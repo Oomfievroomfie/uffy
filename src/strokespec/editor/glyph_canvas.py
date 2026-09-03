@@ -197,13 +197,16 @@ class GlyphCanvas(QWidget):
                 ghost = None
             if ghost is not None:
                 try:
-                    qpix, baseline_px, cap_px = ghost
+                    qpix, baseline_px, _cap_px = ghost
                 except (TypeError, ValueError):
-                    qpix, baseline_px, cap_px = ghost, rect.height(), rect.height()
+                    qpix, baseline_px, _cap_px = ghost, rect.height(), rect.height()
                 if not qpix.isNull():
                     cell = self._cell()
-                    grid_cap_span = (self.cap_height - self.baseline) * cell
-                    scale = (grid_cap_span / cap_px) if (cap_px > 0 and grid_cap_span > 0) else 1.0
+                    # Scale by the reference font's *full cell* (its em = ascender+descender),
+                    # not its cap-height. Full-cell fonts (e.g. 16x16 bitmap fonts) have glyphs
+                    # that fill the cell, and cap-based scaling shrinks them; ascender-based
+                    # "to full cell" scaling shows the real proportions.
+                    scale = rect.height() / qpix.height() if qpix.height() > 0 else 1.0
                     scene_base_y = rect.top() + (GRID_H - self.baseline) * cell
                     scaled = qpix.scaled(
                         max(1, int(qpix.width() * scale)),

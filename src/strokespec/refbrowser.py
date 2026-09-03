@@ -11,10 +11,38 @@ uharfbuzz)** — never ``fontTools``' TTF/OTF code paths.
 from __future__ import annotations
 
 import os
+import struct
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
+
+
+def _os2_cap_height(path: str) -> Optional[int]:
+    """Read the OS/2 ``sCapHeight`` (in font units) from a single-font sfnt without fontTools.
+
+    Falls back to ``None`` for collections (``.ttc``) or fonts without OS/2, so callers can
+    fall back to measuring a glyph.
+    """
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+        if len(data) < 12 or data[0:4] == b"ttcf":
+            return None
+        num_tables = struct.unpack(">H", data[4:6])[0]
+        for i in range(num_tables):
+            rec = data[12 + 16 * i: 12 + 16 * i + 16]
+            if rec[0:4] == b"OS/2":
+                offset = struct.unpack(">I", rec[8:12])[0]
+                if offset + 90 <= len(data):
+                    version = struct.unpack(">H", data[offset:offset + 2])[0]
+                    cap = struct.unpack(">h", data[offset + 88:offset + 90])[0]
+                    if version >= 2 and cap > 0:
+                        return cap
+                return None
+        return None
+    except Exception:
+        return None
 
 try:  # uharfbuzz is optional but strongly recommended
     import uharfbuzz as _hb
@@ -33,6 +61,7 @@ class ReferenceFont:
         self._pil: Optional[ImageFont.ImageFont] = None
         self._hb_face = None
         self._hb_font = None
+        self._upem_value: Optional[int] = None
         self._family = None
         self._covered: Set[int] = set()
         self._absent: Set[int] = set()
@@ -60,6 +89,7 @@ class ReferenceFont:
             face = _hb.Face(data)
             font = _hb.Font(face)
             upem = getattr(face, "upem", None) or 1000
+            self._upem_value = upem
             try:
                 font.scale = (upem, upem)
             except Exception:
@@ -71,6 +101,11 @@ class ReferenceFont:
                     pass
             self._hb_font = font
         return self._hb_font
+
+    def _upem(self) -> int:
+        """Units-per-em for this font (1000 fallback)."""
+        self._hb_font_instance()
+        return self._upem_value or 1000
 
     def has(self, codepoint: int) -> bool:
         """True if this font maps ``codepoint`` to a real glyph (not .notdef)."""
@@ -178,8 +213,15 @@ class ReferenceFont:
         if not ibox:
             return None
         baseline_px = asc
-        hb = f.getbbox("H")
-        cap_px = (hb[3] - hb[1]) if (hb and hb[3] > hb[1]) else asc
+        # Prefer a reliable, glyph-independent cap-height (OS/2 sCapHeight). Rendering a
+        # specific capital like "H" is wrong when the font doesn't contain it (e.g. an
+        # SMP-only font such as unifont_upper) — it would measure the .notdef box instead.
+        os2_cap = _os2_cap_height(str(self.path))
+        if os2_cap:
+            cap_px = os2_cap * (float(em_px) / self._upem())
+        else:
+            hb = f.getbbox("H")
+            cap_px = (hb[3] - hb[1]) if (hb and hb[3] > hb[1]) else asc
         crop = mask.crop((ibox[0], 0, ibox[2], H))
         out = Image.new("RGBA", crop.size, (0, 0, 0, 0))
         out.putalpha(crop)
