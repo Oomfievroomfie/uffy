@@ -337,7 +337,7 @@ class GlyphCanvas(QWidget):
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QColor(0, 150, 90, 130))
                 p.drawPath(self._path_from(
-                    stroke_outline(preview, cap=PEN_CAP, baseline=self.baseline)))
+                    [stroke_outline(preview, cap=PEN_CAP, baseline=self.baseline)]))
                 p.restore()
 
         # hover ring
