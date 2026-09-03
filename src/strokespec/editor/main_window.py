@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDockWidget,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -121,6 +122,20 @@ class GlyphEditorPanel(QWidget):
         opt_row.addStretch(1)
         col.addLayout(opt_row)
 
+        # small 1-pixel nudge d-pad (moves every stroke point by one grid cell)
+        nudge_grid = QGridLayout()
+        nudge_grid.setSpacing(2)
+        nudge_grid.setContentsMargins(0, 0, 0, 0)
+        b_n = QToolButton(); b_n.setArrowType(Qt.ArrowType.UpArrow); b_n.setFixedSize(20, 20)
+        b_s = QToolButton(); b_s.setArrowType(Qt.ArrowType.DownArrow); b_s.setFixedSize(20, 20)
+        b_w = QToolButton(); b_w.setArrowType(Qt.ArrowType.LeftArrow); b_w.setFixedSize(20, 20)
+        b_e = QToolButton(); b_e.setArrowType(Qt.ArrowType.RightArrow); b_e.setFixedSize(20, 20)
+        nudge_grid.addWidget(b_n, 0, 1)
+        nudge_grid.addWidget(b_w, 1, 0)
+        nudge_grid.addWidget(b_s, 1, 1)
+        nudge_grid.addWidget(b_e, 1, 2)
+        col.addLayout(nudge_grid)
+
         btn_delete = QPushButton("Delete selected")
         btn_reverse = QPushButton("Reverse points (flip arc)")
         btn_toggle = QPushButton("Toggle line/arc")
@@ -148,6 +163,10 @@ class GlyphEditorPanel(QWidget):
         self._btn_line.clicked.connect(lambda: self._set_tool(SHAPE_LINE))
         self._btn_arc.clicked.connect(lambda: self._set_tool(SHAPE_ARC))
         self._show_ghost.toggled.connect(self._on_ghost_toggled)
+        b_n.clicked.connect(lambda: self.canvas.nudge(0, 1))
+        b_s.clicked.connect(lambda: self.canvas.nudge(0, -1))
+        b_w.clicked.connect(lambda: self.canvas.nudge(-1, 0))
+        b_e.clicked.connect(lambda: self.canvas.nudge(1, 0))
         self.canvas.glyphChanged.connect(self._on_canvas_changed)
 
     def _on_canvas_changed(self) -> None:

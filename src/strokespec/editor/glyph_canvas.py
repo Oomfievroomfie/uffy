@@ -117,6 +117,16 @@ class GlyphCanvas(QWidget):
             self.update()
             self.glyphChanged.emit()
 
+    def nudge(self, dx: int, dy: int) -> None:
+        """Shift every point of every stroke by ``(dx, dy)`` grid cells (a 1-pixel nudge)."""
+        strokes = self._glyph.strokes
+        for i, s in enumerate(strokes):
+            strokes[i] = Stroke(Point(s.p1.x + dx, s.p1.y + dy),
+                                Point(s.p2.x + dx, s.p2.y + dy), s.shape)
+        self.update()
+        if strokes:
+            self.glyphChanged.emit()
+
     # --- geometry ------------------------------------------------------------
     def _cols(self) -> int:
         """The glyph's cell width (8 for half-width, 16 for full-width)."""
