@@ -279,8 +279,9 @@ class GlyphCanvas(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             pos = event.position()
             gp = self._scene_to_grid(pos)
-            idx, ep = self._find_endpoint(pos)
-            if idx is not None:
+            endpoint = self._find_endpoint(pos)
+            if endpoint is not None:
+                idx, ep = endpoint
                 self._drag = (idx, ep)
                 self._selected_index = idx
                 self.update()
