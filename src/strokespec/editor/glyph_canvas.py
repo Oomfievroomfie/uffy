@@ -192,6 +192,11 @@ class GlyphCanvas(QWidget):
                     )
                     top = scene_base_y - baseline_px * (scaled.height() / qpix.height())
                     left = rect.center().x() - scaled.width() / 2.0
+                    # an odd-cell-width reference glyph lands on a cell boundary when centred;
+                    # nudge it by half a cell so it lines up with the cell-centre lattice
+                    w_cells = scaled.width() / cell
+                    if round(w_cells) % 2 == 1:
+                        left -= 0.5 * cell
                     p.setOpacity(0.20)
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)

@@ -145,7 +145,13 @@ class GlyphEditorPanel(QWidget):
         self._btn_line.clicked.connect(lambda: self._set_tool(SHAPE_LINE))
         self._btn_arc.clicked.connect(lambda: self._set_tool(SHAPE_ARC))
         self._show_ghost.toggled.connect(self._on_ghost_toggled)
-        self.canvas.glyphChanged.connect(self._sync_stroke_list)
+        self.canvas.glyphChanged.connect(self._on_canvas_changed)
+
+    def _on_canvas_changed(self) -> None:
+        # Canvas edits propagate up so MainWindow can initialise/commit the glyph and
+        # mark the document dirty (otherwise a newly drawn glyph would never be saved).
+        self._sync_stroke_list()
+        self.glyphChanged.emit()
 
     def set_glyph(self, glyph: Glyph) -> None:
         self._glyph = glyph
@@ -233,6 +239,13 @@ class MainWindow(QMainWindow):
         self._path: Optional[str] = path
         self._dirty = False
         self._pending_commit: Optional[Glyph] = None
+
+        # Load the project's `ref fonts/` folder (if present) by default.
+        from pathlib import Path as _Path
+        repo_root = _Path(__file__).resolve().parents[3]
+        default_ref = repo_root / "ref fonts"
+        if default_ref.is_dir():
+            self.reflib.add_folders([str(default_ref)], recursive=False)
 
         self._grid = GlyphGrid(self.strokefont, self.reflib)
         self._editor = GlyphEditorPanel()

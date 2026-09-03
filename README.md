@@ -41,6 +41,9 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   advance** (typographically correct); note the fallback ships **no** GPOS mark
   positioning, so fully correct mark attachment is out of scope (consistent with
   "no shaping").
+* Defaults come from Unicode: a codepoint whose East Asian Width is **W/F** starts at
+  **16** cells, otherwise **8**; codepoints of general category **Mn/Mc/Me** start as
+  **combining**. You can still override either per glyph.
 
 ## Design units
 

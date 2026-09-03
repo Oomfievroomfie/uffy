@@ -2,14 +2,14 @@
   "metadata": {
     "name": "SampleFallback",
     "height": 16,
-    "baseline": 3.0,
-    "x_height": 8.0,
+    "baseline": 2.0,
+    "x_height": 10.0,
     "cap_height": 12.0
   },
   "glyphs": [
     {
       "codepoint": 65,
-      "width": 16,
+      "width": 8,
       "combining": false,
       "strokes": [
         {
@@ -49,7 +49,7 @@
     },
     {
       "codepoint": 103,
-      "width": 16,
+      "width": 8,
       "combining": false,
       "strokes": [
         {
@@ -111,7 +111,7 @@
     },
     {
       "codepoint": 769,
-      "width": 16,
+      "width": 8,
       "combining": true,
       "strokes": [
         {
@@ -128,37 +128,8 @@
       ]
     },
     {
-      "codepoint": 9675,
-      "width": 8,
-      "combining": false,
-      "strokes": [
-        {
-          "p1": [
-            1,
-            2
-          ],
-          "p2": [
-            7,
-            14
-          ],
-          "shape": "arc"
-        },
-        {
-          "p1": [
-            7,
-            14
-          ],
-          "p2": [
-            1,
-            12
-          ],
-          "shape": "arc"
-        }
-      ]
-    },
-    {
       "codepoint": 12450,
-      "width": 8,
+      "width": 16,
       "combining": false,
       "strokes": [
         {

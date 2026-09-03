@@ -36,6 +36,24 @@ SHAPE_ARC = "arc"
 _SUPPORTED_SHAPES = frozenset({SHAPE_LINE, SHAPE_ARC})
 
 
+def unicode_fullwidth(codepoint: int) -> bool:
+    """True if the codepoint is full-width per Unicode East Asian Width (W or F)."""
+    import unicodedata
+    try:
+        return unicodedata.east_asian_width(chr(codepoint)) in ("W", "F")
+    except Exception:
+        return False
+
+
+def unicode_combining(codepoint: int) -> bool:
+    """True if the codepoint is a combining mark (general category Mn/Mc/Me)."""
+    import unicodedata
+    try:
+        return unicodedata.category(chr(codepoint)) in ("Mn", "Mc", "Me")
+    except Exception:
+        return False
+
+
 def _clamp_grid(v: int) -> int:
     # cell indices are 0..GRID_N-1 (16 cells -> indices 0..15)
     return max(0, min(GRID_N - 1, int(v)))
@@ -120,14 +138,22 @@ class Glyph:
 
     ``width`` is the advance width in grid units (8 or 16). ``combining`` glyphs get a
     zero advance (correct behaviour for diacritics) while keeping their nominal cell.
+
+    When ``width``/``combining`` are not given explicitly they are **derived from
+    Unicode**: full-width (East Asian Width ``W``/``F``) characters get a 16-cell width,
+    and combining marks (general category ``Mn``/``Mc``/``Me``) start as combining.
     """
     codepoint: int
     strokes: List[Stroke] = field(default_factory=list)
-    width: int = GRID_W
-    combining: bool = False
+    width: Optional[int] = None        # None -> derive from Unicode East Asian Width
+    combining: Optional[bool] = None   # None -> derive from Unicode mark category
     name: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if self.width is None:
+            self.width = GRID_W if unicode_fullwidth(self.codepoint) else GRID_W // 2
+        if self.combining is None:
+            self.combining = unicode_combining(self.codepoint)
         if self.width not in (GRID_W, GRID_W // 2):
             raise ValueError(f"glyph width must be 8 or 16, got {self.width}")
         if len(self.strokes) > 32:
@@ -168,11 +194,15 @@ class Glyph:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Glyph":
+        # width/combining are only taken from JSON when present, otherwise derived from
+        # the codepoint's Unicode properties in __post_init__.
+        width = d.get("width")
+        combining = d.get("combining")
         return cls(
             codepoint=int(d["codepoint"]),
             strokes=[Stroke.from_dict(s) for s in d.get("strokes", [])],
-            width=int(d.get("width", GRID_W)),
-            combining=bool(d.get("combining", False)),
+            width=(int(width) if width is not None else None),
+            combining=(bool(combining) if combining is not None else None),
             name=d.get("name"),
         )
 
