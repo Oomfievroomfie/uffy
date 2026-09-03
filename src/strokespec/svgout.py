@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from typing import List, Tuple, Union, Iterable
 
+from .geometry import arc_end_tangents
 from .model import SHAPE_ARC, SHAPE_LINE, DEFAULT_BASELINE, UPEM, Glyph, Stroke, PEN_RADIUS
 
 Pt = Tuple[float, float]
@@ -41,25 +42,42 @@ def glyph_svg(
     def to_svg(p: Pt) -> Pt:
         return (p[0], ascent - p[1])
 
-    subs: List[str] = []
+    r = pen_radius
+    lines: List[str] = []
+    arcs: List[str] = []
     for s in glyph.strokes:
-        x1, y1 = to_svg(s.p1.as_font_units(baseline))
-        x2, y2 = to_svg(s.p2.as_font_units(baseline))
+        p1f = s.p1.as_font_units(baseline)
+        p2f = s.p2.as_font_units(baseline)
         if s.shape == SHAPE_ARC:
+            # experiment: arcs use a FLAT (butt) cap, but the ends are nudged forward by the
+            # pen radius along the tangent so the flat end lands where a half-square cap would.
+            t1, t2 = arc_end_tangents(p1f, p2f)
+            p1n = (p1f[0] - r * t1[0], p1f[1] - r * t1[1])
+            p2n = (p2f[0] + r * t2[0], p2f[1] + r * t2[1])
+            x1, y1 = to_svg(p1n)
+            x2, y2 = to_svg(p2n)
             dx = abs(x2 - x1)
             dy = abs(y2 - y1)
-            # quarter-ellipse: radii are the AABB half-extents (== full extents), sweep flag
-            # picks the complementary arc (bend derives from the point ordering).
-            subs.append(f"M {x1:.3f} {y1:.3f} A {max(dx,1e-6):.3f} {max(dy,1e-6):.3f} 0 0 1 {x2:.3f} {y2:.3f}")
+            arcs.append(f"M {x1:.3f} {y1:.3f} A {max(dx, 1e-6):.3f} {max(dy, 1e-6):.3f} 0 0 1 {x2:.3f} {y2:.3f}")
         else:
-            subs.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
+            x1, y1 = to_svg(p1f)
+            x2, y2 = to_svg(p2f)
+            lines.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
 
-    d = " ".join(subs)
+    paths: List[str] = []
+    if lines:
+        paths.append(
+            f'<path d="{" ".join(lines)}" fill="none" stroke="black" stroke-width="{2*r:.3f}" '
+            f'stroke-linecap="square" stroke-linejoin="round"/>'
+        )
+    if arcs:
+        paths.append(
+            f'<path d="{" ".join(arcs)}" fill="none" stroke="black" stroke-width="{2*r:.3f}" '
+            f'stroke-linecap="butt" stroke-linejoin="round"/>'
+        )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.0f}" height="{UPEM:.0f}" '
-        f'viewBox="0 0 {width:.0f} {UPEM:.0f}">'
-        f'<path d="{d}" fill="none" stroke="black" stroke-width="{2*pen_radius:.3f}" '
-        f'stroke-linecap="square" stroke-linejoin="round"/></svg>'
+        f'viewBox="0 0 {width:.0f} {UPEM:.0f}">' + "".join(paths) + "</svg>"
     )
 
 

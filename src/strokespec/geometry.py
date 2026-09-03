@@ -1,4 +1,4 @@
-﻿"""Geometric expansion of strokes into closed outlines (font-unit space).
+"""Geometric expansion of strokes into closed outlines (font-unit space).
 
 Every stroke is a "pen" of diameter one grid unit that follows a centreline (a straight
 segment or a quarter-circle) and is expanded into a closed outline in TrueType/font-unit
@@ -300,6 +300,40 @@ def _degenerate(center: Pt, r: float, cap: str) -> List[Op]:
             ("L", (center[0] - r, center[1] + r)),
             ("Z",),
         ]
+
+
+def arc_end_tangents(p1: Pt, p2: Pt) -> Tuple[Pt, Pt]:
+    """Unit tangents (in the ``p1 -> p2`` travel sense) at each arc endpoint.
+
+    A quarter-ellipse is tangent-aligned to its bounding box, so at an ``x``-neighbour
+    endpoint the tangent is vertical and at a ``y``-neighbour endpoint horizontal. Returns
+    a pair for ``(p1, p2)`` (zero vectors for degenerate arcs).
+    """
+    dx = abs(p2[0] - p1[0])
+    dy = abs(p2[1] - p1[1])
+    if dx < 1e-9 or dy < 1e-9:
+        return ((0.0, 0.0), (0.0, 0.0))
+    minx, maxx = min(p1[0], p2[0]), max(p1[0], p2[0])
+    miny, maxy = min(p1[1], p2[1]), max(p1[1], p2[1])
+    cands = [
+        c for c in ((minx, miny), (maxx, miny), (minx, maxy), (maxx, maxy))
+        if (abs(c[0] - p1[0]) > 1e-9 or abs(c[1] - p1[1]) > 1e-9)
+        and (abs(c[0] - p2[0]) > 1e-9 or abs(c[1] - p2[1]) > 1e-9)
+    ]
+    dxd = p2[0] - p1[0]
+    dyd = p2[1] - p1[1]
+    Bc = max(cands, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
+    if abs(p1[1] - Bc[1]) < 1e-9:
+        xend, yend = p1, p2
+    else:
+        xend, yend = p2, p1
+    sa = 1.0 if xend[0] > Bc[0] else -1.0
+    sb = 1.0 if yend[1] > Bc[1] else -1.0
+    t_xend = (0.0, sb)
+    t_yend = (-sa, 0.0)
+    if xend[0] == p1[0] and xend[1] == p1[1]:
+        return (t_xend, t_yend)
+    return ((-t_yend[0], -t_yend[1]), (-t_xend[0], -t_xend[1]))
 
 
 def _ellipse_point(c: Pt, a: float, b: float, sa: float, sb: float, t: float) -> Pt:
