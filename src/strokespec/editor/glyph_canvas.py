@@ -48,6 +48,7 @@ class GlyphCanvas(QWidget):
         self._drag = None
         self._hover: Point | None = None
         self._selected_index: int = -1
+        self._oob_count: int = 0
         self.tool: str = SHAPE_LINE
         self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
@@ -131,6 +132,11 @@ class GlyphCanvas(QWidget):
     def _cols(self) -> int:
         """The glyph's cell width (8 for half-width, 16 for full-width)."""
         return self._glyph.cell_width_grid
+
+    def _in_bounds(self, p) -> bool:
+        """True if a point lies inside the glyph's designated cell AABB."""
+        cols = self._cols()
+        return 0 <= p.x < cols and 0 <= p.y < GRID_H
 
     def _grid_rect(self) -> QRectF:
         import math as _m
@@ -236,19 +242,31 @@ class GlyphCanvas(QWidget):
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)
 
-        # stroke fills (font units -> scene via the baseline transform)
+        # stroke fills (font units -> scene via the baseline transform). We do NOT clip to the
+        # grid rect: strokes that go outside the glyph's cell AABB stay visible (in red) so the
+        # user can tell they overflowed the working area.
         p.save()
-        p.setClipRect(rect)
         self._apply_grid_transform(p, rect)
+        oob_count = 0
         for index, stroke in enumerate(self._glyph.strokes):
-            color = QColor(30, 30, 30)
-            if index == self._selected_index:
+            oob = (not self._in_bounds(stroke.p1)) or (not self._in_bounds(stroke.p2))
+            if oob:
+                oob_count += 1
+            color = QColor(214, 45, 45) if oob else QColor(30, 30, 30)
+            if not oob and index == self._selected_index:
                 color = QColor(0, 110, 220)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QBrush(color))
             p.drawPath(ops_to_painterpath(
                 stroke_outline(stroke, cap=self.cap, baseline=self.baseline)))
         p.restore()
+
+        # if any stroke is out of bounds, ring the working AABB in red so it is unmistakable
+        self._oob_count = oob_count
+        if oob_count:
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor(214, 45, 45), 2, Qt.PenStyle.DashLine))
+            p.drawRect(rect.adjusted(-3, -3, 3, 3))
 
         # grid point dots at cell centres
         p.setPen(Qt.PenStyle.NoPen)
@@ -285,10 +303,15 @@ class GlyphCanvas(QWidget):
         # info line
         p.setPen(QColor(120, 120, 130))
         mode = "ARC" if self.tool == SHAPE_ARC else "LINE"
+        text = (f"{mode}   baseline={self.baseline:.1f}   x-height={self.x_height:.1f}   "
+                f"cap-height={self.cap_height:.1f}")
+        if self._oob_count:
+            text += f"    \u26a0 {self._oob_count} stroke(s) outside glyph area"
+            p.setPen(QColor(214, 45, 45))
         p.drawText(
             QRectF(8, self.height() - 22, self.width() - 16, 18),
             Qt.AlignmentFlag.AlignLeft,
-            f"{mode}   baseline={self.baseline:.1f}   x-height={self.x_height:.1f}   cap-height={self.cap_height:.1f}",
+            text,
         )
 
     # --- interaction ---------------------------------------------------------
