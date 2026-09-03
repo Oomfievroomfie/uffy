@@ -62,7 +62,7 @@ def glyph_svg(
             x2, y2 = to_svg(p2n)
             dx = abs(x2 - x1)
             dy = abs(y2 - y1)
-            arcs.append(f"M {x1:.3f} {y1:.3f} A {max(dx, 1e-6):.3f} {max(dy, 1e-6):.3f} 0 0 1 {x2:.3f} {y2:.3f}")
+            arcs.append(f"M {x1:.3f} {y1:.3f} A {max(dx, 1e-6):.3f} {max(dy, 1e-6):.3f} 0 0 0 {x2:.3f} {y2:.3f}")
         else:
             x1, y1 = to_svg(p1f)
             x2, y2 = to_svg(p2f)
@@ -171,24 +171,7 @@ def parse_svg_d(d: str, ascent: float) -> List[Op]:
     return ops
 
 
-def glyph_contours_svg(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
-    """Expand a glyph's strokes to fill outlines using Google's **picosvg**.
-
-    This is the *canonical* stroke-expansion used both for the compiled font and for the
-    editor preview, so the two can never disagree. Returns a list of contours, each a list
-    of ``M/L/C/Z`` ops in font units (y-up, baseline at 0). A glyph with no strokes returns
-    an empty list.
-    """
-    if not glyph.strokes:
-        return []
-    ascent = (16 - baseline) * 64
-    svg = glyph_svg(glyph, pen_radius, baseline)
-    expanded = SVG.fromstring(svg).topicosvg()
-    d = ""
-    m = re.search(r'd="([^"]+)"', expanded.tostring())
-    if m:
-        d = m.group(1)
-    ops = parse_svg_d(d, ascent)
+def _split_ops_to_contours(ops: List[Op]) -> List[List[Op]]:
     contours: List[List[Op]] = []
     cur: List[Op] = []
     for op in ops:
@@ -201,5 +184,41 @@ def glyph_contours_svg(glyph: Glyph, pen_radius: float, baseline: float) -> List
     if cur:
         contours.append(cur)
     return contours
+
+
+def glyph_contours_svg(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
+    """Expand a glyph's strokes to fill outlines using Google's **picosvg**.
+
+    This is the *canonical* stroke-expansion used both for the compiled font and for the
+    editor preview, so the two can never disagree. Returns a list of contours, each a list
+    of ``M/L/C/Z`` ops in font units (y-up, baseline at 0). A glyph with no strokes returns
+    an empty list.
+
+    picosvg processes one ``<path>`` element per call, so when the glyph uses different
+    stroke-linecaps for lines vs. arcs we feed each sub-path through picosvg independently
+    and combine the result (otherwise the second path is silently dropped).
+    """
+    if not glyph.strokes:
+        return []
+    ascent = (16 - baseline) * 64
+    svg = glyph_svg(glyph, pen_radius, baseline)
+    style = re.findall(r'<path d="([^"]+)"[^>]*stroke-linecap="([^"]+)"[^>]*/>', svg)
+    out: List[List[Op]] = []
+    for d, cap in style:
+        only = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{glyph.cell_width_units:.0f}" height="{UPEM:.0f}" '
+            f'viewBox="0 0 {glyph.cell_width_units:.0f} {UPEM:.0f}">'
+            f'<path d="{d}" fill="none" stroke="black" stroke-width="{2 * pen_radius:.3f}" '
+            f'stroke-linecap="{cap}" stroke-linejoin="round"/></svg>'
+        )
+        try:
+            expanded = SVG.fromstring(only).topicosvg()
+        except Exception:
+            continue
+        m = re.search(r'd="([^"]+)"', expanded.tostring())
+        ops = parse_svg_d(m.group(1) if m else "", ascent)
+        out.extend(_split_ops_to_contours(ops))
+    return out
 
 
