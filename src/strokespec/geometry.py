@@ -510,11 +510,22 @@ def stroke_outline(
     cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
 ) -> List[Op]:
-    """Expand a single stroke to a closed outline (list of M/L/C/Z ops)."""
+    """Expand a single stroke to a closed outline (list of M/L/C/Z ops).
+
+    Arcs use a **flat (butt)** endcap — no half-square extension — so each arc end is half a
+    pen-width shorter, giving a visibly different (shorter) shape. Lines keep the given cap.
+    """
     p1 = stroke.p1.as_font_units(baseline)
     p2 = stroke.p2.as_font_units(baseline)
     if stroke.shape == SHAPE_ARC:
-        return arc_outline(p1, p2, r, cap)
+        # FLAT (butt) cap at a FORWARD-NUDGED end: move each endpoint by the pen radius along
+        # the tangent (p1 backward, p2 forward), re-fit the arc to the nudged endpoints, and
+        # butt-cap. This cuts the end perpendicular to the curve there — a different shape from
+        # the half-square (straight tangent) cap.
+        t1, t2 = arc_end_tangents(p1, p2)
+        p1n = (p1[0] - r * t1[0], p1[1] - r * t1[1])
+        p2n = (p2[0] + r * t2[0], p2[1] + r * t2[1])
+        return arc_outline(p1n, p2n, r, "butt")
     return line_outline(p1, p2, r, cap)
 
 

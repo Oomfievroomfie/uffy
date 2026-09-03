@@ -49,8 +49,10 @@ def glyph_svg(
         p1f = s.p1.as_font_units(baseline)
         p2f = s.p2.as_font_units(baseline)
         if s.shape == SHAPE_ARC:
-            # experiment: arcs use a FLAT (butt) cap, but the ends are nudged forward by the
-            # pen radius along the tangent so the flat end lands where a half-square cap would.
+            # arcs: FLAT (butt) cap, with the ends nudged forward by the pen radius along the
+            # tangent. The nudge is intentional: the arc re-fits to the nudged endpoint, so the
+            # end cuts perpendicular to the *curve* there — a genuinely different shape from a
+            # half-square (straight tangent) cap.
             t1, t2 = arc_end_tangents(p1f, p2f)
             p1n = (p1f[0] - r * t1[0], p1f[1] - r * t1[1])
             p2n = (p2f[0] + r * t2[0], p2f[1] + r * t2[1])
