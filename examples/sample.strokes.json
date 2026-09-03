@@ -1,0 +1,250 @@
+{
+  "metadata": {
+    "name": "SampleFallback",
+    "height": 16,
+    "baseline": 3.0,
+    "x_height": 8.0,
+    "cap_height": 12.0
+  },
+  "glyphs": [
+    {
+      "codepoint": 65,
+      "width": 16,
+      "combining": false,
+      "strokes": [
+        {
+          "p1": [
+            3,
+            3
+          ],
+          "p2": [
+            7,
+            14
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            7,
+            14
+          ],
+          "p2": [
+            11,
+            3
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            4,
+            8
+          ],
+          "p2": [
+            10,
+            8
+          ],
+          "shape": "line",
+          "bend": 1
+        }
+      ]
+    },
+    {
+      "codepoint": 103,
+      "width": 16,
+      "combining": false,
+      "strokes": [
+        {
+          "p1": [
+            4,
+            3
+          ],
+          "p2": [
+            4,
+            11
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            4,
+            11
+          ],
+          "p2": [
+            9,
+            11
+          ],
+          "shape": "arc",
+          "bend": 1
+        },
+        {
+          "p1": [
+            9,
+            11
+          ],
+          "p2": [
+            9,
+            4
+          ],
+          "shape": "arc",
+          "bend": 1
+        },
+        {
+          "p1": [
+            9,
+            4
+          ],
+          "p2": [
+            4,
+            4
+          ],
+          "shape": "arc",
+          "bend": 1
+        },
+        {
+          "p1": [
+            8,
+            4
+          ],
+          "p2": [
+            8,
+            0
+          ],
+          "shape": "line",
+          "bend": 1
+        }
+      ]
+    },
+    {
+      "codepoint": 769,
+      "width": 16,
+      "combining": true,
+      "strokes": [
+        {
+          "p1": [
+            2,
+            10
+          ],
+          "p2": [
+            6,
+            14
+          ],
+          "shape": "line",
+          "bend": 1
+        }
+      ]
+    },
+    {
+      "codepoint": 12450,
+      "width": 8,
+      "combining": false,
+      "strokes": [
+        {
+          "p1": [
+            2,
+            2
+          ],
+          "p2": [
+            2,
+            14
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            2,
+            14
+          ],
+          "p2": [
+            7,
+            13
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            2,
+            8
+          ],
+          "p2": [
+            7,
+            8
+          ],
+          "shape": "line",
+          "bend": 1
+        }
+      ]
+    },
+    {
+      "codepoint": 20013,
+      "width": 16,
+      "combining": false,
+      "strokes": [
+        {
+          "p1": [
+            3,
+            12
+          ],
+          "p2": [
+            13,
+            12
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            3,
+            4
+          ],
+          "p2": [
+            13,
+            4
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            3,
+            4
+          ],
+          "p2": [
+            3,
+            12
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            13,
+            4
+          ],
+          "p2": [
+            13,
+            12
+          ],
+          "shape": "line",
+          "bend": 1
+        },
+        {
+          "p1": [
+            8,
+            2
+          ],
+          "p2": [
+            8,
+            14
+          ],
+          "shape": "line",
+          "bend": 1
+        }
+      ]
+    }
+  ]
+}
