@@ -1,0 +1,510 @@
+"""Main window: interactive grid on the left, glyph editor on the right."""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDockWidget,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..model import SHAPE_ARC, SHAPE_LINE, Glyph, StrokeFont
+from ..refbrowser import ReferenceLibrary
+from .glyph_canvas import GlyphCanvas
+from .grid import GlyphGrid
+from .uiutil import pil_to_qpixmap
+
+
+class ReferenceFontsDock(QWidget):
+    """List of loaded reference fonts with add/clear controls."""
+
+    def __init__(self, reflib: ReferenceLibrary, on_change, parent=None) -> None:
+        super().__init__(parent)
+        self._reflib = reflib
+        self._on_change = on_change
+        lay = QVBoxLayout(self)
+        self._list = QListWidget()
+        lay.addWidget(self._list)
+        btn_row = QHBoxLayout()
+        add_btn = QPushButton("Add Folder…")
+        clear_btn = QPushButton("Clear")
+        btn_row.addWidget(add_btn)
+        btn_row.addWidget(clear_btn)
+        lay.addLayout(btn_row)
+        add_btn.clicked.connect(self.add_folder)
+        clear_btn.clicked.connect(self.clear)
+        self._refresh()
+
+    def add_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Choose a folder of reference fonts")
+        if folder:
+            n = self._reflib.add_folders([folder], recursive=True)
+            self._refresh()
+            if self._on_change:
+                self._on_change()
+            QMessageBox.information(self, "Reference fonts", f"Added {n} font(s).")
+
+    def clear(self) -> None:
+        self._reflib.clear()
+        self._refresh()
+        if self._on_change:
+            self._on_change()
+
+    def _refresh(self) -> None:
+        self._list.clear()
+        for f in self._reflib:
+            self._list.addItem(QListWidgetItem(f"{f.family}  ({f.path.name})"))
+
+
+class GlyphEditorPanel(QWidget):
+    """Right-hand panel: codepoint controls + stroke canvas + stroke list."""
+
+    glyphChanged = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._glyph: Optional[Glyph] = None
+
+        top = QHBoxLayout()
+        self._cp_label = QLabel("U+0000")
+        self._cp_label.setStyleSheet("font-weight:bold;")
+        top.addWidget(self._cp_label)
+        top.addStretch(1)
+        top.addWidget(QLabel("Width:"))
+        self._width_combo = QComboBox()
+        self._width_combo.addItem("16 (full)", 16)
+        self._width_combo.addItem("8 (half)", 8)
+        top.addWidget(self._width_combo)
+        self._combining = QCheckBox("Combining")
+        top.addWidget(self._combining)
+        self._clear_btn = QPushButton("Clear")
+        top.addWidget(self._clear_btn)
+
+        self.canvas = GlyphCanvas()
+
+        self._stroke_list = QListWidget()
+        self._stroke_list.setMinimumWidth(190)
+
+        col = QVBoxLayout()
+        col.setContentsMargins(0, 0, 0, 0)
+        tool_row = QHBoxLayout()
+        self._btn_line = QToolButton(); self._btn_line.setText("Line")
+        self._btn_arc = QToolButton(); self._btn_arc.setText("Arc")
+        self._btn_line.setCheckable(True)
+        self._btn_arc.setCheckable(True)
+        self._btn_line.setChecked(True)
+        tool_row.addWidget(self._btn_line)
+        tool_row.addWidget(self._btn_arc)
+        self._btn_bend_up = QToolButton(); self._btn_bend_up.setText("Bend ↑")
+        self._btn_bend_down = QToolButton(); self._btn_bend_down.setText("Bend ↓")
+        tool_row.addWidget(self._btn_bend_up)
+        tool_row.addWidget(self._btn_bend_down)
+        tool_row.addStretch(1)
+        col.addLayout(tool_row)
+
+        cap_row = QHBoxLayout()
+        self._btn_round = QToolButton(); self._btn_round.setText("Round pen")
+        self._btn_butt = QToolButton(); self._btn_butt.setText("Square pen")
+        self._btn_round.setCheckable(True); self._btn_butt.setCheckable(True)
+        self._btn_round.setChecked(True)
+        self._show_ghost = QCheckBox("Reference ghost")
+        self._show_ghost.setChecked(True)
+        cap_row.addWidget(self._btn_round)
+        cap_row.addWidget(self._btn_butt)
+        cap_row.addWidget(self._show_ghost)
+        cap_row.addStretch(1)
+        col.addLayout(cap_row)
+
+        btn_delete = QPushButton("Delete selected")
+        btn_flip = QPushButton("Flip bend")
+        col.addWidget(btn_delete)
+        col.addWidget(btn_flip)
+        col.addStretch(1)
+
+        mid = QHBoxLayout()
+        mid.addWidget(self._stroke_list, 1)
+        mid.addLayout(col)
+
+        lay = QVBoxLayout(self)
+        lay.addLayout(top)
+        lay.addWidget(self.canvas, 1)
+        lay.addLayout(mid)
+
+        self._stroke_list.currentRowChanged.connect(self._on_stroke_selected)
+        btn_delete.clicked.connect(self.canvas.delete_selected)
+        btn_flip.clicked.connect(self.canvas.flip_selected_bend)
+        self._width_combo.currentIndexChanged.connect(self._on_width_changed)
+        self._combining.toggled.connect(self._on_combining_changed)
+        self._clear_btn.clicked.connect(self._on_clear)
+        self._btn_line.clicked.connect(lambda: self._set_tool(SHAPE_LINE))
+        self._btn_arc.clicked.connect(lambda: self._set_tool(SHAPE_ARC))
+        self._btn_bend_up.clicked.connect(lambda: self._set_bend(1))
+        self._btn_bend_down.clicked.connect(lambda: self._set_bend(-1))
+        self._btn_round.clicked.connect(lambda: self._set_cap("round"))
+        self._btn_butt.clicked.connect(lambda: self._set_cap("butt"))
+        self._show_ghost.toggled.connect(self._on_ghost_toggled)
+        self.canvas.glyphChanged.connect(self._sync_stroke_list)
+
+    def set_glyph(self, glyph: Glyph) -> None:
+        self._glyph = glyph
+        self.canvas.set_glyph(glyph)
+        self._cp_label.setText(f"U+{glyph.codepoint:04X}")
+        idx = self._width_combo.findData(glyph.width)
+        self._width_combo.blockSignals(True)
+        self._width_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self._width_combo.blockSignals(False)
+        self._combining.blockSignals(True)
+        self._combining.setChecked(glyph.combining)
+        self._combining.blockSignals(False)
+        self._sync_stroke_list()
+
+    def glyph(self) -> Optional[Glyph]:
+        return self._glyph
+
+    def refresh_canvas(self) -> None:
+        self.canvas.update()
+        self._sync_stroke_list()
+
+    def set_reference_provider(self, provider) -> None:
+        self.canvas.reference_provider = provider
+        self.canvas.update()
+
+    def _set_tool(self, tool: str) -> None:
+        self._btn_line.blockSignals(True)
+        self._btn_arc.blockSignals(True)
+        self._btn_line.setChecked(tool == SHAPE_LINE)
+        self._btn_arc.setChecked(tool == SHAPE_ARC)
+        self._btn_line.blockSignals(False)
+        self._btn_arc.blockSignals(False)
+        self.canvas.set_tool(tool)
+
+    def _set_bend(self, bend: int) -> None:
+        self.canvas.set_bend(bend)
+        s = self.canvas.selected_stroke()
+        if s is not None and s.shape == SHAPE_ARC:
+            self.canvas.flip_selected_bend()
+
+    def _set_cap(self, cap: str) -> None:
+        self._btn_round.blockSignals(True)
+        self._btn_butt.blockSignals(True)
+        self._btn_round.setChecked(cap == "round")
+        self._btn_butt.setChecked(cap == "butt")
+        self._btn_round.blockSignals(False)
+        self._btn_butt.blockSignals(False)
+        self.canvas.set_cap(cap)
+
+    def _on_ghost_toggled(self, on: bool) -> None:
+        self.canvas.show_reference = on
+        self.canvas.update()
+
+    def _on_stroke_selected(self, row: int) -> None:
+        self.canvas.select_stroke(row)
+
+    def _on_width_changed(self, _idx: int) -> None:
+        if self._glyph is not None and self._glyph.width != self._width_combo.currentData():
+            self._glyph.width = self._width_combo.currentData()
+            self.glyphChanged.emit()
+
+    def _on_combining_changed(self, on: bool) -> None:
+        if self._glyph is not None and self._glyph.combining != on:
+            self._glyph.combining = on
+            self.glyphChanged.emit()
+
+    def _on_clear(self) -> None:
+        if self._glyph is None:
+            return
+        if self._glyph.strokes and QMessageBox.question(
+            self, "Clear strokes", "Remove all strokes from this glyph?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._glyph.strokes.clear()
+        self.canvas.update()
+        self.glyphChanged.emit()
+
+    def _sync_stroke_list(self) -> None:
+        self._stroke_list.blockSignals(True)
+        self._stroke_list.clear()
+        if self._glyph is not None:
+            for i, s in enumerate(self._glyph.strokes):
+                kind = "Arc" if s.shape == SHAPE_ARC else "Ln "
+                bend = "" if s.shape == SHAPE_LINE else ("  ↷" if s.bend > 0 else "  ↶")
+                self._stroke_list.addItem(
+                    f"{i}: {kind} ({s.p1.x},{s.p1.y})→({s.p2.x},{s.p2.y}){bend}"
+                )
+            if 0 <= self.canvas._selected_index < len(self._glyph.strokes):
+                self._stroke_list.setCurrentRow(self.canvas._selected_index)
+        self._stroke_list.blockSignals(False)
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, path: Optional[str] = None) -> None:
+        super().__init__()
+        self.setWindowTitle("strokespec — stroke fallback font editor")
+        self.resize(1280, 780)
+
+        self.strokefont = StrokeFont()
+        self.reflib = ReferenceLibrary()
+        self._path: Optional[str] = path
+        self._dirty = False
+        self._pending_commit: Optional[Glyph] = None
+
+        self._grid = GlyphGrid(self.strokefont, self.reflib)
+        self._editor = GlyphEditorPanel()
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.addWidget(self._grid)
+        self._splitter.addWidget(self._editor)
+        self._splitter.setStretchFactor(0, 1)
+        self._splitter.setStretchFactor(1, 2)
+        self.setCentralWidget(self._splitter)
+
+        self._refdock = ReferenceFontsDock(self.reflib, self._on_refs_changed)
+        dock = QDockWidget("Reference Fonts", self)
+        dock.setWidget(self._refdock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+
+        self._build_menu()
+        self._grid.glyphChosen.connect(self._open_codepoint)
+        self._editor.glyphChanged.connect(self._on_glyph_changed)
+        self._editor.set_reference_provider(self._reference_for_codepoint)
+        self._editor.canvas.set_baseline(self.strokefont.baseline)
+
+        if path:
+            self._load_into(path)
+        self._open_codepoint(0x20)
+
+    # --- menus ---------------------------------------------------------------
+    def _build_menu(self) -> None:
+        m = self.menuBar()
+        fm = m.addMenu("&File")
+        for text, slot, shortcut in [
+            ("&New", self._new, "Ctrl+N"),
+            ("&Open…", self._open, "Ctrl+O"),
+            ("&Save", self._save, "Ctrl+S"),
+            ("Save &As…", self._save_as, "Ctrl+Shift+S"),
+            ("&Compile TTF…", self._compile, "Ctrl+T"),
+            ("&Quit", self.close, "Ctrl+Q"),
+        ]:
+            act = QAction(text, self)
+            act.setShortcut(QKeySequence(shortcut))
+            act.triggered.connect(slot)
+            fm.addAction(act)
+        rm = m.addMenu("&Reference")
+        ref_add = QAction("Add Font Folder…", self)
+        ref_add.triggered.connect(self._refdock.add_folder)
+        rm.addAction(ref_add)
+
+        fm_ = m.addMenu("&Font")
+        metrics = QAction("Metrics &Options…", self)
+        metrics.triggered.connect(self._edit_metrics)
+        fm_.addAction(metrics)
+
+    # --- reference helper ----------------------------------------------------
+    def _reference_for_codepoint(self, cp: int):
+        img = self.reflib.render_first(cp, box_px=128, pixel_size=160)
+        return pil_to_qpixmap(img) if img else None
+
+    def _on_refs_changed(self) -> None:
+        self._grid.refresh()
+        self._editor.refresh_canvas()
+
+    # --- glyph selection -----------------------------------------------------
+    def _open_codepoint(self, cp: int) -> None:
+        existing = self.strokefont.get(cp)
+        if existing is not None:
+            self._pending_commit = None
+            self._editor.set_glyph(existing)  # edit in place
+        else:
+            glyph = Glyph(cp)
+            self._pending_commit = glyph
+            self._editor.set_glyph(glyph)
+
+    def _on_glyph_changed(self) -> None:
+        changed_in_place = False
+        if self._pending_commit is not None:
+            glyph = self._pending_commit
+            if glyph.strokes or glyph.combining or glyph.width != 16:
+                stored = self.strokefont.ensure(glyph.codepoint)
+                stored.strokes[:] = glyph.strokes
+                stored.width = glyph.width
+                stored.combining = glyph.combining
+                stored.name = glyph.name
+                self._pending_commit = None
+                # switch the editor onto the stored glyph so further edits apply directly
+                self._editor.set_glyph(stored)
+                self._grid.refresh()  # a brand-new glyph may appear in this block
+                self._dirty = True
+                self._set_window_title()
+            return  # opening a not-yet-edited glyph is not a change
+        self._mark_dirty(invalidate_grid=True)
+
+    def _mark_dirty(self, invalidate_grid: bool = False) -> None:
+        self._dirty = True
+        self.setWindowTitle(
+            f"strokespec — {self._path or 'untitled'}{' *' if self._dirty else ''}"
+        )
+        if invalidate_grid:
+            self._grid.invalidate_previews()
+
+    # --- document lifecycle --------------------------------------------------
+    def _new(self) -> None:
+        self.strokefont.glyphs.clear()
+        self.strokefont.metadata = StrokeFont().metadata
+        self._path = None
+        self._dirty = False
+        self._set_window_title()
+        self._editor.canvas.set_baseline(self.strokefont.baseline)
+        self._grid.refresh()
+        self._open_codepoint(0x20)
+
+    def _open(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open stroke set", "", "Strokespec (*.strokes.json *.json)"
+        )
+        if path:
+            self._load_into(path)
+
+    def _load_into(self, path: str) -> None:
+        try:
+            loaded = StrokeFont.load(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Open failed", str(e))
+            return
+        self.strokefont.glyphs = loaded.glyphs
+        self.strokefont.metadata = loaded.metadata
+        self._path = path
+        self._dirty = False
+        self._set_window_title()
+        self._editor.canvas.set_baseline(self.strokefont.baseline)
+        self._grid.refresh()
+        self._open_codepoint(0x20)
+
+    def _save(self) -> None:
+        if not self._path:
+            self._save_as()
+            return
+        self._write(self._path)
+
+    def _save_as(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save stroke set", "glyphs", "Strokespec (*.strokes.json)"
+        )
+        if path:
+            if not path.lower().endswith(".json"):
+                path += ".strokes.json"
+            self._path = path
+            self._write(path)
+
+    def _write(self, path: str) -> None:
+        try:
+            self.strokefont.save(path)
+        except Exception as e:
+            QMessageBox.critical(self, "Save failed", str(e))
+            return
+        self._dirty = False
+        self._set_window_title()
+
+    def _set_window_title(self) -> None:
+        star = " *" if self._dirty else ""
+        self.setWindowTitle(f"strokespec — {self._path or 'untitled'}{star}")
+
+    def _edit_metrics(self) -> None:
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Font Metrics")
+        form = QFormLayout(dlg)
+        baseline_spin = QDoubleSpinBox()
+        baseline_spin.setRange(0.0, 16.0)
+        baseline_spin.setSingleStep(0.5)
+        baseline_spin.setValue(self.strokefont.baseline)
+        xh_spin = QDoubleSpinBox()
+        xh_spin.setRange(0.0, 16.0)
+        xh_spin.setSingleStep(0.5)
+        xh_spin.setValue(self.strokefont.x_height)
+        ch_spin = QDoubleSpinBox()
+        ch_spin.setRange(0.0, 16.0)
+        ch_spin.setSingleStep(0.5)
+        ch_spin.setValue(self.strokefont.cap_height)
+        form.addRow("Baseline (cells from bottom):", baseline_spin)
+        form.addRow("x-height (cells):", xh_spin)
+        form.addRow("cap-height (cells):", ch_spin)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        form.addRow(buttons)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self.strokefont.metadata["baseline"] = baseline_spin.value()
+            self.strokefont.metadata["x_height"] = xh_spin.value()
+            self.strokefont.metadata["cap_height"] = ch_spin.value()
+            self._editor.canvas.set_baseline(self.strokefont.baseline)
+            self._editor.refresh_canvas()
+            self._grid.refresh()
+            self._dirty = True
+            self._set_window_title()
+
+    def _compile(self) -> None:
+        if not self.strokefont.glyphs:
+            QMessageBox.information(self, "Compile", "No glyphs to compile yet.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save compiled TTF", "fallback", "TTF font (*.ttf)"
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".ttf"):
+            path += ".ttf"
+        try:
+            from ..compiler import compile_strokefont
+            from PySide6.QtWidgets import QApplication
+            self.statusBar().showMessage("Compiling with Google font tools…")
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+            try:
+                compile_strokefont(
+                    self.strokefont,
+                    path,
+                    family_name=self.strokefont.metadata.get("name", "strokespec"),
+                    cap=self._editor.canvas.cap,
+                )
+            finally:
+                QApplication.restoreOverrideCursor()
+            self.statusBar().showMessage(f"Wrote {path}")
+            QMessageBox.information(self, "Compile", f"Wrote TTF:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Compile failed", str(e))
+            self.statusBar().clearMessage()
+
+    # --- close ---------------------------------------------------------------
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self._dirty:
+            ret = QMessageBox.question(
+                self,
+                "Unsaved changes",
+                "Save changes before quitting?",
+                QMessageBox.StandardButton.Save
+                | QMessageBox.StandardButton.Discard
+                | QMessageBox.StandardButton.Cancel,
+            )
+            if ret == QMessageBox.StandardButton.Save:
+                self._save()
+                if self._dirty:
+                    event.ignore()
+                    return
+            elif ret == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+        event.accept()
