@@ -74,6 +74,16 @@ class GlyphGridModel(QAbstractListModel):
             bottom = self.index(len(self._cps) - 1, 0)
             self.dataChanged.emit(top, bottom, [])
 
+    def invalidate_preview(self, cp: int) -> None:
+        """Repaint only the one cell for ``cp`` (do NOT touch the rest of the grid)."""
+        self._pixmap_cache.pop(cp, None)
+        try:
+            row = self._cps.index(cp)
+        except ValueError:
+            return
+        idx = self.index(row, 0)
+        self.dataChanged.emit(idx, idx, [])
+
     def rowCount(self, parent=QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._cps)
 
@@ -262,6 +272,10 @@ class GlyphGrid(QWidget):
     def invalidate_previews(self) -> None:
         """Repaint only (do not recompute which codepoints are shown)."""
         self._model.invalidate_previews()
+
+    def invalidate_preview(self, cp: int) -> None:
+        """Repaint only the single cell for ``cp``."""
+        self._model.invalidate_preview(cp)
 
     def _on_clicked(self, index) -> None:
         cp = self._model.codepoint_at(index.row())

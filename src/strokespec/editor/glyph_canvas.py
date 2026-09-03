@@ -373,8 +373,8 @@ class GlyphCanvas(QWidget):
                 if 0 <= idx < len(strokes):
                     s = strokes[idx]
                     strokes[idx] = Stroke(gp, s.p2, s.shape) if ep == 0 else Stroke(s.p1, gp, s.shape)
-                    self.update()
-                    self.glyphChanged.emit()
+                    self.update()  # repaint the canvas only; the grid refresh (picosvg) is
+                    # deferred to mouseRelease so it doesn't run on every drag step.
             else:  # "new": preview the stroke while dragging
                 self._hover = self._scene_to_grid(pos)
                 self.update()
@@ -416,6 +416,7 @@ class GlyphCanvas(QWidget):
         if kind == "endpoint":
             self._drag = None
             self.update()
+            self.glyphChanged.emit()  # commit the drag once, on release
         else:  # "new"
             gp = self._scene_to_grid(event.position())
             if self._pending is not None and gp != self._pending:

@@ -426,7 +426,9 @@ class MainWindow(QMainWindow):
                 self._dirty = True
                 self._set_window_title()
             return  # opening a not-yet-edited glyph is not a change
-        self._mark_dirty(invalidate_grid=True)
+        # editing an existing glyph in place: repaint only the single cell, never the whole grid
+        self._mark_dirty(invalidate_grid=False)
+        self._grid.invalidate_preview(self._editor.glyph().codepoint)
 
     def _mark_dirty(self, invalidate_grid: bool = False) -> None:
         self._dirty = True
