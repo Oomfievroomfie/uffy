@@ -525,9 +525,8 @@ def stroke_outline(
     p2 = stroke.p2.as_font_units(baseline)
     if stroke.shape == SHAPE_ARC:
         # FLAT (butt) cap at a FORWARD-NUDGED end: move each endpoint by the pen radius along
-        # the tangent (p1 backward, p2 forward), re-fit the arc to the nudged endpoints, and
-        # butt-cap. This cuts the end perpendicular to the curve there — a different shape from
-        # the half-square (straight tangent) cap.
+        # the tangent (p1 back, p2 forward) in stroke space, then build the arc outline —
+        # the flat end lands where a half-square cap would have.
         t1, t2 = arc_end_tangents(p1, p2)
         p1n = (p1[0] - r * t1[0], p1[1] - r * t1[1])
         p2n = (p2[0] + r * t2[0], p2[1] + r * t2[1])

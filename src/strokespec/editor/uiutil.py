@@ -12,8 +12,13 @@ from ..svgout import glyph_contours_svg
 
 
 def ops_to_painterpath(ops: list) -> QPainterPath:
-    """Convert a list of M/L/C/Z font-unit ops into a QPainterPath (y-up units)."""
+    """Convert a list of M/L/C/Z font-unit ops into a QPainterPath (y-up units).
+
+    Non-zero winding fill: TrueType/OpenType use non-zero winding, and Qt's default
+    ``OddEvenFill`` would fill a closed contour of overlapping arcs as a solid region.
+    """
     path = QPainterPath()
+    path.setFillRule(Qt.FillRule.WindingFill)
     for op in ops:
         kind = op[0]
         if kind == "M":

@@ -52,6 +52,7 @@ class GlyphCanvas(QWidget):
         self._selected_index: int = -1
         self._oob_count: int = 0
         self._clip: list = []
+        self._exp_cache: dict = {}
         self.tool: str = SHAPE_LINE
         self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
@@ -66,7 +67,37 @@ class GlyphCanvas(QWidget):
         self._pending = None
         self._drag = None
         self._selected_index = -1
+        self._exp_cache.clear()
         self.update()
+
+    def _expanded(self, strokes: list) -> list:
+        """picosvg outline for ``strokes``, memoised by their exact geometry.
+
+        picosvg expansion is slow, and the canvas repaints on every mouse move, so cache the
+        result and recompute only when the stroke geometry actually changes.
+        """
+        key = (self._glyph.width, tuple(
+            (s.shape, s.p1.x, s.p1.y, s.p2.x, s.p2.y) for s in strokes))
+        hit = self._exp_cache.get(key)
+        if hit is None:
+            sub = Glyph(self._glyph.codepoint)
+            sub.width = self._glyph.width
+            sub.strokes = list(strokes)
+            hit = tuple(glyph_contours_svg(sub, PEN_RADIUS, self.baseline))
+            self._exp_cache[key] = hit
+            if len(self._exp_cache) > 800:
+                self._exp_cache.clear()
+        return hit
+
+    @staticmethod
+    def _path_from(contours: list) -> "QPainterPath":
+        """One non-zero-winding path from all contours (so inner counters punch holes)."""
+        from PySide6.QtGui import QPainterPath
+        path = QPainterPath()
+        path.setFillRule(Qt.FillRule.WindingFill)
+        for contour in contours:
+            path.addPath(ops_to_painterpath(contour))
+        return path
 
     def glyph(self) -> Glyph:
         return self._glyph
@@ -279,16 +310,15 @@ class GlyphCanvas(QWidget):
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)
 
-        # stroke fills — the SAME picosvg expansion as the compiled font, so preview == output.
+        # stroke fills — same picosvg expansion as the compile (data is correct); the display
+        # bug was drawing each contour SEPARATELY, which fills a solid region instead of
+        # letting the inner counter punch its hole. Build ONE winding-filled path and draw it.
         # We do NOT clip to the grid rect: out-of-bounds strokes stay visible (in red).
         p.save()
         self._apply_grid_transform(p, rect)
-        base = glyph_contours_svg(self._glyph, PEN_RADIUS, self.baseline)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(QColor(30, 30, 30)))
-        for contour in base:
-            p.drawPath(ops_to_painterpath(contour))
-        # selected stroke (blue) and out-of-bounds strokes (red) overlaid from their own SVG
+        p.drawPath(self._path_from(self._expanded(self._glyph.strokes)))
         oob_strokes = [s for s in self._glyph.strokes
                        if not (self._in_bounds(s.p1) and self._in_bounds(s.p2))]
         sel = self.selected_stroke()
@@ -296,12 +326,8 @@ class GlyphCanvas(QWidget):
                                    ([sel] if sel is not None else [], QColor(0, 110, 220))):
             if not sub_strokes:
                 continue
-            sub = Glyph(self._glyph.codepoint)
-            sub.width = self._glyph.width
-            sub.strokes = sub_strokes
             p.setBrush(QBrush(color))
-            for contour in glyph_contours_svg(sub, PEN_RADIUS, self.baseline):
-                p.drawPath(ops_to_painterpath(contour))
+            p.drawPath(self._path_from(self._expanded(sub_strokes)))
         p.restore()
 
         # if any stroke is out of bounds, ring the working AABB in red so it is unmistakable
@@ -328,15 +354,11 @@ class GlyphCanvas(QWidget):
             p.drawEllipse(q, c * 0.13, c * 0.13)
             if self._hover is not None and self._hover != self._pending:
                 preview = Stroke(self._pending, self._hover, self.tool)
-                pg = Glyph(self._glyph.codepoint)
-                pg.width = self._glyph.width
-                pg.strokes = [preview]
                 p.save()
                 self._apply_grid_transform(p, rect)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QColor(0, 150, 90, 130))
-                for contour in glyph_contours_svg(pg, PEN_RADIUS, self.baseline):
-                    p.drawPath(ops_to_painterpath(contour))
+                p.drawPath(self._path_from(self._expanded([preview])))
                 p.restore()
 
         # hover ring

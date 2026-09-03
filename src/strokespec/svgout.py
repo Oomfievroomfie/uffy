@@ -51,10 +51,9 @@ def glyph_svg(
         p1f = s.p1.as_font_units(baseline)
         p2f = s.p2.as_font_units(baseline)
         if s.shape == SHAPE_ARC:
-            # arcs: FLAT (butt) cap, with the ends nudged forward by the pen radius along the
-            # tangent. The nudge is intentional: the arc re-fits to the nudged endpoint, so the
-            # end cuts perpendicular to the *curve* there — a genuinely different shape from a
-            # half-square (straight tangent) cap.
+            # arcs: FLAT (butt) cap, with the ends nudged forward by the pen radius in stroke
+            # space (p1 back, p2 forward along the tangent) BEFORE the arc conversion, so the
+            # flat end lands where a half-square cap would have.
             t1, t2 = arc_end_tangents(p1f, p2f)
             p1n = (p1f[0] - r * t1[0], p1f[1] - r * t1[1])
             p2n = (p2f[0] + r * t2[0], p2f[1] + r * t2[1])
@@ -62,7 +61,12 @@ def glyph_svg(
             x2, y2 = to_svg(p2n)
             dx = abs(x2 - x1)
             dy = abs(y2 - y1)
-            arcs.append(f"M {x1:.3f} {y1:.3f} A {max(dx, 1e-6):.3f} {max(dy, 1e-6):.3f} 0 0 0 {x2:.3f} {y2:.3f}")
+            if dx < 1e-6 or dy < 1e-6:
+                # degenerate (axis-aligned) arc: an ellipse arc with a zero radius is invalid
+                # for picosvg — emit it as a straight line instead.
+                arcs.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
+            else:
+                arcs.append(f"M {x1:.3f} {y1:.3f} A {dx:.3f} {dy:.3f} 0 0 0 {x2:.3f} {y2:.3f}")
         else:
             x1, y1 = to_svg(p1f)
             x2, y2 = to_svg(p2f)
