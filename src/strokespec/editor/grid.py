@@ -13,6 +13,8 @@ from typing import Dict, List, Optional
 
 import unicodedata
 
+from PIL import Image
+
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,
@@ -56,6 +58,14 @@ def _unicode_name(cp: int) -> str:
         return unicodedata.name(chr(cp))
     except (ValueError, TypeError):
         return ""
+
+
+def _tint_grey(img: "Image.Image", rgb=(150, 150, 150)) -> "Image.Image":
+    """Recolor an RGBA reference bitmap to grey (keep its alpha mask)."""
+    img = img.convert("RGBA")
+    out = Image.new("RGBA", img.size, (*rgb, 0))
+    out.putalpha(img.getchannel("A"))
+    return out
 
 
 class GlyphGridModel(QAbstractListModel):
@@ -140,7 +150,7 @@ class GlyphGridModel(QAbstractListModel):
         if self.reflib.has(cp):
             img = self.reflib.render_first(cp, box_px=PIX_W, pixel_size=MAX_REF_PX)
             if img is not None:
-                return pil_to_qpixmap(img)
+                return pil_to_qpixmap(_tint_grey(img))  # fallback ghost: grey, not black
         return None
 
 
