@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+import unicodedata
+
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,
@@ -46,6 +48,14 @@ def _is_printable(cp: int) -> bool:
     if 0xD800 <= cp <= 0xDFFF:
         return False
     return True
+
+
+def _unicode_name(cp: int) -> str:
+    """The codepoint's name from the Unicode database, or '' if unnamed/unassigned."""
+    try:
+        return unicodedata.name(chr(cp))
+    except (ValueError, TypeError):
+        return ""
 
 
 class GlyphGridModel(QAbstractListModel):
@@ -99,7 +109,8 @@ class GlyphGridModel(QAbstractListModel):
         if role == Qt.ItemDataRole.DisplayRole:
             return chr(cp) if _is_printable(cp) else ""
         if role == Qt.ItemDataRole.ToolTipRole:
-            return f"U+{cp:04X}"
+            name = _unicode_name(cp)
+            return f"U+{cp:04X}  {name}" if name else f"U+{cp:04X}"
         return None
 
     # --- preview caching ------------------------------------------------------
