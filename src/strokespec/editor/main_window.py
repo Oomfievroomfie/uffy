@@ -123,8 +123,10 @@ class GlyphEditorPanel(QWidget):
 
         btn_delete = QPushButton("Delete selected")
         btn_reverse = QPushButton("Reverse points (flip arc)")
+        btn_toggle = QPushButton("Toggle line/arc")
         col.addWidget(btn_delete)
         col.addWidget(btn_reverse)
+        col.addWidget(btn_toggle)
         col.addStretch(1)
 
         mid = QHBoxLayout()
@@ -139,6 +141,7 @@ class GlyphEditorPanel(QWidget):
         self._stroke_list.currentRowChanged.connect(self._on_stroke_selected)
         btn_delete.clicked.connect(self.canvas.delete_selected)
         btn_reverse.clicked.connect(self.canvas.reverse_selected)
+        btn_toggle.clicked.connect(self.canvas.toggle_selected_shape)
         self._width_combo.currentIndexChanged.connect(self._on_width_changed)
         self._combining.toggled.connect(self._on_combining_changed)
         self._clear_btn.clicked.connect(self._on_clear)

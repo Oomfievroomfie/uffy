@@ -107,6 +107,15 @@ class GlyphCanvas(QWidget):
             self.update()
             self.glyphChanged.emit()
 
+    def toggle_selected_shape(self) -> None:
+        """Switch the selected stroke between a straight line and a quarter-ellipse."""
+        if 0 <= self._selected_index < len(self._glyph.strokes):
+            s = self._glyph.strokes[self._selected_index]
+            new_shape = SHAPE_LINE if s.shape == SHAPE_ARC else SHAPE_ARC
+            self._glyph.strokes[self._selected_index] = Stroke(s.p1, s.p2, new_shape)
+            self.update()
+            self.glyphChanged.emit()
+
     # --- geometry ------------------------------------------------------------
     def _grid_rect(self) -> QRectF:
         side = min(self.width(), self.height()) - 24.0
