@@ -49,6 +49,7 @@ class GlyphCanvas(QWidget):
         self._hover: Point | None = None
         self._selected_index: int = -1
         self._oob_count: int = 0
+        self._clip: list = []
         self.tool: str = SHAPE_LINE
         self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
@@ -124,6 +125,27 @@ class GlyphCanvas(QWidget):
         for i, s in enumerate(strokes):
             strokes[i] = Stroke(Point(s.p1.x + dx, s.p1.y + dy),
                                 Point(s.p2.x + dx, s.p2.y + dy), s.shape)
+        self.update()
+        if strokes:
+            self.glyphChanged.emit()
+
+    def copy_strokes(self) -> None:
+        """Copy the current glyph's strokes to an internal clipboard."""
+        self._clip = [Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes]
+
+    def paste_strokes(self) -> None:
+        """Replace the current glyph's strokes with the clipboard (if any)."""
+        if self._clip:
+            self._glyph.strokes = [Stroke(s.p1, s.p2, s.shape) for s in self._clip]
+            self.update()
+            self.glyphChanged.emit()
+
+    def flip_horizontal(self) -> None:
+        """Mirror every stroke's points left-right across the glyph's cell centre."""
+        m = self._cols() - 1
+        strokes = self._glyph.strokes
+        for i, s in enumerate(strokes):
+            strokes[i] = Stroke(Point(m - s.p1.x, s.p1.y), Point(m - s.p2.x, s.p2.y), s.shape)
         self.update()
         if strokes:
             self.glyphChanged.emit()

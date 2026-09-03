@@ -4,8 +4,19 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import (
+    QAction,
+    QBrush,
+    QColor,
+    QCloseEvent,
+    QIcon,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,6 +41,48 @@ from ..refbrowser import ReferenceLibrary
 from .glyph_canvas import GlyphCanvas
 from .grid import GlyphGrid
 from .uiutil import pil_to_qpixmap
+
+
+_ICON_HEX = QColor(60, 60, 72)
+
+
+def _make_icon(size: int, draw) -> QIcon:
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    draw(p)
+    p.end()
+    return QIcon(pm)
+
+
+def _icon_copy() -> QIcon:
+    def d(p):
+        p.setPen(QPen(_ICON_HEX, 1.4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(8.5, 1.5, 8, 11), 1.5, 1.5)
+        p.drawRoundedRect(QRectF(3.0, 5.5, 8, 11), 1.5, 1.5)
+    return _make_icon(20, d)
+
+
+def _icon_paste() -> QIcon:
+    def d(p):
+        p.setPen(QPen(_ICON_HEX, 1.4))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(QRectF(4.0, 3.0, 12, 14), 1.5, 1.5)
+        p.drawRoundedRect(QRectF(7.0, 1.0, 6, 5), 1.5, 1.5)
+    return _make_icon(20, d)
+
+
+def _icon_flip() -> QIcon:
+    def d(p):
+        p.setPen(QPen(_ICON_HEX, 1.4))
+        p.setBrush(_ICON_HEX)
+        # horizontal-flip: two mirrored triangles
+        p.drawPolygon(QPolygonF([QPointF(4, 3), QPointF(16, 9), QPointF(4, 15)]))
+        p.setBrush(QColor(255, 255, 255))
+        p.drawPolygon(QPolygonF([QPointF(16, 4), QPointF(16, 14), QPointF(5, 9)]))
+    return _make_icon(20, d)
 
 
 class ReferenceFontsDock(QWidget):
@@ -122,19 +175,24 @@ class GlyphEditorPanel(QWidget):
         opt_row.addStretch(1)
         col.addLayout(opt_row)
 
-        # small 1-pixel nudge d-pad (moves every stroke point by one grid cell)
-        nudge_grid = QGridLayout()
-        nudge_grid.setSpacing(2)
-        nudge_grid.setContentsMargins(0, 0, 0, 0)
+        # single-row tool controls: copy / paste / flip + the 1-pixel nudge arrows (icons only)
+        nudge_row = QHBoxLayout()
+        nudge_row.setSpacing(2)
+        nudge_row.setContentsMargins(0, 0, 0, 0)
+        b_copy = QToolButton(); b_copy.setIcon(_icon_copy()); b_copy.setFixedSize(22, 22)
+        b_paste = QToolButton(); b_paste.setIcon(_icon_paste()); b_paste.setFixedSize(22, 22)
+        b_flip = QToolButton(); b_flip.setIcon(_icon_flip()); b_flip.setFixedSize(22, 22)
         b_n = QToolButton(); b_n.setArrowType(Qt.ArrowType.UpArrow); b_n.setFixedSize(20, 20)
         b_s = QToolButton(); b_s.setArrowType(Qt.ArrowType.DownArrow); b_s.setFixedSize(20, 20)
         b_w = QToolButton(); b_w.setArrowType(Qt.ArrowType.LeftArrow); b_w.setFixedSize(20, 20)
         b_e = QToolButton(); b_e.setArrowType(Qt.ArrowType.RightArrow); b_e.setFixedSize(20, 20)
-        nudge_grid.addWidget(b_n, 0, 1)
-        nudge_grid.addWidget(b_w, 1, 0)
-        nudge_grid.addWidget(b_s, 1, 1)
-        nudge_grid.addWidget(b_e, 1, 2)
-        col.addLayout(nudge_grid)
+        for w in (b_copy, b_paste, b_flip):
+            nudge_row.addWidget(w)
+        nudge_row.addSpacing(6)
+        for w in (b_n, b_s, b_w, b_e):
+            nudge_row.addWidget(w)
+        nudge_row.addStretch(1)
+        col.addLayout(nudge_row)
 
         btn_delete = QPushButton("Delete selected")
         btn_reverse = QPushButton("Reverse points (flip arc)")
@@ -163,6 +221,9 @@ class GlyphEditorPanel(QWidget):
         self._btn_line.clicked.connect(lambda: self._set_tool(SHAPE_LINE))
         self._btn_arc.clicked.connect(lambda: self._set_tool(SHAPE_ARC))
         self._show_ghost.toggled.connect(self._on_ghost_toggled)
+        b_copy.clicked.connect(self.canvas.copy_strokes)
+        b_paste.clicked.connect(self.canvas.paste_strokes)
+        b_flip.clicked.connect(self.canvas.flip_horizontal)
         b_n.clicked.connect(lambda: self.canvas.nudge(0, 1))
         b_s.clicked.connect(lambda: self.canvas.nudge(0, -1))
         b_w.clicked.connect(lambda: self.canvas.nudge(-1, 0))
