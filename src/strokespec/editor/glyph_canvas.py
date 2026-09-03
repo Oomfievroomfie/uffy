@@ -324,6 +324,8 @@ class GlyphCanvas(QWidget):
             self._pending = gp  # Shift forces the stroke to start HERE, ignoring endpoints
         elif self._pending is None:
             self._pending = gp
+        self._hover = gp  # separated strokes: each click starts fresh — never draw a line
+        # back to a stale hover from the previous stroke (that was the phantom)
         self._drag = ("new",)
         self.update()
 
