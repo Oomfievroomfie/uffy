@@ -1,0 +1,33 @@
+# Python / uv
+.venv/
+.uv-cache/
+.uv-python/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Build artifacts
+dist/
+build/
+*.spec.bak
+
+# Editor / compiler scratch
+_strokespec_build_*/
+strokespec_build_*/
+.strokespec-build-*/
+probe_*/
+*.build.log
+*.fix.log
+Sample.ttf
+StrokeTest.ttf
+*.ttf
+
+# Test render/scratch outputs
+scratch_*.py
+gui_smoke.png
+render_test.png
+sample_render.png
+sample_preview.png
+refs_sheet.png
+_test_ufo_build/

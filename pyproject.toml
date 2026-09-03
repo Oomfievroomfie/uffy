@@ -1,0 +1,44 @@
+[project]
+name = "strokespec"
+version = "0.1.0"
+description = "Stroke-defined dual-width monospace universal fallback font authoring & compilation tools"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "uffy" }]
+keywords = ["font", "stroke", "fallback", "ufo", "fonttools", "fontmake"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Graphics :: Editors",
+  "Topic :: Text Processing :: Fonts",
+]
+dependencies = [
+  "fonttools[ufo]>=4.50",
+  "ufo2ft>=2.30",
+  "fontmake>=3.8",
+  "PySide6>=6.6",
+  "uharfbuzz>=0.40",
+  "pillow>=10",
+]
+
+[project.optional-dependencies]
+validate = ["gftools>=0.6"]
+dev = ["pytest>=8", "ruff", "pyinstaller>=6"]
+
+[project.scripts]
+uffy = "strokespec.cli:main"
+uffy-editor = "strokespec.editor.editor_main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strokespec"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/strokespec"]
+
+[tool.uv]
+# Keep the toolchain / dependency resolution predictable.
+resolution = "highest"
