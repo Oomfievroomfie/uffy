@@ -1,4 +1,4 @@
-"""Compile a UFO into a static TTF using Google's CLI font tooling.
+﻿"""Compile a UFO into a static TTF using Google's CLI font tooling.
 
 We never touch ``fontTools.ttLib`` / its TTF/OTF readers or writers directly here. The
 UFO is written by :mod:`strokespec.ufo` (an *authoring* format, which is fine), and the
@@ -24,7 +24,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
-from .model import StrokeFont
+from .model import StrokeFont, PEN_CAP
 from .ufo import build_ufo
 
 
@@ -229,7 +229,7 @@ def compile_strokefont(
     *,
     family_name: Optional[str] = None,
     style_name: str = "Regular",
-    cap: str = "round",
+    cap: str = PEN_CAP,
     keep_ufo: Optional[str] = None,
     tool: str = "auto",
     run_fix: bool = True,
@@ -268,3 +268,5 @@ def compile_strokefont(
         if keep_ufo:
             shutil.copytree(ufo_dir, keep_ufo, dirs_exist_ok=True)
         shutil.rmtree(tmp, ignore_errors=True)
+
+

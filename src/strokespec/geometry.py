@@ -1,4 +1,4 @@
-"""Geometric expansion of strokes into closed outlines (font-unit space).
+﻿"""Geometric expansion of strokes into closed outlines (font-unit space).
 
 Every stroke is a "pen" of diameter one grid unit that follows a centreline (a straight
 segment or a quarter-circle) and is expanded into a closed outline in TrueType/font-unit
@@ -32,6 +32,7 @@ from typing import Callable, List, Sequence, Tuple
 
 from .model import (
     DEFAULT_BASELINE,
+    PEN_CAP,
     PEN_RADIUS,
     SCALE,
     SHAPE_ARC,
@@ -257,15 +258,28 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         _append_endcap(p1, r, ang_mn, ang_u + math.pi, ops)
         ops.append(("Z",))
         return _orient_ccw(ops)
-    else:  # butt
+    if cap == "square":
+        # square cap: extend each end by half the pen width (= r) so the flat end lands on a
+        # cell boundary, and close with a straight (square) end.
+        e1 = (p1[0] - u[0] * r, p1[1] - u[1] * r)
+        e2 = (p2[0] + u[0] * r, p2[1] + u[1] * r)
         ops = [
-            ("M", off(p1, 1.0)),
-            ("L", off(p2, 1.0)),
-            ("L", off(p2, -1.0)),
-            ("L", off(p1, -1.0)),
+            ("M", (e1[0] + n[0] * r, e1[1] + n[1] * r)),
+            ("L", (e2[0] + n[0] * r, e2[1] + n[1] * r)),
+            ("L", (e2[0] - n[0] * r, e2[1] - n[1] * r)),
+            ("L", (e1[0] - n[0] * r, e1[1] - n[1] * r)),
             ("Z",),
         ]
         return _orient_ccw(ops)
+    # butt (no extension)
+    ops = [
+        ("M", off(p1, 1.0)),
+        ("L", off(p2, 1.0)),
+        ("L", off(p2, -1.0)),
+        ("L", off(p1, -1.0)),
+        ("Z",),
+    ]
+    return _orient_ccw(ops)
 
 
 def _degenerate(center: Pt, r: float, cap: str) -> List[Op]:
@@ -416,6 +430,25 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     t_end = (-sa, 0.0)   # t=pi/2 (yend)
     t_start = (0.0, sb)  # t=0 (xend)
 
+    if cap == "square":
+        # square (half-pen) cap: extend each end by r (half the pen width) along the tangent
+        # so the flat end lands on a cell boundary, then close with a straight square end.
+        a_start_ext = (a_pts[0][0] - t_start[0] * r, a_pts[0][1] - t_start[1] * r)
+        a_end_ext = (a_pts[N][0] + t_end[0] * r, a_pts[N][1] + t_end[1] * r)
+        b_start_ext = (b_pts[0][0] - t_start[0] * r, b_pts[0][1] - t_start[1] * r)
+        b_end_ext = (b_pts[N][0] + t_end[0] * r, b_pts[N][1] + t_end[1] * r)
+        ops: List[Op] = [("M", a_start_ext)]
+        for i in range(N + 1):
+            ops.append(("L", a_pts[i]))                   # outer   A -> B
+        ops.append(("L", a_end_ext))                      # square end at B
+        ops.append(("L", b_end_ext))
+        for i in range(N - 1, -1, -1):
+            ops.append(("L", b_pts[i]))                   # inner   B -> A
+        ops.append(("L", b_start_ext))                    # square end at A
+        ops.append(("L", a_start_ext))
+        ops.append(("Z",))
+        return _orient_ccw(ops)
+
     ops: List[Op] = [("M", a_pts[0])]
     for i in range(1, N + 1):
         ops.append(("L", a_pts[i]))                       # side_a (outer)   A -> B
@@ -440,7 +473,7 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
 def stroke_outline(
     stroke: Stroke,
     r: float = PEN_RADIUS,
-    cap: str = "round",
+    cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
 ) -> List[Op]:
     """Expand a single stroke to a closed outline (list of M/L/C/Z ops)."""
@@ -452,7 +485,7 @@ def stroke_outline(
 
 
 def glyph_outline(
-    glyph: Glyph, r: float = PEN_RADIUS, cap: str = "round", baseline: float = DEFAULT_BASELINE
+    glyph: Glyph, r: float = PEN_RADIUS, cap: str = PEN_CAP, baseline: float = DEFAULT_BASELINE
 ) -> List[Op]:
     """Expand every stroke in ``glyph`` into one flat op stream (multiple closed
     subpaths, one per stroke)."""
@@ -465,7 +498,7 @@ def glyph_outline(
 def glyph_contours(
     glyph: Glyph,
     r: float = PEN_RADIUS,
-    cap: str = "round",
+    cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
 ) -> List[List[Op]]:
     """Expand every stroke to its own closed contour (list of M/L/C/Z op lists)."""
@@ -476,7 +509,7 @@ def outline_to_paths(
     glyph: Glyph,
     cell_width_units: int,
     r: float = PEN_RADIUS,
-    cap: str = "round",
+    cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
 ) -> List[Tuple[float, List[Op]]]:
     """Convenience: a list of ``(advance, contours)`` ready to be written as glyphs.
@@ -485,3 +518,4 @@ def outline_to_paths(
     """
     advance = 0 if glyph.combining else cell_width_units
     return [(advance, glyph_contours(glyph, r, cap, baseline))]
+

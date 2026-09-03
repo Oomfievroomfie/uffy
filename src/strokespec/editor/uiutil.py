@@ -11,6 +11,7 @@ from ..model import (
     GRID_H,
     GRID_N,
     DEFAULT_BASELINE,
+    PEN_CAP,
     SCALE,
     UPEM,
     Glyph,
@@ -33,7 +34,7 @@ def ops_to_painterpath(ops: list) -> QPainterPath:
     return path
 
 
-def glyph_qpainterpath(glyph: Glyph, cap: str = "round", baseline: float = DEFAULT_BASELINE) -> QPainterPath:
+def glyph_qpainterpath(glyph: Glyph, cap: str = PEN_CAP, baseline: float = DEFAULT_BASELINE) -> QPainterPath:
     """Build one QPainterPath (in font units, baseline at y=0) for all strokes.
 
     The fill rule is set to non-zero winding (**not** even-odd) so overlapping strokes
@@ -61,7 +62,7 @@ def paint_stroke_glyph(
     rect: QRectF,
     *,
     color: QColor = QColor(20, 20, 20),
-    cap: str = "round",
+    cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
     offset_y: float = 0.0,
 ) -> None:
@@ -101,3 +102,4 @@ def grid_geometry(widget_size: QRectF, cols: int = GRID_N) -> QRectF:
     x = widget_size.center().x() - side / 2.0
     y = widget_size.center().y() - side / 2.0
     return QRectF(x, y, side, side)
+

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QWidget
 
 from ..geometry import stroke_outline
 from ..model import (
+    PEN_CAP,
     DEFAULT_BASELINE,
     DEFAULT_CAP_HEIGHT,
     DEFAULT_X_HEIGHT,
@@ -48,7 +49,7 @@ class GlyphCanvas(QWidget):
         self._hover: Point | None = None
         self._selected_index: int = -1
         self.tool: str = SHAPE_LINE
-        self.cap: str = "round"  # pen shape is a tool-level choice; not exposed
+        self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
         self.x_height: float = DEFAULT_X_HEIGHT
         self.cap_height: float = DEFAULT_CAP_HEIGHT
@@ -366,3 +367,5 @@ class GlyphCanvas(QWidget):
                     best_d = d ** 0.5
                     best = (i, ep)
         return best
+
+

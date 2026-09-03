@@ -15,7 +15,7 @@ from ufoLib2.objects import Glyph as UFOGlyph
 
 import re
 
-from .model import GRID_W, GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS
+from .model import GRID_W, GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS, PEN_CAP
 from .svgout import glyph_svg, parse_svg_d
 from picosvg.svg import SVG
 
@@ -110,7 +110,7 @@ def build_ufo(
     *,
     family_name: Optional[str] = None,
     style_name: Optional[str] = "Regular",
-    cap: str = "round",
+    cap: str = PEN_CAP,
     pen_radius: int = PEN_RADIUS,
     notdef_width_units: Optional[int] = None,
 ) -> str:
@@ -148,7 +148,7 @@ def build_ufo(
     info.postscriptUnderlineThickness = SCALE // 2
 
     font.lib["com.strokespec.type"] = "stroke-fallback"
-    font.lib["com.strokespec.penRadius"] = str(pen_radius)
+    font.lib["com.strokespec.penRadius"] = str(PEN_RADIUS)
     font.lib["com.strokespec.cap"] = cap
 
     # .notdef always first.
@@ -186,3 +186,5 @@ def build_ufo(
         pass
     font.save(output_dir, overwrite=True)
     return output_dir
+
+

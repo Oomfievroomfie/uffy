@@ -59,7 +59,7 @@ def glyph_svg(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.0f}" height="{UPEM:.0f}" '
         f'viewBox="0 0 {width:.0f} {UPEM:.0f}">'
         f'<path d="{d}" fill="none" stroke="black" stroke-width="{2*pen_radius:.3f}" '
-        f'stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        f'stroke-linecap="square" stroke-linejoin="round"/></svg>'
     )
 
 
@@ -147,3 +147,5 @@ def parse_svg_d(d: str, ascent: float) -> List[Op]:
             emit(cmd, params)
             params = []
     return ops
+
+

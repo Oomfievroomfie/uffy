@@ -20,6 +20,9 @@ GRID_N = 16          # cell indices are 0..15; each point sits at a cell CENTRE
 SCALE = 64           # font units per grid cell
 UPEM = SCALE * GRID_H  # 1024 units per em
 PEN_RADIUS = SCALE // 2  # 32 units -> 1 grid-cell-diameter pen
+# Pen endcap is a tool-level choice (not per-glyph data). "square" = half-pen square cap:
+# the stroke extends by the pen radius (a half cell) so its flat end lands on a cell boundary.
+PEN_CAP = "square"
 FULL_WIDTH_UNITS = GRID_W * SCALE   # 1024
 HALF_WIDTH_UNITS = (GRID_W // 2) * SCALE  # 512
 
