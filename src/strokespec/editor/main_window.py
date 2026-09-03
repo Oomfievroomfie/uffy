@@ -111,30 +111,20 @@ class GlyphEditorPanel(QWidget):
         self._btn_line.setChecked(True)
         tool_row.addWidget(self._btn_line)
         tool_row.addWidget(self._btn_arc)
-        self._btn_bend_up = QToolButton(); self._btn_bend_up.setText("Bend ↑")
-        self._btn_bend_down = QToolButton(); self._btn_bend_down.setText("Bend ↓")
-        tool_row.addWidget(self._btn_bend_up)
-        tool_row.addWidget(self._btn_bend_down)
         tool_row.addStretch(1)
         col.addLayout(tool_row)
 
-        cap_row = QHBoxLayout()
-        self._btn_round = QToolButton(); self._btn_round.setText("Round pen")
-        self._btn_butt = QToolButton(); self._btn_butt.setText("Square pen")
-        self._btn_round.setCheckable(True); self._btn_butt.setCheckable(True)
-        self._btn_round.setChecked(True)
+        opt_row = QHBoxLayout()
         self._show_ghost = QCheckBox("Reference ghost")
         self._show_ghost.setChecked(True)
-        cap_row.addWidget(self._btn_round)
-        cap_row.addWidget(self._btn_butt)
-        cap_row.addWidget(self._show_ghost)
-        cap_row.addStretch(1)
-        col.addLayout(cap_row)
+        opt_row.addWidget(self._show_ghost)
+        opt_row.addStretch(1)
+        col.addLayout(opt_row)
 
         btn_delete = QPushButton("Delete selected")
-        btn_flip = QPushButton("Flip bend")
+        btn_reverse = QPushButton("Reverse points (flip arc)")
         col.addWidget(btn_delete)
-        col.addWidget(btn_flip)
+        col.addWidget(btn_reverse)
         col.addStretch(1)
 
         mid = QHBoxLayout()
@@ -148,16 +138,12 @@ class GlyphEditorPanel(QWidget):
 
         self._stroke_list.currentRowChanged.connect(self._on_stroke_selected)
         btn_delete.clicked.connect(self.canvas.delete_selected)
-        btn_flip.clicked.connect(self.canvas.flip_selected_bend)
+        btn_reverse.clicked.connect(self.canvas.reverse_selected)
         self._width_combo.currentIndexChanged.connect(self._on_width_changed)
         self._combining.toggled.connect(self._on_combining_changed)
         self._clear_btn.clicked.connect(self._on_clear)
         self._btn_line.clicked.connect(lambda: self._set_tool(SHAPE_LINE))
         self._btn_arc.clicked.connect(lambda: self._set_tool(SHAPE_ARC))
-        self._btn_bend_up.clicked.connect(lambda: self._set_bend(1))
-        self._btn_bend_down.clicked.connect(lambda: self._set_bend(-1))
-        self._btn_round.clicked.connect(lambda: self._set_cap("round"))
-        self._btn_butt.clicked.connect(lambda: self._set_cap("butt"))
         self._show_ghost.toggled.connect(self._on_ghost_toggled)
         self.canvas.glyphChanged.connect(self._sync_stroke_list)
 
@@ -194,21 +180,6 @@ class GlyphEditorPanel(QWidget):
         self._btn_arc.blockSignals(False)
         self.canvas.set_tool(tool)
 
-    def _set_bend(self, bend: int) -> None:
-        self.canvas.set_bend(bend)
-        s = self.canvas.selected_stroke()
-        if s is not None and s.shape == SHAPE_ARC:
-            self.canvas.flip_selected_bend()
-
-    def _set_cap(self, cap: str) -> None:
-        self._btn_round.blockSignals(True)
-        self._btn_butt.blockSignals(True)
-        self._btn_round.setChecked(cap == "round")
-        self._btn_butt.setChecked(cap == "butt")
-        self._btn_round.blockSignals(False)
-        self._btn_butt.blockSignals(False)
-        self.canvas.set_cap(cap)
-
     def _on_ghost_toggled(self, on: bool) -> None:
         self.canvas.show_reference = on
         self.canvas.update()
@@ -243,9 +214,8 @@ class GlyphEditorPanel(QWidget):
         if self._glyph is not None:
             for i, s in enumerate(self._glyph.strokes):
                 kind = "Arc" if s.shape == SHAPE_ARC else "Ln "
-                bend = "" if s.shape == SHAPE_LINE else ("  ↷" if s.bend > 0 else "  ↶")
                 self._stroke_list.addItem(
-                    f"{i}: {kind} ({s.p1.x},{s.p1.y})→({s.p2.x},{s.p2.y}){bend}"
+                    f"{i}: {kind} ({s.p1.x},{s.p1.y})→({s.p2.x},{s.p2.y})"
                 )
             if 0 <= self.canvas._selected_index < len(self._glyph.strokes):
                 self._stroke_list.setCurrentRow(self.canvas._selected_index)
@@ -318,8 +288,14 @@ class MainWindow(QMainWindow):
 
     # --- reference helper ----------------------------------------------------
     def _reference_for_codepoint(self, cp: int):
-        img = self.reflib.render_first(cp, box_px=128, pixel_size=160)
-        return pil_to_qpixmap(img) if img else None
+        f = self.reflib.first_with(cp)
+        if f is None:
+            return None
+        res = f.glyph_bitmap(cp, 160)
+        if res is None:
+            return None
+        img, baseline_px, cap_px = res
+        return (pil_to_qpixmap(img), baseline_px, cap_px)
 
     def _on_refs_changed(self) -> None:
         self._grid.refresh()
@@ -486,7 +462,6 @@ class MainWindow(QMainWindow):
                     self.strokefont,
                     path,
                     family_name=self.strokefont.metadata.get("name", "strokespec"),
-                    cap=self._editor.canvas.cap,
                 )
             finally:
                 QApplication.restoreOverrideCursor()

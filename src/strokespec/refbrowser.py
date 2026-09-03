@@ -156,6 +156,35 @@ class ReferenceFont:
         canvas.paste(glyph, (box_px // 2 - nw // 2, box_px // 2 - nh // 2), glyph)
         return canvas
 
+    def glyph_bitmap(self, codepoint: int, em_px: int = 160):
+        """Render a glyph while retaining its vertical metrics.
+
+        Returns ``(image, baseline_px, capheight_px)``: ``image`` is an RGBA bitmap whose
+        *baseline* is ``baseline_px`` pixels below the top, and ``capheight_px`` is this
+        font's cap-height in the same pixel space (measured from a capital ``H``). This lets
+        a caller place the glyph against its own baseline and scale it by its own cap-height
+        (rather than fit-and-centre). Returns ``None`` if the font lacks the codepoint.
+        """
+        if not self.has(codepoint):
+            return None
+        f = self._pil_font(em_px)
+        asc, desc = f.getmetrics()
+        W = max(em_px * 2, em_px + 64)
+        H = asc + desc
+        mask = Image.new("L", (W, H), 0)
+        d = ImageDraw.Draw(mask)
+        d.text((em_px // 2, 0), chr(codepoint), font=f, fill=255)
+        ibox = mask.getbbox()
+        if not ibox:
+            return None
+        baseline_px = asc
+        hb = f.getbbox("H")
+        cap_px = (hb[3] - hb[1]) if (hb and hb[3] > hb[1]) else asc
+        crop = mask.crop((ibox[0], 0, ibox[2], H))
+        out = Image.new("RGBA", crop.size, (0, 0, 0, 0))
+        out.putalpha(crop)
+        return out, float(baseline_px), float(cap_px)
+
 
 class ReferenceLibrary:
     """A list of reference fonts indexed from one or more folders."""

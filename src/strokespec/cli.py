@@ -36,7 +36,6 @@ def _build(args) -> int:
         args.output,
         family_name=args.family or sf.metadata.get("name", "strokespec"),
         style_name=args.style,
-        cap=args.cap,
         tool=args.tool,
         run_fix=not args.no_fix,
     )
@@ -70,7 +69,7 @@ def _preview(args) -> int:
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     paint_stroke_glyph(
         painter, glyph, QRectF(4, 4, size - 8, size - 8),
-        color=QColor(20, 20, 20), cap=args.cap, baseline=sf.baseline,
+        color=QColor(20, 20, 20), baseline=sf.baseline,
     )
     painter.end()
     img.save(args.output)
@@ -132,7 +131,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     b.add_argument("-o", "--output", default="fallback.ttf", help="output TTF path")
     b.add_argument("--family", default=None, help="font family name")
     b.add_argument("--style", default="Regular", help="font style name")
-    b.add_argument("--cap", default="round", choices=["round", "butt"], help="pen cap style")
     b.add_argument("--tool", default="auto", choices=["auto", "gftools", "fontmake"], help="compile tool")
     b.add_argument("--no-fix", action="store_true", help="skip gftools fix")
     b.set_defaults(func=_build)
@@ -142,7 +140,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     pr.add_argument("-c", "--cp", type=lambda s: int(s, 0), help="codepoint (int or 0x..)")
     pr.add_argument("-o", "--output", default="glyph_preview.png", help="output PNG path")
     pr.add_argument("--size", type=int, default=512, help="output pixel size")
-    pr.add_argument("--cap", default="round", choices=["round", "butt"])
     pr.set_defaults(func=_preview)
 
     rf = sub.add_parser("refs", help="scan a folder of reference fonts")

@@ -19,19 +19,19 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   16×16 unifont glyph". The outermost vertices sit half a cell inside the em box, which
   leaves visible padding around them in the editor.
 * A glyph is a set of **up to 32 strokes**.
-* A stroke is **exactly two grid points** plus a shape flag:
+* The only data a stroke carries is **exactly two grid points plus a line-vs-quarter-ellipse
+  flag**:
   * `line` — a straight segment between the two points;
   * `arc` — a **scaled quarter-circle** (a quarter-**ellipse**) that is confined to the
     axis-aligned bounding box of the two points and is **tangent-aligned** to it (at each
-    endpoint the tangent is horizontal/vertical). It never bulges past the chord. A `bend`
-    sign chooses which of the two complementary quarter-ellipses (which corner of the box
-    the arc bows toward) is drawn, so the ordering of the two points fixes "top vs bottom".
+    endpoint the tangent is horizontal/vertical). It never bulges past the chord. Its **bend
+    direction is a pure function of the ordering of the two points** — there is no bend
+    flag. Swapping the two points bends the arc the other way.
 * Each stroke is "painted" with a pen of **one grid-cell diameter** that follows the
-  centreline and expands it into an outline. Two cap styles:
-  * `round` — a circle of radius ½ grid cell; the natural pen look (default).
-  * `butt` — a square of one grid cell; a pixel/brush look.
-  The outline is filled with the **non-zero winding rule** (like TrueType/OpenType; *not*
-  even-odd), so overlapping strokes **union** instead of punching holes.
+  centreline and expands it into an outline. The pen/cap shape is a **tool-level choice**
+  (a round pen by default), not per-glyph data. The outline is filled with the **non-zero
+  winding rule** (like TrueType/OpenType; *not* even-odd), so overlapping strokes **union**
+  instead of punching holes.
 * The **baseline is globally configurable**, in grid cells above the bottom edge of the em
   box (default 3.0). Descenders are drawn in the cells *below* the baseline and map to a
   negative font y. **x-height** and **cap-height** are also configurable and are written
@@ -53,7 +53,9 @@ The grid is the em box. One grid cell = **64 font units**:
 | half-width glyph     | 8 grid  = 512  units                               |
 | grid cell            | 64 units                                           |
 | pen radius           | 32 units (1 grid-cell diameter)                    |
-| baseline (default)   | 3.0 cells above the em-box bottom (→ 192 units descent) |
+| baseline (default)   | 2.0 cells above the em-box bottom (Unifont, → 128 units descent) |
+| x-height (default)   | 10.0 cells above the em-box bottom (Unifont)            |
+| cap-height (default) | 12.0 cells above the em-box bottom (Unifont)            |
 
 The pen radius (32) is chosen so a minimum-size arc/semicircle stays well inside the box.
 Coordinates are rounded to integers when written to the font.
@@ -89,11 +91,13 @@ src/strokespec/
   Clicking a cell opens that glyph in the editor.
 * a **glyph editor** on the right:
   * a 16×16 grid canvas where you **click two points** to add a stroke; **drag an endpoint**
-    to move it; tools (Line / Arc) and bend (↑ / ↓) + pen (Round / Square) via the toolbar;
-  * a **stroke list** (select / delete / flip bend), a **combining** checkbox and a
-    **width** selector (8 / 16);
-  * a faint **reference ghost** behind your strokes showing the reference glyph as a
-    tracing guide (toggleable);
+    to move it; a **Line / Arc** tool toggle; an arc's bend is flipped by **reversing the
+    stroke's points**;
+  * a **stroke list** (select / delete / reverse to flip an arc), a **combining** checkbox
+    and a **width** selector (8 / 16);
+  * a faint **reference ghost** behind your strokes, scaled by the reference font's
+    cap-height and aligned to its baseline so it lines up with your grid's metric guides
+    (toggleable);
   * **Font → Metrics Options…** to set the baseline, x-height and cap-height.
 * a **Reference Fonts** dock where you point the app at a folder of fonts to preview while
   authoring;

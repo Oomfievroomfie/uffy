@@ -31,8 +31,6 @@ import math
 from typing import Callable, List, Sequence, Tuple
 
 from .model import (
-    BEND_DOWN,
-    BEND_UP,
     DEFAULT_BASELINE,
     PEN_RADIUS,
     SCALE,
@@ -336,14 +334,16 @@ def _offset_ellipse_pts(c, a, b, sa, sb, r, side, n=20) -> List[Pt]:
     return pts
 
 
-def arc_outline(p1: Pt, p2: Pt, bend: int, r: float, cap: str) -> List[Op]:
+def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     """Outline for a scaled quarter-circle (quarter-*ellipse*) stroke.
 
     The arc is confined to the axis-aligned bounding box of the two points (its chord is a
     diagonal of that box) and stays inside it — it never bulges past the chord. It is
-    tangent-aligned to the box: at each endpoint the tangent is axis-aligned. ``bend``
-    chooses which of the two complementary quarter-ellipses (i.e. which of the two
-    remaining box corners the arc bows toward) is drawn.
+    tangent-aligned to the box: at each endpoint the tangent is axis-aligned.
+
+    The bend direction is a pure function of the ordering of the two points: the arc bows
+    toward the box corner that lies on the LEFT of the directed chord ``p1 -> p2`` (positive
+    cross product in y-up coordinates), so swapping the points bends it the other way.
     """
     dx = abs(p2[0] - p1[0])
     dy = abs(p2[1] - p1[1])
@@ -356,12 +356,15 @@ def arc_outline(p1: Pt, p2: Pt, bend: int, r: float, cap: str) -> List[Op]:
     minx, maxx = min(p1[0], p2[0]), max(p1[0], p2[0])
     miny, maxy = min(p1[1], p2[1]), max(p1[1], p2[1])
     corners = [(minx, miny), (maxx, miny), (minx, maxy), (maxx, maxy)]
-    candidates = sorted(
-        (c for c in corners if abs(c[0] - p1[0]) > 1e-9 or abs(c[1] - p1[1]) > 1e-9
-         if abs(c[0] - p2[0]) > 1e-9 or abs(c[1] - p2[1]) > 1e-9),
-        key=lambda c: (c[0], c[1]),
-    )
-    Bc = candidates[0] if bend == BEND_UP else candidates[1]
+    candidates = [
+        c for c in corners
+        if (abs(c[0] - p1[0]) > 1e-9 or abs(c[1] - p1[1]) > 1e-9)
+        and (abs(c[0] - p2[0]) > 1e-9 or abs(c[1] - p2[1]) > 1e-9)
+    ]
+    # bulge toward the box corner on the left of p1 -> p2 (ordering is the only input)
+    dxd = p2[0] - p1[0]
+    dyd = p2[1] - p1[1]
+    Bc = max(candidates, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
     a, b = dx, dy
 
     # x-neighbour (same y as Bc) and y-neighbour (same x as Bc) are exactly p1/p2.
@@ -409,7 +412,7 @@ def stroke_outline(
     p1 = stroke.p1.as_font_units(baseline)
     p2 = stroke.p2.as_font_units(baseline)
     if stroke.shape == SHAPE_ARC:
-        return arc_outline(p1, p2, stroke.bend, r, cap)
+        return arc_outline(p1, p2, r, cap)
     return line_outline(p1, p2, r, cap)
 
 

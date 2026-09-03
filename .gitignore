@@ -31,3 +31,7 @@ sample_render.png
 sample_preview.png
 refs_sheet.png
 _test_ufo_build/
+
+# Reference font binaries
+ref fonts/
+

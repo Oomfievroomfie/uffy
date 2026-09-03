@@ -21,8 +21,7 @@
             7,
             14
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -33,8 +32,7 @@
             11,
             3
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -45,8 +43,7 @@
             10,
             8
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         }
       ]
     },
@@ -64,8 +61,7 @@
             4,
             11
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -76,8 +72,7 @@
             9,
             11
           ],
-          "shape": "arc",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -88,8 +83,7 @@
             9,
             4
           ],
-          "shape": "arc",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -100,8 +94,7 @@
             4,
             4
           ],
-          "shape": "arc",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -112,8 +105,7 @@
             8,
             0
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         }
       ]
     },
@@ -131,8 +123,36 @@
             6,
             14
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
+        }
+      ]
+    },
+    {
+      "codepoint": 9675,
+      "width": 8,
+      "combining": false,
+      "strokes": [
+        {
+          "p1": [
+            1,
+            2
+          ],
+          "p2": [
+            7,
+            14
+          ],
+          "shape": "arc"
+        },
+        {
+          "p1": [
+            7,
+            14
+          ],
+          "p2": [
+            1,
+            12
+          ],
+          "shape": "arc"
         }
       ]
     },
@@ -143,39 +163,36 @@
       "strokes": [
         {
           "p1": [
-            2,
-            2
+            1,
+            3
           ],
           "p2": [
-            2,
+            1,
             14
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
-            2,
+            1,
             14
           ],
           "p2": [
-            7,
-            13
+            6,
+            14
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
-            2,
-            8
+            1,
+            3
           ],
           "p2": [
-            7,
-            8
+            6,
+            9
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         }
       ]
     },
@@ -193,8 +210,7 @@
             13,
             12
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -205,8 +221,7 @@
             13,
             4
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -217,8 +232,7 @@
             3,
             12
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -229,8 +243,7 @@
             13,
             12
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         },
         {
           "p1": [
@@ -241,8 +254,7 @@
             8,
             14
           ],
-          "shape": "line",
-          "bend": 1
+          "shape": "line"
         }
       ]
     }

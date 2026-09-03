@@ -26,18 +26,12 @@ HALF_WIDTH_UNITS = (GRID_W // 2) * SCALE  # 512
 # Metrics, in grid cells, measured from the BOTTOM edge of the em box (0) upward.
 # The bottom edge is NOT the baseline: descenders live in the cells below the baseline,
 # so the baseline sits above the bottom edge. Both are globally configurable per stroke set.
-DEFAULT_BASELINE = 3.0    # grid cells from the em-box bottom to the baseline
-DEFAULT_X_HEIGHT = 8.0    # grid cells (x-height metric; stored in the font info)
-DEFAULT_CAP_HEIGHT = 12.0
+DEFAULT_BASELINE = 2.0    # grid cells from the em-box bottom to the baseline (Unifont)
+DEFAULT_X_HEIGHT = 10.0   # grid cells (x-height metric; stored in the font info) (Unifont)
+DEFAULT_CAP_HEIGHT = 12.0 # grid cells (cap-height metric) (Unifont)
 
 SHAPE_LINE = "line"
 SHAPE_ARC = "arc"
-
-# Bend sign: which side of the chord (p1 -> p2) the quarter-circle bulges toward.
-# +1 = one side, -1 = the other (deterministic; the editor exposes both and they are
-# visually distinct, so the exact convention does not matter to the author).
-BEND_UP = 1
-BEND_DOWN = -1
 
 _SUPPORTED_SHAPES = frozenset({SHAPE_LINE, SHAPE_ARC})
 
@@ -84,44 +78,40 @@ class Point:
 
 @dataclass(frozen=True)
 class Stroke:
-    """A single stroke: exactly two grid points plus a shape and bend.
+    """A single stroke: exactly two grid points plus a line-vs-quarter-ellipse flag.
 
-    ``shape`` is ``SHAPE_LINE`` or ``SHAPE_ARC``.  For arcs, ``bend`` selects the side
-    of the chord that the quarter-circle bulges toward.  The ordering of p1/p2 matters:
-    it fixes the chord direction and therefore which ''top vs bottom'' bend is selected.
+    That is the *only* data a stroke carries. An arc's bend direction is a pure function of
+    the ordering of ``p1`` and ``p2`` (no separate bend flag), and the pen/cap shape is a
+    tool-level choice, not per-glyph data.
     """
     p1: Point
     p2: Point
     shape: str = SHAPE_LINE
-    bend: int = BEND_UP
 
     def __post_init__(self) -> None:
         if self.shape not in _SUPPORTED_SHAPES:
             raise ValueError(f"unknown stroke shape: {self.shape!r}")
-        if self.shape == SHAPE_ARC and self.bend not in (BEND_UP, BEND_DOWN):
-            raise ValueError(f"bad bend sign for arc: {self.bend}")
 
     @property
     def is_arc(self) -> bool:
         return self.shape == SHAPE_ARC
 
-    def flipped(self, bend: int) -> "Stroke":
-        """Return a copy with the bend sign replaced (for UI toggles)."""
-        return Stroke(self.p1, self.p2, self.shape, bend)
+    def reversed(self) -> "Stroke":
+        """The same stroke with the two points swapped (the arc bends the other way)."""
+        return Stroke(self.p2, self.p1, self.shape)
 
     def to_dict(self) -> dict:
         return {
             "p1": [self.p1.x, self.p1.y],
             "p2": [self.p2.x, self.p2.y],
             "shape": self.shape,
-            "bend": self.bend,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> "Stroke":
         p1 = Point(*d["p1"])
         p2 = Point(*d["p2"])
-        return cls(p1, p2, d.get("shape", SHAPE_LINE), d.get("bend", BEND_UP))
+        return cls(p1, p2, d.get("shape", SHAPE_LINE))
 
 
 @dataclass
@@ -164,11 +154,6 @@ class Glyph:
         if len(self.strokes) >= 32:
             raise ValueError("a glyph may have at most 32 strokes")
         self.strokes.append(stroke)
-
-    def set_bend(self, index: int, bend: int) -> None:
-        s = self.strokes[index]
-        if s.shape == SHAPE_ARC:
-            self.strokes[index] = s.flipped(bend)
 
     def to_dict(self) -> dict:
         d: dict = {

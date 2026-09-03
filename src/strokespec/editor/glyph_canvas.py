@@ -14,8 +14,6 @@ from PySide6.QtWidgets import QWidget
 
 from ..geometry import stroke_outline
 from ..model import (
-    BEND_DOWN,
-    BEND_UP,
     DEFAULT_BASELINE,
     DEFAULT_CAP_HEIGHT,
     DEFAULT_X_HEIGHT,
@@ -50,8 +48,7 @@ class GlyphCanvas(QWidget):
         self._hover: Point | None = None
         self._selected_index: int = -1
         self.tool: str = SHAPE_LINE
-        self.bend: int = BEND_UP
-        self.cap: str = "round"
+        self.cap: str = "round"  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
         self.x_height: float = DEFAULT_X_HEIGHT
         self.cap_height: float = DEFAULT_CAP_HEIGHT
@@ -84,14 +81,6 @@ class GlyphCanvas(QWidget):
             self.tool = tool
             self.update()
 
-    def set_bend(self, bend: int) -> None:
-        self.bend = bend
-        self.update()
-
-    def set_cap(self, cap: str) -> None:
-        self.cap = cap
-        self.update()
-
     def select_stroke(self, index: int) -> None:
         self._selected_index = index
         self.update()
@@ -110,10 +99,11 @@ class GlyphCanvas(QWidget):
             return True
         return False
 
-    def flip_selected_bend(self) -> None:
-        s = self.selected_stroke()
-        if s is not None and s.shape == SHAPE_ARC:
-            self._glyph.strokes[self._selected_index] = s.flipped(-s.bend)
+    def reverse_selected(self) -> None:
+        """Reverse the selected stroke's points — this is what flips an arc's bend."""
+        if 0 <= self._selected_index < len(self._glyph.strokes):
+            s = self._glyph.strokes[self._selected_index]
+            self._glyph.strokes[self._selected_index] = s.reversed()
             self.update()
             self.glyphChanged.emit()
 
@@ -178,25 +168,33 @@ class GlyphCanvas(QWidget):
         p.setPen(QPen(QColor(120, 150, 210), 1.5))
         p.drawLine(QPoint(rect.left(), base_y), QPoint(rect.right(), base_y))
 
-        # faint reference glyph ghost
+        # faint reference glyph ghost, aligned to this font's baseline/cap-height guide
         if self.show_reference and self.reference_provider is not None:
             try:
                 ghost = self.reference_provider(self._glyph.codepoint)
             except Exception:
                 ghost = None
-            if ghost is not None and not ghost.isNull():
-                scaled = ghost.scaled(
-                    int(rect.width() * 0.96), int(rect.height() * 0.96),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                p.setOpacity(0.20)
-                p.drawPixmap(
-                    QPoint(rect.center().x() - scaled.width() / 2,
-                           rect.center().y() - scaled.height() / 2),
-                    scaled,
-                )
-                p.setOpacity(1.0)
+            if ghost is not None:
+                try:
+                    qpix, baseline_px, cap_px = ghost
+                except (TypeError, ValueError):
+                    qpix, baseline_px, cap_px = ghost, rect.height(), rect.height()
+                if not qpix.isNull():
+                    cell = self._cell()
+                    grid_cap_span = (self.cap_height - self.baseline) * cell
+                    scale = (grid_cap_span / cap_px) if (cap_px > 0 and grid_cap_span > 0) else 1.0
+                    scene_base_y = rect.top() + (GRID_H - self.baseline) * cell
+                    scaled = qpix.scaled(
+                        max(1, int(qpix.width() * scale)),
+                        max(1, int(qpix.height() * scale)),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                    top = scene_base_y - baseline_px * (scaled.height() / qpix.height())
+                    left = rect.center().x() - scaled.width() / 2.0
+                    p.setOpacity(0.20)
+                    p.drawPixmap(left, top, scaled)
+                    p.setOpacity(1.0)
 
         # stroke fills (font units -> scene via the baseline transform)
         p.save()
@@ -228,7 +226,7 @@ class GlyphCanvas(QWidget):
             q = self._grid_to_scene(self._pending.x, self._pending.y)
             p.drawEllipse(q, c * 0.13, c * 0.13)
             if self._hover is not None and self._hover != self._pending:
-                preview = Stroke(self._pending, self._hover, self.tool, self.bend)
+                preview = Stroke(self._pending, self._hover, self.tool)
                 p.save()
                 p.setClipRect(rect)
                 self._apply_grid_transform(p, rect)
@@ -250,7 +248,7 @@ class GlyphCanvas(QWidget):
         p.drawText(
             QRectF(8, self.height() - 22, self.width() - 16, 18),
             Qt.AlignmentFlag.AlignLeft,
-            f"{mode}  bend={'up' if self.bend == BEND_UP else 'down'}  baseline={self.baseline:.1f}",
+            f"{mode}   baseline={self.baseline:.1f}   x-height={self.x_height:.1f}   cap-height={self.cap_height:.1f}",
         )
 
     # --- interaction ---------------------------------------------------------
@@ -263,9 +261,9 @@ class GlyphCanvas(QWidget):
             if 0 <= idx < len(strokes):
                 s = strokes[idx]
                 if ep == 0:
-                    strokes[idx] = Stroke(gp, s.p2, s.shape, s.bend)
+                    strokes[idx] = Stroke(gp, s.p2, s.shape)
                 else:
-                    strokes[idx] = Stroke(s.p1, gp, s.shape, s.bend)
+                    strokes[idx] = Stroke(s.p1, gp, s.shape)
                 self.update()
                 self.glyphChanged.emit()
         else:
@@ -287,7 +285,7 @@ class GlyphCanvas(QWidget):
             else:
                 if gp != self._pending:
                     try:
-                        self._glyph.add_stroke(Stroke(self._pending, gp, self.tool, self.bend))
+                        self._glyph.add_stroke(Stroke(self._pending, gp, self.tool))
                     except ValueError:
                         pass
                     self._pending = None
