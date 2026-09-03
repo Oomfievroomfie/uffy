@@ -17,6 +17,8 @@ from ..model import (
     BEND_DOWN,
     BEND_UP,
     DEFAULT_BASELINE,
+    DEFAULT_CAP_HEIGHT,
+    DEFAULT_X_HEIGHT,
     GRID_H,
     GRID_N,
     SCALE,
@@ -51,6 +53,8 @@ class GlyphCanvas(QWidget):
         self.bend: int = BEND_UP
         self.cap: str = "round"
         self.baseline: float = DEFAULT_BASELINE
+        self.x_height: float = DEFAULT_X_HEIGHT
+        self.cap_height: float = DEFAULT_CAP_HEIGHT
         self.reference_provider = None
         self.show_reference = True
 
@@ -67,6 +71,12 @@ class GlyphCanvas(QWidget):
 
     def set_baseline(self, baseline: float) -> None:
         self.baseline = baseline
+        self.update()
+
+    def set_metrics(self, baseline: float, x_height: float, cap_height: float) -> None:
+        self.baseline = float(baseline)
+        self.x_height = float(x_height)
+        self.cap_height = float(cap_height)
         self.update()
 
     def set_tool(self, tool: str) -> None:
@@ -154,8 +164,17 @@ class GlyphCanvas(QWidget):
             y = rect.top() + i * c
             p.drawLine(QPoint(rect.left(), y), QPoint(rect.right(), y))
 
-        # baseline (em box bottom is grid 0; baseline is `baseline` cells up)
-        base_y = rect.top() + (GRID_H - self.baseline) * c
+        # guide lines: cap-height (top), x-height (middle), baseline (bottom)
+        def grid2y(u: float) -> float:
+            return rect.top() + (GRID_H - u) * c
+
+        cap_y = grid2y(self.cap_height)
+        xh_y = grid2y(self.x_height)
+        base_y = grid2y(self.baseline)
+        p.setPen(QPen(QColor(205, 120, 120), 1))
+        p.drawLine(QPoint(rect.left(), cap_y), QPoint(rect.right(), cap_y))
+        p.setPen(QPen(QColor(120, 190, 130), 1))
+        p.drawLine(QPoint(rect.left(), xh_y), QPoint(rect.right(), xh_y))
         p.setPen(QPen(QColor(120, 150, 210), 1.5))
         p.drawLine(QPoint(rect.left(), base_y), QPoint(rect.right(), base_y))
 

@@ -282,7 +282,9 @@ class MainWindow(QMainWindow):
         self._grid.glyphChosen.connect(self._open_codepoint)
         self._editor.glyphChanged.connect(self._on_glyph_changed)
         self._editor.set_reference_provider(self._reference_for_codepoint)
-        self._editor.canvas.set_baseline(self.strokefont.baseline)
+        self._editor.canvas.set_metrics(
+            self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
+        )
 
         if path:
             self._load_into(path)
@@ -368,7 +370,9 @@ class MainWindow(QMainWindow):
         self._path = None
         self._dirty = False
         self._set_window_title()
-        self._editor.canvas.set_baseline(self.strokefont.baseline)
+        self._editor.canvas.set_metrics(
+            self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
+        )
         self._grid.refresh()
         self._open_codepoint(0x20)
 
@@ -390,7 +394,9 @@ class MainWindow(QMainWindow):
         self._path = path
         self._dirty = False
         self._set_window_title()
-        self._editor.canvas.set_baseline(self.strokefont.baseline)
+        self._editor.canvas.set_metrics(
+            self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
+        )
         self._grid.refresh()
         self._open_codepoint(0x20)
 
@@ -451,7 +457,9 @@ class MainWindow(QMainWindow):
             self.strokefont.metadata["baseline"] = baseline_spin.value()
             self.strokefont.metadata["x_height"] = xh_spin.value()
             self.strokefont.metadata["cap_height"] = ch_spin.value()
-            self._editor.canvas.set_baseline(self.strokefont.baseline)
+            self._editor.canvas.set_metrics(
+            self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
+        )
             self._editor.refresh_canvas()
             self._grid.refresh()
             self._dirty = True
