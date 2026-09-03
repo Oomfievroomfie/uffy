@@ -311,8 +311,14 @@ def arc_end_tangents(p1: Pt, p2: Pt) -> Tuple[Pt, Pt]:
     """
     dx = abs(p2[0] - p1[0])
     dy = abs(p2[1] - p1[1])
-    if dx < 1e-9 or dy < 1e-9:
+    if dx < 1e-9 and dy < 1e-9:
         return ((0.0, 0.0), (0.0, 0.0))
+    if dx < 1e-9 or dy < 1e-9:
+        # axis-aligned "arc" (degenerates to a straight line): there is no valid ellipse
+        # tangent, so nudge along the direction the line goes (p1 -> p2).
+        L = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        ux, uy = (p2[0] - p1[0]) / L, (p2[1] - p1[1]) / L
+        return ((ux, uy), (ux, uy))
     minx, maxx = min(p1[0], p2[0]), max(p1[0], p2[0])
     miny, maxy = min(p1[1], p2[1]), max(p1[1], p2[1])
     cands = [

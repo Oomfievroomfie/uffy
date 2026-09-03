@@ -6,16 +6,9 @@ from PIL import Image
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QPixmap
 
-from ..geometry import Op, glyph_contours
-from ..model import (
-    GRID_H,
-    GRID_N,
-    DEFAULT_BASELINE,
-    PEN_CAP,
-    SCALE,
-    UPEM,
-    Glyph,
-)
+from ..geometry import Op
+from ..model import (GRID_H, GRID_N, DEFAULT_BASELINE, PEN_RADIUS, SCALE, UPEM, Glyph)
+from ..svgout import glyph_contours_svg
 
 
 def ops_to_painterpath(ops: list) -> QPainterPath:
@@ -34,15 +27,15 @@ def ops_to_painterpath(ops: list) -> QPainterPath:
     return path
 
 
-def glyph_qpainterpath(glyph: Glyph, cap: str = PEN_CAP, baseline: float = DEFAULT_BASELINE) -> QPainterPath:
+def glyph_qpainterpath(glyph: Glyph, baseline: float = DEFAULT_BASELINE) -> QPainterPath:
     """Build one QPainterPath (in font units, baseline at y=0) for all strokes.
 
-    The fill rule is set to non-zero winding (**not** even-odd) so overlapping strokes
-    *union* rather than punch holes — TrueType/OpenType also fills with non-zero winding.
+    Uses the same picosvg stroke expansion as the font compiler, so the preview and the
+    compiled glyph can never differ. Non-zero winding so overlapping strokes union.
     """
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)
-    for contour in glyph_contours(glyph, cap=cap, baseline=baseline):
+    for contour in glyph_contours_svg(glyph, PEN_RADIUS, baseline):
         path.addPath(ops_to_painterpath(contour))
     return path
 
@@ -62,7 +55,6 @@ def paint_stroke_glyph(
     rect: QRectF,
     *,
     color: QColor = QColor(20, 20, 20),
-    cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
     offset_y: float = 0.0,
 ) -> None:
@@ -71,7 +63,7 @@ def paint_stroke_glyph(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
-    path = glyph_qpainterpath(glyph, cap=cap, baseline=baseline)
+    path = glyph_qpainterpath(glyph, baseline=baseline)
     if offset_y:
         rect = rect.translated(0, offset_y)
     width_units = glyph.cell_width_units

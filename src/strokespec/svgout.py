@@ -13,10 +13,12 @@ tools from strokes.
 from __future__ import annotations
 
 import math
+import re
 from typing import List, Tuple, Union, Iterable
 
 from .geometry import arc_end_tangents
 from .model import SHAPE_ARC, SHAPE_LINE, DEFAULT_BASELINE, UPEM, Glyph, Stroke, PEN_RADIUS
+from picosvg.svg import SVG
 
 Pt = Tuple[float, float]
 # An op is ("M"/"L"/"C"/"Q"/"Z", ...) in font units (y-up, baseline 0).
@@ -167,5 +169,37 @@ def parse_svg_d(d: str, ascent: float) -> List[Op]:
             emit(cmd, params)
             params = []
     return ops
+
+
+def glyph_contours_svg(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
+    """Expand a glyph's strokes to fill outlines using Google's **picosvg**.
+
+    This is the *canonical* stroke-expansion used both for the compiled font and for the
+    editor preview, so the two can never disagree. Returns a list of contours, each a list
+    of ``M/L/C/Z`` ops in font units (y-up, baseline at 0). A glyph with no strokes returns
+    an empty list.
+    """
+    if not glyph.strokes:
+        return []
+    ascent = (16 - baseline) * 64
+    svg = glyph_svg(glyph, pen_radius, baseline)
+    expanded = SVG.fromstring(svg).topicosvg()
+    d = ""
+    m = re.search(r'd="([^"]+)"', expanded.tostring())
+    if m:
+        d = m.group(1)
+    ops = parse_svg_d(d, ascent)
+    contours: List[List[Op]] = []
+    cur: List[Op] = []
+    for op in ops:
+        if op[0] == "M":
+            if cur:
+                contours.append(cur)
+            cur = [op]
+        else:
+            cur.append(op)
+    if cur:
+        contours.append(cur)
+    return contours
 
 

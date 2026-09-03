@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QWidget
 from ..geometry import stroke_outline
 from ..model import (
     PEN_CAP,
+    PEN_RADIUS,
     DEFAULT_BASELINE,
     DEFAULT_CAP_HEIGHT,
     DEFAULT_X_HEIGHT,
@@ -28,6 +29,7 @@ from ..model import (
     Point,
     Stroke,
 )
+from ..svgout import glyph_contours_svg
 from .uiutil import ops_to_painterpath
 
 
@@ -277,28 +279,34 @@ class GlyphCanvas(QWidget):
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)
 
-        # stroke fills (font units -> scene via the baseline transform). We do NOT clip to the
-        # grid rect: strokes that go outside the glyph's cell AABB stay visible (in red) so the
-        # user can tell they overflowed the working area.
+        # stroke fills — the SAME picosvg expansion as the compiled font, so preview == output.
+        # We do NOT clip to the grid rect: out-of-bounds strokes stay visible (in red).
         p.save()
         self._apply_grid_transform(p, rect)
-        oob_count = 0
-        for index, stroke in enumerate(self._glyph.strokes):
-            oob = (not self._in_bounds(stroke.p1)) or (not self._in_bounds(stroke.p2))
-            if oob:
-                oob_count += 1
-            color = QColor(214, 45, 45) if oob else QColor(30, 30, 30)
-            if not oob and index == self._selected_index:
-                color = QColor(0, 110, 220)
-            p.setPen(Qt.PenStyle.NoPen)
+        base = glyph_contours_svg(self._glyph, PEN_RADIUS, self.baseline)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(QColor(30, 30, 30)))
+        for contour in base:
+            p.drawPath(ops_to_painterpath(contour))
+        # selected stroke (blue) and out-of-bounds strokes (red) overlaid from their own SVG
+        oob_strokes = [s for s in self._glyph.strokes
+                       if not (self._in_bounds(s.p1) and self._in_bounds(s.p2))]
+        sel = self.selected_stroke()
+        for sub_strokes, color in ((oob_strokes, QColor(214, 45, 45)),
+                                   ([sel] if sel is not None else [], QColor(0, 110, 220))):
+            if not sub_strokes:
+                continue
+            sub = Glyph(self._glyph.codepoint)
+            sub.width = self._glyph.width
+            sub.strokes = sub_strokes
             p.setBrush(QBrush(color))
-            p.drawPath(ops_to_painterpath(
-                stroke_outline(stroke, cap=self.cap, baseline=self.baseline)))
+            for contour in glyph_contours_svg(sub, PEN_RADIUS, self.baseline):
+                p.drawPath(ops_to_painterpath(contour))
         p.restore()
 
         # if any stroke is out of bounds, ring the working AABB in red so it is unmistakable
-        self._oob_count = oob_count
-        if oob_count:
+        self._oob_count = len(oob_strokes)
+        if oob_strokes:
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.setPen(QPen(QColor(214, 45, 45), 2, Qt.PenStyle.DashLine))
             p.drawRect(rect.adjusted(-3, -3, 3, 3))
@@ -320,13 +328,15 @@ class GlyphCanvas(QWidget):
             p.drawEllipse(q, c * 0.13, c * 0.13)
             if self._hover is not None and self._hover != self._pending:
                 preview = Stroke(self._pending, self._hover, self.tool)
+                pg = Glyph(self._glyph.codepoint)
+                pg.width = self._glyph.width
+                pg.strokes = [preview]
                 p.save()
-                p.setClipRect(rect)
                 self._apply_grid_transform(p, rect)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QColor(0, 150, 90, 130))
-                p.drawPath(ops_to_painterpath(
-                    stroke_outline(preview, cap=self.cap, baseline=self.baseline)))
+                for contour in glyph_contours_svg(pg, PEN_RADIUS, self.baseline):
+                    p.drawPath(ops_to_painterpath(contour))
                 p.restore()
 
         # hover ring

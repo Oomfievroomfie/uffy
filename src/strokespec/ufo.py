@@ -49,32 +49,9 @@ def op_to_pen(ops: List[Op], pen) -> None:
 
 
 def glyph_outline_from_strokes(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
-    """Expand a glyph's strokes to outlines using Google's **picosvg**.
-
-    The strokes are emitted as a stroked SVG path; picosvg resolves the strokes (including
-    the round caps and the elliptical arc) into a filled outline. This is what the font is
-    compiled from; my own geometry is used only for the editor preview.
-    """
-    ascent = (GRID_H - baseline) * SCALE
-    svg = glyph_svg(glyph, pen_radius, baseline)
-    expanded = SVG.fromstring(svg).topicosvg()
-    d = ""
-    m = re.search(r'd="([^"]+)"', expanded.tostring())
-    if m:
-        d = m.group(1)
-    ops = parse_svg_d(d, ascent)
-    contours: List[List[Op]] = []
-    cur: List[Op] = []
-    for op in ops:
-        if op[0] == "M":
-            if cur:
-                contours.append(cur)
-            cur = [op]
-        else:
-            cur.append(op)
-    if cur:
-        contours.append(cur)
-    return contours
+    """Expand a glyph's strokes to outlines using Google's **picosvg** (shared with the preview)."""
+    from .svgout import glyph_contours_svg
+    return glyph_contours_svg(glyph, pen_radius, baseline)
 
 
 def _notdef_ops(width_units: int, cap: str, r: float, descent: float, ascent: float) -> List[List[Op]]:
