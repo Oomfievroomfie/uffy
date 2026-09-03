@@ -134,11 +134,17 @@ class GlyphCanvas(QWidget):
         self._clip = [Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes]
 
     def paste_strokes(self) -> None:
-        """Replace the current glyph's strokes with the clipboard (if any)."""
+        """Append the clipboard strokes to the current glyph (up to the 32-stroke cap).
+
+        Pasting *adds* rather than replaces; to replace, the user clears the glyph first.
+        """
         if self._clip:
-            self._glyph.strokes = [Stroke(s.p1, s.p2, s.shape) for s in self._clip]
-            self.update()
-            self.glyphChanged.emit()
+            room = 32 - len(self._glyph.strokes)
+            if room > 0:
+                self._glyph.strokes.extend(
+                    [Stroke(s.p1, s.p2, s.shape) for s in self._clip[:room]])
+                self.update()
+                self.glyphChanged.emit()
 
     def flip_horizontal(self) -> None:
         """Mirror every stroke left-right across the glyph's cell centre.
