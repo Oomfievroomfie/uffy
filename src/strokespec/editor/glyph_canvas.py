@@ -141,11 +141,18 @@ class GlyphCanvas(QWidget):
             self.glyphChanged.emit()
 
     def flip_horizontal(self) -> None:
-        """Mirror every stroke's points left-right across the glyph's cell centre."""
+        """Mirror every stroke left-right across the glyph's cell centre.
+
+        The point order is also swapped: the mirror flips the handedness of the geometry, and
+        an arc's bulge comes from the point ordering, so without the swap arcs would re-bow in
+        the *opposite* direction. (Swapping a line's endpoints is harmless.)
+        """
         m = self._cols() - 1
         strokes = self._glyph.strokes
         for i, s in enumerate(strokes):
-            strokes[i] = Stroke(Point(m - s.p1.x, s.p1.y), Point(m - s.p2.x, s.p2.y), s.shape)
+            p1 = Point(m - s.p1.x, s.p1.y)
+            p2 = Point(m - s.p2.x, s.p2.y)
+            strokes[i] = Stroke(p2, p1, s.shape)
         self.update()
         if strokes:
             self.glyphChanged.emit()
