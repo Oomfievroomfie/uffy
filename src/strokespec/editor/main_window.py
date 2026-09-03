@@ -199,6 +199,7 @@ class GlyphEditorPanel(QWidget):
     def _on_width_changed(self, _idx: int) -> None:
         if self._glyph is not None and self._glyph.width != self._width_combo.currentData():
             self._glyph.width = self._width_combo.currentData()
+            self.canvas.update()  # the grid rect/cell size depends on the glyph width
             self.glyphChanged.emit()
 
     def _on_combining_changed(self, on: bool) -> None:

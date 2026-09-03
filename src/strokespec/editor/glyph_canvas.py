@@ -117,15 +117,25 @@ class GlyphCanvas(QWidget):
             self.glyphChanged.emit()
 
     # --- geometry ------------------------------------------------------------
+    def _cols(self) -> int:
+        """The glyph's cell width (8 for half-width, 16 for full-width)."""
+        return self._glyph.cell_width_grid
+
     def _grid_rect(self) -> QRectF:
-        side = min(self.width(), self.height()) - 24.0
-        side = max(24.0, side)
-        x = (self.width() - side) / 2.0
-        y = (self.height() - side) / 2.0
-        return QRectF(x, y, side, side)
+        import math as _m
+        cols = self._cols()
+        rows = GRID_H
+        margin = 20.0
+        avail_w = max(1.0, self.width() - margin)
+        avail_h = max(1.0, self.height() - margin)
+        # upright square cells; the box takes the glyph's aspect ratio (cols:rows)
+        scale = min(avail_w / cols, avail_h / rows)
+        w, h = scale * cols, scale * rows
+        return QRectF((self.width() - w) / 2.0, (self.height() - h) / 2.0, w, h)
 
     def _cell(self) -> float:
-        return self._grid_rect().width() / GRID_N
+        r = self._grid_rect()
+        return r.width() / self._cols()
 
     def _grid_to_scene(self, gx: int, gy: int) -> QPointF:
         r = self._grid_rect()
@@ -140,7 +150,7 @@ class GlyphCanvas(QWidget):
         return Point(gx, gy)
 
     def _apply_grid_transform(self, p: QPainter, rect: QRectF) -> None:
-        c = rect.width() / GRID_N
+        c = rect.width() / self._cols()
         # font (fx,fy) -> scene: sx = rect.left + fx*c/SCALE;
         #                        sy = rect.top + (16 - baseline - fy/SCALE)*c
         tf = QTransform(c / SCALE, 0.0, 0.0, -(c / SCALE),
@@ -155,12 +165,14 @@ class GlyphCanvas(QWidget):
         rect = self._grid_rect()
         c = self._cell()
 
-        # cell boundary lines (0..16)
+        # cell boundary lines (cols wide x GRID_H tall)
+        cols = self._cols()
         p.setPen(QPen(QColor(206, 206, 214), 1))
-        for i in range(GRID_N + 1):
+        for i in range(cols + 1):
             x = rect.left() + i * c
             p.drawLine(QPoint(x, rect.top()), QPoint(x, rect.bottom()))
-            y = rect.top() + i * c
+        for j in range(GRID_H + 1):
+            y = rect.top() + j * c
             p.drawLine(QPoint(rect.left(), y), QPoint(rect.right(), y))
 
         # guide lines: cap-height (top), x-height (middle), baseline (bottom)
@@ -228,8 +240,8 @@ class GlyphCanvas(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(155, 155, 168))
         dot = max(1.5, c * 0.07)
-        for gx in range(GRID_N):
-            for gy in range(GRID_N):
+        for gx in range(cols):
+            for gy in range(GRID_H):
                 q = self._grid_to_scene(gx, gy)
                 p.drawEllipse(q, dot, dot)
 
