@@ -12,6 +12,22 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 > and reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
 > (uharfbuzz)**, again without fontTools' TTF/OTF code.
 
+## How a stroke set becomes a font
+
+Strokes are the **source of truth** — the compiled font is **not** built from my own outline
+geometry. Each glyph's strokes are emitted as a stroked **SVG** path (a straight segment is
+`M/L`, a quarter-ellipse is an SVG elliptical-arc `A`, with a pen `stroke-width` and round
+`stroke-linecap`). That SVG is handed to **`picosvg`** (Google Fonts), which expands the
+*strokes* (caps and arcs included) into a filled outline, which is written to a UFO and then
+compiled to a TTF by `gftools`/`fontmake`.
+
+> `.glyphs` is *not* used: the `glyphsLib` pipeline that `fontmake` uses has **no stroke
+> support** (no stroke attributes/classes on paths), so strokes would not survive it. picosvg
+> is the Google tool that genuinely consumes strokes.
+
+My own `geometry.py` outline code is **preview-only** (a rough quarter-ellipse expansion for
+the editor/GUI). It never feeds the compiled font.
+
 ## The model
 
 * A glyph is defined on a **16×16 grid** of cells. Each grid index `g` (0..15) is the
@@ -67,15 +83,16 @@ Coordinates are rounded to integers when written to the font.
 
 ```
 src/strokespec/
-  model.py         Stroke / Glyph / StrokeFont + JSON persistence + Unicode blocks
-  geometry.py      stroke -> outline (centreline offset, round/butt caps, quarter arcs)
-  ufo.py           write a UFO (***authoring format only***) from a StrokeFont
+  model.py         Stroke / Glyph / StrokeFont + JSON persistence + Unicode defaults
+  geometry.py      stroke -> outline (***preview only***; rough quarter-ellipse expansion)
+  svgout.py        strokes -> stroked SVG, and picosvg output -> font-unit contours
+  ufo.py           write a UFO (***authoring format only***) by expanding strokes with picosvg
   compiler.py      UFO -> TTF via Google CLI (gftools, else fontmake); gftools fix
   refbrowser.py    scan a folder of reference fonts; render glyphs via FreeType+HarfBuzz
   cli.py           `uffy` command-line entry point
   editor/          PySide6 graphical editor
     grid.py        interactive, FontForge-style glyph grid (clickable cells)
-    glyph_canvas.py 16×16 stroke-authoring canvas (line/arc/bend, drag endpoints)
+    glyph_canvas.py 16×16 stroke-authoring canvas (line/arc, drag endpoints, reverse to flip)
     main_window.py  main window (grid left, editor right, reference-font dock)
     uiutil.py       stroke -> QPainterPath painting + PIL -> QImage
   examples/sample.strokes.json

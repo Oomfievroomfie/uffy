@@ -13,16 +13,14 @@ from typing import List, Optional
 from ufoLib2 import Font
 from ufoLib2.objects import Glyph as UFOGlyph
 
-from .geometry import Op, glyph_contours
-from .model import (
-    GRID_W,
-    GRID_H,
-    SCALE,
-    UPEM,
-    StrokeFont,
-    Glyph,
-    PEN_RADIUS,
-)
+import re
+
+from .model import GRID_W, GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS
+from .svgout import glyph_svg, parse_svg_d
+from picosvg.svg import SVG
+
+# Op is a tuple ("M"/"L"/"C"/"Q"/"Z", ...) — reused from svgout.
+Op = tuple
 
 
 def glyph_name(codepoint: int) -> str:
@@ -33,7 +31,7 @@ def glyph_name(codepoint: int) -> str:
 
 
 def op_to_pen(ops: List[Op], pen) -> None:
-    """Feed a list of M/L/C/Z ops into a segment pen."""
+    """Feed a list of M/L/Q/C/Z ops into a segment pen (supports quadratic+curves)."""
     for op in ops:
         kind = op[0]
         if kind == "M":
@@ -42,8 +40,41 @@ def op_to_pen(ops: List[Op], pen) -> None:
             pen.lineTo(op[1])
         elif kind == "C":
             pen.curveTo(op[1], op[2], op[3])
+        elif kind == "Q":
+            # picosvg emits quadratic beziers; store as TrueType-style qcurve points so they
+            # round-trip to glyf quadratics. qCurveTo(control, oncurve).
+            pen.qCurveTo(op[1], op[2])
         elif kind == "Z":
             pen.closePath()
+
+
+def glyph_outline_from_strokes(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
+    """Expand a glyph's strokes to outlines using Google's **picosvg**.
+
+    The strokes are emitted as a stroked SVG path; picosvg resolves the strokes (including
+    the round caps and the elliptical arc) into a filled outline. This is what the font is
+    compiled from; my own geometry is used only for the editor preview.
+    """
+    ascent = (GRID_H - baseline) * SCALE
+    svg = glyph_svg(glyph, pen_radius, baseline)
+    expanded = SVG.fromstring(svg).topicosvg()
+    d = ""
+    m = re.search(r'd="([^"]+)"', expanded.tostring())
+    if m:
+        d = m.group(1)
+    ops = parse_svg_d(d, ascent)
+    contours: List[List[Op]] = []
+    cur: List[Op] = []
+    for op in ops:
+        if op[0] == "M":
+            if cur:
+                contours.append(cur)
+            cur = [op]
+        else:
+            cur.append(op)
+    if cur:
+        contours.append(cur)
+    return contours
 
 
 def _notdef_ops(width_units: int, cap: str, r: float, descent: float, ascent: float) -> List[List[Op]]:
@@ -139,7 +170,11 @@ def build_ufo(
         ufo_glyph.unicode = cp
         ufo_glyph.width = glyph.advance_units
         pen = ufo_glyph.getPen()
-        for contour in glyph_contours(glyph, pen_radius, cap, baseline):
+        try:
+            contours = glyph_outline_from_strokes(glyph, pen_radius, baseline)
+        except Exception:
+            contours = []  # picosvg couldn't expand it (e.g. degenerate) -> leave empty
+        for contour in contours:
             op_to_pen(contour, pen)
         order.append(name)
 

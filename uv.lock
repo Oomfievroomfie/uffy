@@ -2307,6 +2307,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fontmake" },
     { name = "fonttools" },
+    { name = "picosvg" },
     { name = "pillow" },
     { name = "pyside6" },
     { name = "ufo2ft" },
@@ -2328,6 +2329,7 @@ requires-dist = [
     { name = "fontmake", specifier = ">=3.8" },
     { name = "fonttools", extras = ["ufo"], specifier = ">=4.50" },
     { name = "gftools", marker = "extra == 'validate'", specifier = ">=0.6" },
+    { name = "picosvg", specifier = ">=0.23.0" },
     { name = "pillow", specifier = ">=10" },
     { name = "pyinstaller", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "pyside6", specifier = ">=6.6" },

@@ -302,6 +302,27 @@ def _ellipse_normal(c: Pt, a: float, b: float, sa: float, sb: float, t: float) -
     return (nx / m, ny / m)
 
 
+def _cap_pts(endpoint: Pt, radial: Pt, bulge: Pt, r: float, n: int = 10) -> List[Pt]:
+    """Sample a round cap: a semicircle radius ``r`` centred on ``endpoint`` from the outer
+    point (``endpoint + r*radial``) through the bulge direction to the inner point
+    (``endpoint - r*radial``). Returns ``n`` points (excluding the outer point)."""
+    a_out = math.atan2(radial[1], radial[0])
+    a_bulge = math.atan2(bulge[1], bulge[0])
+    chosen = None
+    for sign in (1.0, -1.0):
+        mid = a_out + sign * (math.pi / 2.0)
+        if abs(_norm_angle(mid - a_bulge)) < math.pi / 2.0 + 1e-6:
+            chosen = sign
+            break
+    if chosen is None:
+        chosen = -1.0
+    pts: List[Pt] = []
+    for i in range(1, n + 1):
+        a = a_out + chosen * math.pi * (i / n)
+        pts.append((endpoint[0] + r * math.cos(a), endpoint[1] + r * math.sin(a)))
+    return pts
+
+
 def _smooth_open(pts: List[Pt], ops: List[Op]) -> None:
     """Emit an open Catmull-Rom spline (as cubic beziers) through ``pts``."""
     n = len(pts)
@@ -375,29 +396,43 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     sa = 1.0 if xend[0] > Bc[0] else -1.0
     sb = 1.0 if yend[1] > Bc[1] else -1.0
 
-    outer_pts = _offset_ellipse_pts(Bc, a, b, sa, sb, r, +1.0)
-    inner_pts = _offset_ellipse_pts(Bc, a, b, sa, sb, r, -1.0)
+    # Sample the centreline and build the outline as a single sampled *polygon*:
+    # side_a = centreline+r*normal, cap at the end, side_b = centreline-r*normal, cap at the
+    # start. The two offset sides are always 2r apart and the caps join their endpoints, so
+    # the polygon is simple by construction (no self-intersection / notches).
+    N = 40
+    a_pts: List[Pt] = []
+    b_pts: List[Pt] = []
+    ncap_pts: List[Pt] = []
+    for i in range(N + 1):
+        t = (math.pi / 2.0) * i / N
+        c = _ellipse_point(Bc, a, b, sa, sb, t)
+        nm = _ellipse_normal(Bc, a, b, sa, sb, t)
+        a_pts.append((c[0] + r * nm[0], c[1] + r * nm[1]))
+        b_pts.append((c[0] - r * nm[0], c[1] - r * nm[1]))
+        ncap_pts.append(nm)
 
-    # radial (normal) angles at the two endpoints (t=0 -> xend, t=pi/2 -> yend)
-    n0 = _ellipse_normal(Bc, a, b, sa, sb, 0.0)
-    n1 = _ellipse_normal(Bc, a, b, sa, sb, math.pi / 2.0)
-    a_rad0 = math.atan2(n0[1], n0[0])
-    a_rad1 = math.atan2(n1[1], n1[0])
+    # travel tangent directions at the two endpoints
+    t_end = (-sa, 0.0)   # t=pi/2 (yend)
+    t_start = (0.0, sb)  # t=0 (xend)
 
-    ops: List[Op] = []
-    _smooth_open(outer_pts, ops)              # outer curve t:0 -> pi/2
+    ops: List[Op] = [("M", a_pts[0])]
+    for i in range(1, N + 1):
+        ops.append(("L", a_pts[i]))                       # side_a (outer)   A -> B
     if cap == "round":
-        # end cap at yend: bulges in the travel direction (tangent at pi/2 = (-sa, 0))
-        bulge1 = math.atan2(0.0, -sa)
-        _append_endcap(yend, r, a_rad1, bulge1, ops)
-        _smooth_open(inner_pts[::-1], ops)    # inner curve t:pi/2 -> 0
-        # start cap at xend: bulges backward (tangent at 0 = (0, sb) -> backward is (0,-sb))
-        bulge0 = math.atan2(-sb, 0.0)
-        _append_endcap(xend, r, a_rad0, bulge0, ops)
+        cap_end = _cap_pts(yend, ncap_pts[N], t_end, r)
+        for pt in cap_end[1:]:
+            ops.append(("L", pt))                          # round cap at B
+        for i in range(N - 1, -1, -1):
+            ops.append(("L", b_pts[i]))                    # side_b (inner)   B -> A
+        cap_start = _cap_pts(xend, ncap_pts[0], (-t_start[0], -t_start[1]), r)[::-1]
+        for pt in cap_start[1:]:
+            ops.append(("L", pt))                          # round cap at A
     else:
-        ops.append(("L", inner_pts[-1]))      # straight cut at y end
-        _smooth_open(inner_pts[::-1], ops)
-        ops.append(("L", outer_pts[0]))       # straight cut at x end
+        ops.append(("L", b_pts[N]))                        # butt cut at B
+        for i in range(N - 1, -1, -1):
+            ops.append(("L", b_pts[i]))
+        ops.append(("L", a_pts[0]))                        # butt cut at A
     ops.append(("Z",))
     return _orient_ccw(ops)
 
