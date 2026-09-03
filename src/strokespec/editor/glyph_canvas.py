@@ -266,50 +266,70 @@ class GlyphCanvas(QWidget):
         )
 
     # --- interaction ---------------------------------------------------------
+    # _drag is None, ("endpoint", idx, ep) to move an endpoint, or ("new",) to draw a stroke.
     def mouseMoveEvent(self, event) -> None:
         pos = event.position()
         if self._drag is not None:
-            idx, ep = self._drag
-            gp = self._scene_to_grid(pos)
-            strokes = self._glyph.strokes
-            if 0 <= idx < len(strokes):
-                s = strokes[idx]
-                if ep == 0:
-                    strokes[idx] = Stroke(gp, s.p2, s.shape)
-                else:
-                    strokes[idx] = Stroke(s.p1, gp, s.shape)
+            kind = self._drag[0]
+            if kind == "endpoint":
+                idx, ep = self._drag[1], self._drag[2]
+                gp = self._scene_to_grid(pos)
+                strokes = self._glyph.strokes
+                if 0 <= idx < len(strokes):
+                    s = strokes[idx]
+                    strokes[idx] = Stroke(gp, s.p2, s.shape) if ep == 0 else Stroke(s.p1, gp, s.shape)
+                    self.update()
+                    self.glyphChanged.emit()
+            else:  # "new": preview the stroke while dragging
+                self._hover = self._scene_to_grid(pos)
                 self.update()
-                self.glyphChanged.emit()
         else:
             self._hover = self._scene_to_grid(pos)
             self.update()
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position()
-            gp = self._scene_to_grid(pos)
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        pos = event.position()
+        gp = self._scene_to_grid(pos)
+        shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+
+        if not shift:
             endpoint = self._find_endpoint(pos)
             if endpoint is not None:
                 idx, ep = endpoint
-                self._drag = (idx, ep)
+                self._drag = ("endpoint", idx, ep)
                 self._selected_index = idx
                 self.update()
                 return
-            if self._pending is None:
-                self._pending = gp
-            else:
-                if gp != self._pending:
-                    try:
-                        self._glyph.add_stroke(Stroke(self._pending, gp, self.tool))
-                    except ValueError:
-                        pass
-                    self._pending = None
-                    self._selected_index = len(self._glyph.strokes) - 1
-                    self.update()
-                    self.glyphChanged.emit()
+
+        # Blank space (or Shift): begin a new stroke. The pending start point is set or,
+        # if both clicks are used, left intact so a second click completes the stroke.
+        if shift:
+            self._pending = gp  # Shift forces the stroke to start HERE, ignoring endpoints
+        elif self._pending is None:
+            self._pending = gp
+        self._drag = ("new",)
+        self.update()
 
     def mouseReleaseEvent(self, event) -> None:
-        if self._drag is not None:
+        if event.button() != Qt.MouseButton.LeftButton or self._drag is None:
+            return
+        kind = self._drag[0]
+        if kind == "endpoint":
+            self._drag = None
+            self.update()
+        else:  # "new"
+            gp = self._scene_to_grid(event.position())
+            if self._pending is not None and gp != self._pending:
+                try:
+                    self._glyph.add_stroke(Stroke(self._pending, gp, self.tool))
+                except ValueError:
+                    pass
+                self._selected_index = len(self._glyph.strokes) - 1
+                self._pending = None
+                self.glyphChanged.emit()
+            # else: a click with no drag keeps the pending point for two-click completion
             self._drag = None
             self.update()
 
