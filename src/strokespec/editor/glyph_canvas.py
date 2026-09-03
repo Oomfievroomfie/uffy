@@ -12,7 +12,7 @@ from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QTransform
 from PySide6.QtWidgets import QWidget
 
-from ..geometry import stroke_outline
+from ..geometry import stroke_outline, glyph_contours
 from ..model import (
     PEN_CAP,
     PEN_RADIUS,
@@ -29,7 +29,6 @@ from ..model import (
     Point,
     Stroke,
 )
-from ..svgout import glyph_contours_svg
 from .uiutil import ops_to_painterpath
 
 
@@ -52,7 +51,6 @@ class GlyphCanvas(QWidget):
         self._selected_index: int = -1
         self._oob_count: int = 0
         self._clip: list = []
-        self._exp_cache: dict = {}
         self.tool: str = SHAPE_LINE
         self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
@@ -67,27 +65,7 @@ class GlyphCanvas(QWidget):
         self._pending = None
         self._drag = None
         self._selected_index = -1
-        self._exp_cache.clear()
         self.update()
-
-    def _expanded(self, strokes: list) -> list:
-        """picosvg outline for ``strokes``, memoised by their exact geometry.
-
-        picosvg expansion is slow, and the canvas repaints on every mouse move, so cache the
-        result and recompute only when the stroke geometry actually changes.
-        """
-        key = (self._glyph.width, tuple(
-            (s.shape, s.p1.x, s.p1.y, s.p2.x, s.p2.y) for s in strokes))
-        hit = self._exp_cache.get(key)
-        if hit is None:
-            sub = Glyph(self._glyph.codepoint)
-            sub.width = self._glyph.width
-            sub.strokes = list(strokes)
-            hit = tuple(glyph_contours_svg(sub, PEN_RADIUS, self.baseline))
-            self._exp_cache[key] = hit
-            if len(self._exp_cache) > 800:
-                self._exp_cache.clear()
-        return hit
 
     @staticmethod
     def _path_from(contours: list) -> "QPainterPath":
@@ -310,15 +288,14 @@ class GlyphCanvas(QWidget):
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)
 
-        # stroke fills — same picosvg expansion as the compile (data is correct); the display
-        # bug was drawing each contour SEPARATELY, which fills a solid region instead of
-        # letting the inner counter punch its hole. Build ONE winding-filled path and draw it.
-        # We do NOT clip to the grid rect: out-of-bounds strokes stay visible (in red).
+        # stroke fills — real-time outline from our own fast geometry (pure Python, no picosvg),
+        # drawn as ONE non-zero-winding path so inner counters punch their holes. We do NOT clip
+        # to the grid rect: out-of-bounds strokes stay visible (in red).
         p.save()
         self._apply_grid_transform(p, rect)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(QColor(30, 30, 30)))
-        p.drawPath(self._path_from(self._expanded(self._glyph.strokes)))
+        p.drawPath(self._path_from(glyph_contours(self._glyph, cap=PEN_CAP, baseline=self.baseline)))
         oob_strokes = [s for s in self._glyph.strokes
                        if not (self._in_bounds(s.p1) and self._in_bounds(s.p2))]
         sel = self.selected_stroke()
@@ -327,7 +304,8 @@ class GlyphCanvas(QWidget):
             if not sub_strokes:
                 continue
             p.setBrush(QBrush(color))
-            p.drawPath(self._path_from(self._expanded(sub_strokes)))
+            contours = [stroke_outline(st, cap=PEN_CAP, baseline=self.baseline) for st in sub_strokes]
+            p.drawPath(self._path_from(contours))
         p.restore()
 
         # if any stroke is out of bounds, ring the working AABB in red so it is unmistakable
@@ -358,7 +336,8 @@ class GlyphCanvas(QWidget):
                 self._apply_grid_transform(p, rect)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QColor(0, 150, 90, 130))
-                p.drawPath(self._path_from(self._expanded([preview])))
+                p.drawPath(self._path_from(
+                    stroke_outline(preview, cap=PEN_CAP, baseline=self.baseline)))
                 p.restore()
 
         # hover ring
