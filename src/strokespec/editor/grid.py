@@ -154,31 +154,37 @@ class GlyphGridDelegate(QStyledItemDelegate):
         painter.setBrush(bg)
         painter.drawRoundedRect(rect, 6, 6)
 
-        # preview area
-        pix_rect = QRectF(rect.left() + (rect.width() - PIX_W) / 2, rect.top() + 4, PIX_W, PIX_H)
+        # Character preview fills most of the cell.
+        label_h = 16.0
+        avail_w = rect.width() - 8.0
+        avail_h = rect.height() - label_h - 4.0
         pm = self._model.preview_pixmap(cp)
         if pm is not None and not pm.isNull():
-            painter.drawPixmap(pix_rect.toRect(), pm)
-
-        # label
-        label = chr(cp) if _is_printable(cp) else ""
-        painter.setPen(QColor(60, 60, 70))
-        font = QFont()
-        painter.setFont(font)
-        fm = QFontMetrics(font)
-        char = font
-        # draw the character (best-effort, may be tofu if not present) plus hex below
-        if label:
-            painter.setFont(QFont(font.family(), 14))
-            painter.drawText(
-                QRectF(rect.left(), rect.top() + PIX_H + 4, rect.width(), 20),
-                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-                label,
+            scaled = pm.scaled(
+                avail_w, avail_h,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
             )
-        painter.setFont(QFont(font.family(), 8))
+            px = rect.left() + (rect.width() - scaled.width()) / 2.0
+            py = rect.top() + 2.0 + max(0.0, (avail_h - scaled.height()) / 2.0)
+            painter.drawPixmap(px, py, scaled)
+
+        # Small plaintext character, top-left corner (never overlaps the id at the bottom).
+        char = chr(cp) if _is_printable(cp) else ""
+        if char:
+            badge = QRectF(rect.left() + 2.0, rect.top() + 2.0, 18.0, 18.0)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 210))
+            painter.drawRoundedRect(badge, 4.0, 4.0)
+            painter.setPen(QColor(60, 60, 72))
+            painter.setFont(QFont("", 9))
+            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignHCenter, char)
+
+        # Codepoint id pinned to the bottom.
         painter.setPen(QColor(130, 130, 140))
+        painter.setFont(QFont("", 8))
         painter.drawText(
-            QRectF(rect.left(), rect.bottom() - 16, rect.width(), 14),
+            QRectF(rect.left(), rect.bottom() - label_h, rect.width(), label_h),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
             f"U+{cp:04X}",
         )
