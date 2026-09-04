@@ -6,13 +6,12 @@ from PIL import Image
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QPixmap
 
-from ..geometry import Op
+from ..geometry import Op, glyph_contours
 from ..model import (GRID_H, GRID_N, DEFAULT_BASELINE, PEN_RADIUS, SCALE, UPEM, Glyph)
-from ..svgout import glyph_contours_svg_per_stroke
 
 
 def ops_to_painterpath(ops: list) -> QPainterPath:
-    """Convert a list of M/L/C/Z font-unit ops into a QPainterPath (y-up units).
+    """Convert a list of M/L/Q/C/Z font-unit ops into a QPainterPath (y-up units).
 
     Non-zero winding fill: TrueType/OpenType use non-zero winding, and Qt's default
     ``OddEvenFill`` would fill a closed contour of overlapping arcs as a solid region.
@@ -25,6 +24,8 @@ def ops_to_painterpath(ops: list) -> QPainterPath:
             path.moveTo(op[1][0], op[1][1])
         elif kind == "L":
             path.lineTo(op[1][0], op[1][1])
+        elif kind == "Q":
+            path.quadTo(op[1][0], op[1][1], op[2][0], op[2][1])
         elif kind == "C":
             path.cubicTo(op[1][0], op[1][1], op[2][0], op[2][1], op[3][0], op[3][1])
         elif kind == "Z":
@@ -35,13 +36,13 @@ def ops_to_painterpath(ops: list) -> QPainterPath:
 def glyph_qpainterpath(glyph: Glyph, baseline: float = DEFAULT_BASELINE) -> QPainterPath:
     """Build one QPainterPath (in font units, baseline at y=0) for all strokes.
 
-    Uses the same picosvg stroke expansion as the font compiler (per-stroke, no boolean
-    merge, by default), so the preview and the compiled glyph can never differ. Non-zero
-    winding so overlapping strokes union visually.
+    Uses the same stroke geometry as the font compiler (each stroke swept by the pen, one
+    contour per stroke, no boolean merge), so the preview and the compiled glyph can never
+    differ. Non-zero winding so overlapping strokes union visually.
     """
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)
-    for contour in glyph_contours_svg_per_stroke(glyph, PEN_RADIUS, baseline):
+    for contour in glyph_contours(glyph, r=PEN_RADIUS, baseline=baseline):
         path.addPath(ops_to_painterpath(contour))
     return path
 

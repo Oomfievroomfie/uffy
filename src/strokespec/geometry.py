@@ -1,8 +1,9 @@
 """Geometric expansion of strokes into closed outlines (font-unit space).
 
 Every stroke is a "pen" of diameter one grid unit that follows a centreline (a straight
-segment or a quarter-circle) and is expanded into a closed outline in TrueType/font-unit
-coordinates (y-up). The two cap styles mirror the user's "1x1 circle or square" stylus:
+segment or a **single quadratic** arc, one quadratic per quarter) and is expanded into a
+closed outline in TrueType/font-unit coordinates (y-up). The two cap styles mirror the user's
+"1x1 circle or square" stylus:
 
 * ``"round"`` — a circle of radius ``PEN_RADIUS``. The outline is a capsule / annular
   band with round (semicircular) end caps. Best for a natural "pen stroke" look and for
@@ -15,8 +16,8 @@ contour. All contours are normalised to counter-clockwise (positive area) so tha
 overlapping strokes *union* under the TrueType non-zero winding rule instead of punching
 holes.
 
-A glyph is a set of up to 32 such strokes; each is expanded independently and the glyph
-outline is the union of the resulting contours.
+A glyph is a set of up to 32 such strokes; each is expanded independently (no boolean merge)
+and the glyph outline is the per-stroke contours, which union visually when rendered.
 
 Coordinate conventions
 ----------------------
@@ -48,11 +49,11 @@ Pt = Tuple[float, float]
 
 _TWO_PI = 2.0 * math.pi
 
-# An arc whose chord is axis-aligned (or degenerate/zero-length) is NOT a quarter ellipse at
-# all: it is exactly the straight segment between its two points. Such a stroke is therefore
-# a LINE in every expansion pipeline, and must never reach the arc/butt/`A` code path.
+# An arc whose chord is axis-aligned (or degenerate/zero-length) is NOT a single quadratic
+# at all: it is exactly the straight segment between its two points. Such a stroke is
+# therefore a LINE in every expansion pipeline, and must never reach the arc/butt code path.
 # This is the single source of truth for that decision, shared by the geometry preview and
-# the picosvg/SVG compile so the two can never disagree.
+# the font compile so the two can never disagree.
 _AXIS_EPS = 1e-6
 
 
@@ -171,7 +172,7 @@ def _signed_area(ops: Sequence[Op]) -> float:
 
 
 def _flatten(ops: Sequence[Op], samples: int = 16) -> List[Pt]:
-    """Flatten a contour of M/L/C/Z ops into a closed polygon (first point repeated)."""
+    """Flatten a contour of M/L/Q/C/Z ops into a closed polygon (first point repeated)."""
     pts: List[Pt] = []
     cur: Pt = (0.0, 0.0)
     for op in ops:
@@ -182,6 +183,15 @@ def _flatten(ops: Sequence[Op], samples: int = 16) -> List[Pt]:
         elif kind == "L":
             cur = op[1]
             pts.append(cur)
+        elif kind == "Q":
+            p0, c, p1 = cur, op[1], op[2]
+            for t in range(1, samples + 1):
+                u = t / samples
+                v = 1.0 - u
+                x = v * v * p0[0] + 2 * v * u * c[0] + u * u * p1[0]
+                y = v * v * p0[1] + 2 * v * u * c[1] + u * u * p1[1]
+                pts.append((x, y))
+            cur = p1
         elif kind == "C":
             p0, c1, c2, p1 = cur, op[1], op[2], op[3]
             for t in range(1, samples + 1):
@@ -207,7 +217,7 @@ def _flatten(ops: Sequence[Op], samples: int = 16) -> List[Pt]:
 
 
 def _reverse(ops: Sequence[Op]) -> List[Op]:
-    """Reverse a closed M/L/C/Z contour."""
+    """Reverse a closed M/L/Q/C/Z contour."""
     if len(ops) < 2:
         return list(ops)
     # Build (kind, start, c1, c2, end) segments, walking the on-curve path.
@@ -219,6 +229,9 @@ def _reverse(ops: Sequence[Op]) -> List[Op]:
             end = op[1]
             segments.append(("L", cur, None, None, end))
             cur = end
+        elif kind == "Q":
+            segments.append(("Q", cur, op[1], None, op[2]))
+            cur = op[2]
         elif kind == "C":
             segments.append(("C", cur, op[1], op[2], op[3]))
             cur = op[3]
@@ -230,6 +243,8 @@ def _reverse(ops: Sequence[Op]) -> List[Op]:
         kind, start, c1, c2, end = seg
         if kind == "L":
             new.append(("L", start))
+        elif kind == "Q":
+            new.append(("Q", c1, start))
         else:
             new.append(("C", c2, c1, start))
     new.append(("Z",))
@@ -318,132 +333,15 @@ def _degenerate(center: Pt, r: float, cap: str) -> List[Op]:
         ]
 
 
-def arc_end_tangents(p1: Pt, p2: Pt) -> Tuple[Pt, Pt]:
-    """Unit tangents (in the ``p1 -> p2`` travel sense) at each arc endpoint.
+def arc_control(p1: Pt, p2: Pt) -> Pt:
+    """The single quadratic control point: the box corner the arc bulges toward.
 
-    A quarter-ellipse is tangent-aligned to its bounding box, so at an ``x``-neighbour
-    endpoint the tangent is vertical and at a ``y``-neighbour endpoint horizontal. Returns
-    a pair for ``(p1, p2)`` (zero vectors for degenerate arcs).
+    The arc is ONE quadratic per quarter, ``p1 -> C -> p2``, whose control point ``C`` is the
+    axis-aligned bounding-box corner on the LEFT of the directed ``p1 -> p2`` chord (positive
+    cross product in y-up coordinates). That makes the endpoint tangents axial and
+    full-strength (the control point sits at the box corner, at full extent). Swapping the
+    points bows the arc the other way.
     """
-    dx = abs(p2[0] - p1[0])
-    dy = abs(p2[1] - p1[1])
-    if dx < 1e-9 and dy < 1e-9:
-        return ((0.0, 0.0), (0.0, 0.0))
-    if dx < 1e-9 or dy < 1e-9:
-        # axis-aligned "arc" (degenerates to a straight line): there is no valid ellipse
-        # tangent, so nudge along the direction the line goes (p1 -> p2).
-        L = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
-        ux, uy = (p2[0] - p1[0]) / L, (p2[1] - p1[1]) / L
-        return ((ux, uy), (ux, uy))
-    minx, maxx = min(p1[0], p2[0]), max(p1[0], p2[0])
-    miny, maxy = min(p1[1], p2[1]), max(p1[1], p2[1])
-    cands = [
-        c for c in ((minx, miny), (maxx, miny), (minx, maxy), (maxx, maxy))
-        if (abs(c[0] - p1[0]) > 1e-9 or abs(c[1] - p1[1]) > 1e-9)
-        and (abs(c[0] - p2[0]) > 1e-9 or abs(c[1] - p2[1]) > 1e-9)
-    ]
-    dxd = p2[0] - p1[0]
-    dyd = p2[1] - p1[1]
-    Bc = max(cands, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
-    if abs(p1[1] - Bc[1]) < 1e-9:
-        xend, yend = p1, p2
-    else:
-        xend, yend = p2, p1
-    sa = 1.0 if xend[0] > Bc[0] else -1.0
-    sb = 1.0 if yend[1] > Bc[1] else -1.0
-    t_xend = (0.0, sb)
-    t_yend = (-sa, 0.0)
-    if xend[0] == p1[0] and xend[1] == p1[1]:
-        return (t_xend, t_yend)
-    return ((-t_yend[0], -t_yend[1]), (-t_xend[0], -t_xend[1]))
-
-
-def _ellipse_point(c: Pt, a: float, b: float, sa: float, sb: float, t: float) -> Pt:
-    return (c[0] + sa * a * math.cos(t), c[1] + sb * b * math.sin(t))
-
-
-def _ellipse_normal(c: Pt, a: float, b: float, sa: float, sb: float, t: float) -> Pt:
-    """Outward unit normal of the ellipse at parameter ``t`` (gradient-normalised)."""
-    nx = sa * math.cos(t) / a
-    ny = sb * math.sin(t) / b
-    m = math.hypot(nx, ny)
-    if m == 0:
-        return (0.0, 0.0)
-    return (nx / m, ny / m)
-
-
-def _cap_pts(endpoint: Pt, radial: Pt, bulge: Pt, r: float, n: int = 10) -> List[Pt]:
-    """Sample a round cap: a semicircle radius ``r`` centred on ``endpoint`` from the outer
-    point (``endpoint + r*radial``) through the bulge direction to the inner point
-    (``endpoint - r*radial``). Returns ``n`` points (excluding the outer point)."""
-    a_out = math.atan2(radial[1], radial[0])
-    a_bulge = math.atan2(bulge[1], bulge[0])
-    chosen = None
-    for sign in (1.0, -1.0):
-        mid = a_out + sign * (math.pi / 2.0)
-        if abs(_norm_angle(mid - a_bulge)) < math.pi / 2.0 + 1e-6:
-            chosen = sign
-            break
-    if chosen is None:
-        chosen = -1.0
-    pts: List[Pt] = []
-    for i in range(1, n + 1):
-        a = a_out + chosen * math.pi * (i / n)
-        pts.append((endpoint[0] + r * math.cos(a), endpoint[1] + r * math.sin(a)))
-    return pts
-
-
-def _smooth_open(pts: List[Pt], ops: List[Op]) -> None:
-    """Emit an open Catmull-Rom spline (as cubic beziers) through ``pts``."""
-    n = len(pts)
-    if n == 0:
-        return
-    ops.append(("M", pts[0]))
-    if n == 1:
-        return
-    if n == 2:
-        ops.append(("L", pts[1]))
-        return
-    for i in range(n - 1):
-        p0 = pts[max(i - 1, 0)]
-        p1 = pts[i]
-        p2 = pts[i + 1]
-        p3 = pts[min(i + 2, n - 1)]
-        c1 = (p1[0] + (p2[0] - p0[0]) / 6.0, p1[1] + (p2[1] - p0[1]) / 6.0)
-        c2 = (p2[0] - (p3[0] - p1[0]) / 6.0, p2[1] - (p3[1] - p1[1]) / 6.0)
-        ops.append(("C", c1, c2, p2))
-
-
-def _offset_ellipse_pts(c, a, b, sa, sb, r, side, n=20) -> List[Pt]:
-    """Offset the quarter-ellipse centreline by ``side*r`` along its normal, sampled."""
-    pts: List[Pt] = []
-    for i in range(n + 1):
-        t = (math.pi / 2.0) * i / n
-        p = _ellipse_point(c, a, b, sa, sb, t)
-        N = _ellipse_normal(c, a, b, sa, sb, t)
-        pts.append((p[0] + side * r * N[0], p[1] + side * r * N[1]))
-    return pts
-
-
-def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
-    """Outline for a scaled quarter-circle (quarter-*ellipse*) stroke.
-
-    The arc is confined to the axis-aligned bounding box of the two points (its chord is a
-    diagonal of that box) and stays inside it — it never bulges past the chord. It is
-    tangent-aligned to the box: at each endpoint the tangent is axis-aligned.
-
-    The bend direction is a pure function of the ordering of the two points: the arc bows
-    toward the box corner that lies on the LEFT of the directed chord ``p1 -> p2`` (positive
-    cross product in y-up coordinates), so swapping the points bends it the other way.
-    """
-    dx = abs(p2[0] - p1[0])
-    dy = abs(p2[1] - p1[1])
-    if dx < 1e-9 and dy < 1e-9:
-        return _degenerate(p1, r, cap)
-    if dx < 1e-9 or dy < 1e-9:
-        # axis-aligned chord: the quarter-ellipse degenerates to the straight segment
-        return line_outline(p1, p2, r, cap)
-
     minx, maxx = min(p1[0], p2[0]), max(p1[0], p2[0])
     miny, maxy = min(p1[1], p2[1]), max(p1[1], p2[1])
     corners = [(minx, miny), (maxx, miny), (minx, maxy), (maxx, maxy)]
@@ -452,76 +350,80 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         if (abs(c[0] - p1[0]) > 1e-9 or abs(c[1] - p1[1]) > 1e-9)
         and (abs(c[0] - p2[0]) > 1e-9 or abs(c[1] - p2[1]) > 1e-9)
     ]
-    # bulge toward the box corner on the left of p1 -> p2 (ordering is the only input)
     dxd = p2[0] - p1[0]
     dyd = p2[1] - p1[1]
-    Bc = max(candidates, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
-    a, b = dx, dy
+    return max(candidates, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
 
-    # x-neighbour (same y as Bc) and y-neighbour (same x as Bc) are exactly p1/p2.
-    if abs(p1[1] - Bc[1]) < 1e-9:
-        xend, yend = p1, p2
-    else:
-        xend, yend = p2, p1
-    sa = 1.0 if xend[0] > Bc[0] else -1.0
-    sb = 1.0 if yend[1] > Bc[1] else -1.0
 
-    # Sample the centreline and build the outline as a single sampled *polygon*:
-    # side_a = centreline+r*normal, cap at the end, side_b = centreline-r*normal, cap at the
-    # start. The two offset sides are always 2r apart and the caps join their endpoints, so
-    # the polygon is simple by construction (no self-intersection / notches).
-    N = 40
-    a_pts: List[Pt] = []
-    b_pts: List[Pt] = []
-    ncap_pts: List[Pt] = []
-    for i in range(N + 1):
-        t = (math.pi / 2.0) * i / N
-        c = _ellipse_point(Bc, a, b, sa, sb, t)
-        nm = _ellipse_normal(Bc, a, b, sa, sb, t)
-        a_pts.append((c[0] + r * nm[0], c[1] + r * nm[1]))
-        b_pts.append((c[0] - r * nm[0], c[1] - r * nm[1]))
-        ncap_pts.append(nm)
+def arc_end_tangents(p1: Pt, p2: Pt) -> Tuple[Pt, Pt]:
+    """Unit tangents (in the ``p1 -> p2`` travel sense) at each arc endpoint.
 
-    # travel tangent directions at the two endpoints
-    t_end = (-sa, 0.0)   # t=pi/2 (yend)
-    t_start = (0.0, sb)  # t=0 (xend)
+    The single-quadratic arc is axial at both ends: the tangent at ``p1`` points at the
+    control (box) corner and the tangent at ``p2`` points away from it, so both are
+    axis-aligned and full-strength. Returns ``(t1, t2)`` (zero vectors for degenerate arcs).
+    """
+    dx = abs(p2[0] - p1[0])
+    dy = abs(p2[1] - p1[1])
+    if dx < 1e-9 and dy < 1e-9:
+        return ((0.0, 0.0), (0.0, 0.0))
+    if dx < 1e-9 or dy < 1e-9:
+        # axis-aligned "arc" (degenerates to a straight line): nudge along the segment.
+        L = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        ux, uy = (p2[0] - p1[0]) / L, (p2[1] - p1[1]) / L
+        return ((ux, uy), (ux, uy))
+    C = arc_control(p1, p2)
+    return (_unit(_sub(C, p1)), _unit(_sub(p2, C)))
 
-    if cap == "square":
-        # square (half-pen) cap: extend each end by r (half the pen width) along the tangent
-        # so the flat end lands on a cell boundary, then close with a straight square end.
-        a_start_ext = (a_pts[0][0] - t_start[0] * r, a_pts[0][1] - t_start[1] * r)
-        a_end_ext = (a_pts[N][0] + t_end[0] * r, a_pts[N][1] + t_end[1] * r)
-        b_start_ext = (b_pts[0][0] - t_start[0] * r, b_pts[0][1] - t_start[1] * r)
-        b_end_ext = (b_pts[N][0] + t_end[0] * r, b_pts[N][1] + t_end[1] * r)
-        ops: List[Op] = [("M", a_start_ext)]
-        for i in range(N + 1):
-            ops.append(("L", a_pts[i]))                   # outer   A -> B
-        ops.append(("L", a_end_ext))                      # square end at B
-        ops.append(("L", b_end_ext))
-        for i in range(N - 1, -1, -1):
-            ops.append(("L", b_pts[i]))                   # inner   B -> A
-        ops.append(("L", b_start_ext))                    # square end at A
-        ops.append(("L", a_start_ext))
-        ops.append(("Z",))
-        return _orient_ccw(ops)
 
-    ops: List[Op] = [("M", a_pts[0])]
-    for i in range(1, N + 1):
-        ops.append(("L", a_pts[i]))                       # side_a (outer)   A -> B
+def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
+    """Outline for a single-quadratic-per-quarter arc stroke.
+
+    The centreline is ONE quadratic Bezier ``p1 -> C -> p2`` whose control point ``C`` is the
+    box bulge corner, so the endpoint tangents are **axial and full-strength** (the control
+    point sits at the box corner, at full extent). The outline is that centreline swept by a
+    pen of diameter ``2r``: two offset sides, each a **single quadratic** (the offset control
+    polygon), joined by the end caps.
+
+    The bend direction is a pure function of the ordering of ``p1``/``p2``: the arc bows
+    toward the box corner on the LEFT of the directed ``p1 -> p2`` chord.
+    """
+    dx = abs(p2[0] - p1[0])
+    dy = abs(p2[1] - p1[1])
+    if dx < 1e-9 and dy < 1e-9:
+        return _degenerate(p1, r, cap)
+    if dx < 1e-9 or dy < 1e-9:
+        # axis-aligned chord: degenerates to the straight segment
+        return line_outline(p1, p2, r, cap)
+
+    C = arc_control(p1, p2)
+    # centreline tangents (axial, full-strength) and their CCW normals
+    u1 = _unit(_sub(C, p1))   # tangent at p1 (points at the control corner)
+    u2 = _unit(_sub(p2, C))   # tangent at p2 (points away from the control corner)
+    uc = _unit(_sub(p2, p1))  # tangent (chord direction) at the control point
+    n1 = _perp(u1)
+    n2 = _perp(u2)
+    nc = _perp(uc)
+
+    # offset control polygon: outer = centreline + r*n, inner = centreline - r*n
+    O1 = (p1[0] + r * n1[0], p1[1] + r * n1[1])
+    OC = (C[0] + r * nc[0], C[1] + r * nc[1])
+    O2 = (p2[0] + r * n2[0], p2[1] + r * n2[1])
+    I1 = (p1[0] - r * n1[0], p1[1] - r * n1[1])
+    IC = (C[0] - r * nc[0], C[1] - r * nc[1])
+    I2 = (p2[0] - r * n2[0], p2[1] - r * n2[1])
+
+    ops: List[Op] = [("M", O1), ("Q", OC, O2)]  # outer side, one quadratic
     if cap == "round":
-        cap_end = _cap_pts(yend, ncap_pts[N], t_end, r)
-        for pt in cap_end[1:]:
-            ops.append(("L", pt))                          # round cap at B
-        for i in range(N - 1, -1, -1):
-            ops.append(("L", b_pts[i]))                    # side_b (inner)   B -> A
-        cap_start = _cap_pts(xend, ncap_pts[0], (-t_start[0], -t_start[1]), r)[::-1]
-        for pt in cap_start[1:]:
-            ops.append(("L", pt))                          # round cap at A
+        _append_endcap(p2, r, math.atan2(n2[1], n2[0]), math.atan2(u2[1], u2[0]), ops)
+        ops.append(("Q", IC, I1))               # inner side (back)
+        _append_endcap(p1, r, math.atan2(-n1[1], -n1[0]), math.atan2(-u1[1], -u1[0]), ops)
     else:
-        ops.append(("L", b_pts[N]))                        # butt cut at B
-        for i in range(N - 1, -1, -1):
-            ops.append(("L", b_pts[i]))
-        ops.append(("L", a_pts[0]))                        # butt cut at A
+        # butt / square: a flat cut across the pen. The half-pen-square extension is already
+        # applied by the forward nudge (stroke_outline), so the flat cut is the correct end
+        # for both the butt and the (nudged) square arc.
+        ops.append(("L", I2))                   # flat end cut at p2
+        ops.append(("Q", IC, I1))               # inner side (back)
+        ops.append(("L", O1))                   # flat start cut at p1
     ops.append(("Z",))
     return _orient_ccw(ops)
 

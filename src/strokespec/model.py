@@ -99,7 +99,7 @@ class Point:
 
 @dataclass(frozen=True)
 class Stroke:
-    """A single stroke: exactly two grid points plus a line-vs-quarter-ellipse flag.
+    """A single stroke: exactly two grid points plus a line-vs-single-quadratic flag.
 
     That is the *only* data a stroke carries. An arc's bend direction is a pure function of
     the ordering of ``p1`` and ``p2`` (no separate bend flag), and the pen/cap shape is a

@@ -19,7 +19,6 @@ dependencies = [
   "PySide6>=6.6",
   "uharfbuzz>=0.40",
   "pillow>=10",
-  "picosvg>=0.23.0",
 ]
 
 [project.optional-dependencies]

@@ -14,19 +14,20 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 
 ## How a stroke set becomes a font
 
-Strokes are the **source of truth** — the compiled font is **not** built from my own outline
-geometry. Each glyph's strokes are emitted as a stroked **SVG** path (a straight segment is
-`M/L`, a quarter-ellipse is an SVG elliptical-arc `A`, with a pen `stroke-width` and round
-`stroke-linecap`). That SVG is handed to **`picosvg`** (Google Fonts), which expands the
-*strokes* (caps and arcs included) into a filled outline, which is written to a UFO and then
-compiled to a TTF by `gftools`/`fontmake`.
+Strokes are the **source of truth**. Each glyph's strokes are expanded into filled outlines by
+our own stroke geometry (`geometry.py`): every stroke is swept by a pen of one grid-cell
+diameter into a closed contour, one contour per stroke, with **no boolean merge** — overlapping
+strokes stay as redundant subpaths and union visually under the non-zero winding rule. Arcs are
+a **single quadratic** per quarter (control point at the box bulge corner, so the endpoint
+tangents are axial and full-strength). The outlines are written to a UFO and compiled to a TTF
+by `gftools`/`fontmake`.
 
 > `.glyphs` is *not* used: the `glyphsLib` pipeline that `fontmake` uses has **no stroke
-> support** (no stroke attributes/classes on paths), so strokes would not survive it. picosvg
-> is the Google tool that genuinely consumes strokes.
+> support** (no stroke attributes/classes on paths), so strokes would not survive it. The
+> strokes are expanded ourselves instead.
 
-My own `geometry.py` outline code is **preview-only** (a rough quarter-ellipse expansion for
-the editor/GUI). It never feeds the compiled font.
+My stroke geometry is used directly (it is **not** preview-only): the editor canvas, the grid
+previews and the compiled font all use the same expansion, so they can never disagree.
 
 ## The model
 
@@ -35,14 +36,14 @@ the editor/GUI). It never feeds the compiled font.
   16×16 unifont glyph". The outermost vertices sit half a cell inside the em box, which
   leaves visible padding around them in the editor.
 * A glyph is a set of **up to 32 strokes**.
-* The only data a stroke carries is **exactly two grid points plus a line-vs-quarter-ellipse
+* The only data a stroke carries is **exactly two grid points plus a line-vs-single-quadratic
   flag**:
   * `line` — a straight segment between the two points;
-  * `arc` — a **scaled quarter-circle** (a quarter-**ellipse**) that is confined to the
-    axis-aligned bounding box of the two points and is **tangent-aligned** to it (at each
-    endpoint the tangent is horizontal/vertical). It never bulges past the chord. Its **bend
-    direction is a pure function of the ordering of the two points** — there is no bend
-    flag. Swapping the two points bends the arc the other way.
+  * `arc` — a **single quadratic** per quarter, confined to the axis-aligned bounding box of
+    the two points. Its control point is the box corner the arc bows toward, so at each
+    endpoint the tangent is **axial and full-strength** (horizontal/vertical). It never bulges
+    past the chord. Its **bend direction is a pure function of the ordering of the two
+    points** — there is no bend flag. Swapping the two points bends the arc the other way.
 * Each stroke is "painted" with a pen of **one grid-cell diameter** that follows the
   centreline and expands it into an outline. The pen/cap shape is a **tool-level choice**
   (a round pen by default), not per-glyph data. The outline is filled with the **non-zero
@@ -84,9 +85,9 @@ Coordinates are rounded to integers when written to the font.
 ```
 src/strokespec/
   model.py         Stroke / Glyph / StrokeFont + JSON persistence + Unicode defaults
-  geometry.py      stroke -> outline (***preview only***; rough quarter-ellipse expansion)
-  svgout.py        strokes -> stroked SVG, and picosvg output -> font-unit contours
-  ufo.py           write a UFO (***authoring format only***) by expanding strokes with picosvg
+  geometry.py      stroke -> outline (the real stroke->outline expansion used everywhere)
+  svgout.py        strokes -> stroked SVG (debug/inspection; arcs are a single quadratic)
+  ufo.py           write a UFO (***authoring format only***) from the stroke geometry
   compiler.py      UFO -> TTF via Google CLI (gftools, else fontmake); gftools fix
   refbrowser.py    scan a folder of reference fonts; render glyphs via FreeType+HarfBuzz
   cli.py           `uffy` command-line entry point

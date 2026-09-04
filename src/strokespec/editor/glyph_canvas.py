@@ -122,7 +122,7 @@ class GlyphCanvas(QWidget):
             self.glyphChanged.emit()
 
     def toggle_selected_shape(self) -> None:
-        """Switch the selected stroke between a straight line and a quarter-ellipse."""
+        """Switch the selected stroke between a straight line and a single-quadratic arc."""
         if 0 <= self._selected_index < len(self._glyph.strokes):
             s = self._glyph.strokes[self._selected_index]
             new_shape = SHAPE_LINE if s.shape == SHAPE_ARC else SHAPE_ARC
@@ -288,7 +288,7 @@ class GlyphCanvas(QWidget):
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)
 
-        # stroke fills — real-time outline from our own fast geometry (pure Python, no picosvg),
+        # stroke fills — real-time outline from our own fast geometry (pure Python),
         # drawn as ONE non-zero-winding path so inner counters punch their holes. We do NOT clip
         # to the grid rect: out-of-bounds strokes stay visible (in red).
         p.save()
@@ -373,7 +373,7 @@ class GlyphCanvas(QWidget):
                 if 0 <= idx < len(strokes):
                     s = strokes[idx]
                     strokes[idx] = Stroke(gp, s.p2, s.shape) if ep == 0 else Stroke(s.p1, gp, s.shape)
-                    self.update()  # repaint the canvas only; the grid refresh (picosvg) is
+                    self.update()  # repaint the canvas only; the grid refresh is
                     # deferred to mouseRelease so it doesn't run on every drag step.
             else:  # "new": preview the stroke while dragging
                 self._hover = self._scene_to_grid(pos)

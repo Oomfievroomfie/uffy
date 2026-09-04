@@ -13,13 +13,10 @@ from typing import List, Optional
 from ufoLib2 import Font
 from ufoLib2.objects import Glyph as UFOGlyph
 
-import re
+from .model import GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS, PEN_CAP
+from .geometry import glyph_contours
 
-from .model import GRID_W, GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS, PEN_CAP
-from .svgout import glyph_svg, parse_svg_d
-from picosvg.svg import SVG
-
-# Op is a tuple ("M"/"L"/"C"/"Q"/"Z", ...) — reused from svgout.
+# Op is a tuple ("M"/"L"/"Q"/"C"/"Z", ...) — reused from geometry.
 Op = tuple
 
 
@@ -41,29 +38,22 @@ def op_to_pen(ops: List[Op], pen) -> None:
         elif kind == "C":
             pen.curveTo(op[1], op[2], op[3])
         elif kind == "Q":
-            # picosvg emits quadratic beziers; store as TrueType-style qcurve points so they
-            # round-trip to glyf quadratics. qCurveTo(control, oncurve).
+            # store as TrueType-style quadratic qcurve points so they round-trip to glyf
+            # quadratics (the arc is one quadratic per quarter, so keep it exactly).
             pen.qCurveTo(op[1], op[2])
         elif kind == "Z":
             pen.closePath()
 
 
-def glyph_outline_from_strokes(
-    glyph: Glyph, pen_radius: float, baseline: float, *, per_stroke: bool = True
-) -> List[List[Op]]:
-    """Expand a glyph's strokes to outlines using Google's **picosvg** (shared with the preview).
+def glyph_outline_from_strokes(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
+    """Expand a glyph's strokes to fill outlines from our own stroke geometry.
 
-    With ``per_stroke=True`` (default) picosvg runs on each stroke independently and the
-    outlines are concatenated with **no boolean merge**, keeping overlapping strokes as
-    redundant subpaths (produces a smaller TTF — see
-    :func:`strokespec.svgout.glyph_contours_svg_per_stroke`). With ``per_stroke=False`` the
-    whole glyph is fed to picosvg at once and overlapping strokes are boolean-unioned.
+    This is the canonical stroke expansion (each stroke swept by the pen into a closed
+    contour, one contour per stroke, no boolean merge — overlapping strokes stay as
+    redundant subpaths and union visually under the non-zero winding rule). The editor preview
+    uses the same path, so preview and compiled font can never differ.
     """
-    if per_stroke:
-        from .svgout import glyph_contours_svg_per_stroke
-        return glyph_contours_svg_per_stroke(glyph, pen_radius, baseline)
-    from .svgout import glyph_contours_svg
-    return glyph_contours_svg(glyph, pen_radius, baseline)
+    return glyph_contours(glyph, r=pen_radius, baseline=baseline)
 
 
 def _notdef_ops(width_units: int, cap: str, r: float, descent: float, ascent: float) -> List[List[Op]]:
@@ -102,13 +92,10 @@ def build_ufo(
     cap: str = PEN_CAP,
     pen_radius: int = PEN_RADIUS,
     notdef_width_units: Optional[int] = None,
-    per_stroke: bool = True,
 ) -> str:
     """Build a UFO at ``output_dir`` and return its path.
 
     ``output_dir`` must not already exist (or will be overwritten if it is a UFO).
-    ``per_stroke`` selects the expansion: ``True`` (default) is the no-boolean-merge
-    per-stroke picosvg expansion; ``False`` boolean-unions the whole glyph.
     """
     if family_name is None:
         family_name = strokefont.metadata.get("name", "strokespec")
@@ -162,10 +149,7 @@ def build_ufo(
         ufo_glyph.unicode = cp
         ufo_glyph.width = glyph.advance_units
         pen = ufo_glyph.getPen()
-        try:
-            contours = glyph_outline_from_strokes(glyph, pen_radius, baseline, per_stroke=per_stroke)
-        except Exception:
-            contours = []  # picosvg couldn't expand it (e.g. degenerate) -> leave empty
+        contours = glyph_outline_from_strokes(glyph, pen_radius, baseline)
         for contour in contours:
             op_to_pen(contour, pen)
         order.append(name)

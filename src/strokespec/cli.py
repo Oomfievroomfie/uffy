@@ -38,7 +38,6 @@ def _build(args) -> int:
         style_name=args.style,
         tool=args.tool,
         run_fix=not args.no_fix,
-        per_stroke=not args.unioned,
     )
     print(f"wrote {out}")
     return 0
@@ -134,11 +133,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     b.add_argument("--style", default="Regular", help="font style name")
     b.add_argument("--tool", default="auto", choices=["auto", "gftools", "fontmake"], help="compile tool")
     b.add_argument("--no-fix", action="store_true", help="skip gftools fix")
-    b.add_argument(
-        "--unioned",
-        action="store_true",
-        help="boolean-union the whole glyph through picosvg at once (default is per-stroke, no merge)",
-    )
     b.set_defaults(func=_build)
 
     pr = sub.add_parser("preview", help="render a single stroke glyph to a PNG")

@@ -77,6 +77,10 @@ def compile_with_fontmake(
         "ttf",
         "--output-path",
         str(out),
+        # Keep the per-stroke overlapping contours (they union visually under the non-zero
+        # winding rule). RemoveOverlapsFilter only handles cubic segments, and our arcs are
+        # TrueType quadratics, so it would also error on the qcurve segments.
+        "--keep-overlaps",
     ]
     rc = _run(cmd, log)
     if rc != 0:
@@ -233,7 +237,6 @@ def compile_strokefont(
     keep_ufo: Optional[str] = None,
     tool: str = "auto",
     run_fix: bool = True,
-    per_stroke: bool = True,
 ) -> str:
     """Convenience: build a UFO in a temp dir and compile it to ``out_ttf``."""
     from .model import PEN_RADIUS  # local import to keep API tight
@@ -255,7 +258,6 @@ def compile_strokefont(
         style_name=style_name,
         cap=cap,
         pen_radius=PEN_RADIUS,
-        per_stroke=per_stroke,
     )
     try:
         return compile_ufo_to_ttf(
