@@ -495,22 +495,23 @@ class GlyphEditorPanel(QWidget):
         lay.addLayout(mid)
 
         self._stroke_list.currentRowChanged.connect(self._on_stroke_selected)
-        btn_delete.clicked.connect(self.canvas.delete_selected)
-        btn_reverse.clicked.connect(self.canvas.reverse_selected)
-        btn_toggle.clicked.connect(self.canvas.toggle_selected_shape)
+        btn_delete.clicked.connect(self._focus_back(self.canvas.delete_selected))
+        btn_reverse.clicked.connect(self._focus_back(self.canvas.reverse_selected))
+        btn_toggle.clicked.connect(self._focus_back(self.canvas.toggle_selected_shape))
         self._width_combo.currentIndexChanged.connect(self._on_width_changed)
         self._combining.toggled.connect(self._on_combining_changed)
-        self._clear_btn.clicked.connect(self._on_clear)
-        self._btn_line.clicked.connect(lambda: self._set_tool(SHAPE_LINE))
-        self._btn_arc.clicked.connect(lambda: self._set_tool(SHAPE_ARC))
+        self._clear_btn.clicked.connect(self._focus_back(self._on_clear))
+        self._btn_line.clicked.connect(self._focus_back(lambda: self._set_tool(SHAPE_LINE)))
+        self._btn_arc.clicked.connect(self._focus_back(lambda: self._set_tool(SHAPE_ARC)))
         self._show_ghost.toggled.connect(self._on_ghost_toggled)
-        b_copy.clicked.connect(self.canvas.copy_strokes)
-        b_paste.clicked.connect(self.canvas.paste_strokes)
-        b_flip.clicked.connect(self.canvas.flip_horizontal)
-        b_n.clicked.connect(lambda: self.canvas.nudge(0, 1))
-        b_s.clicked.connect(lambda: self.canvas.nudge(0, -1))
-        b_w.clicked.connect(lambda: self.canvas.nudge(-1, 0))
-        b_e.clicked.connect(lambda: self.canvas.nudge(1, 0))
+        b_copy.clicked.connect(self._focus_back(self.canvas.copy_strokes))
+        b_paste.clicked.connect(self._focus_back(self.canvas.paste_strokes))
+        b_flip.clicked.connect(self._focus_back(self.canvas.flip_horizontal))
+        b_n.clicked.connect(self._focus_back(lambda: self.canvas.nudge(0, 1)))
+        b_s.clicked.connect(self._focus_back(lambda: self.canvas.nudge(0, -1)))
+        b_w.clicked.connect(self._focus_back(lambda: self.canvas.nudge(-1, 0)))
+        b_e.clicked.connect(self._focus_back(lambda: self.canvas.nudge(1, 0)))
+        self._stroke_list.itemClicked.connect(lambda _item: self.canvas.setFocus())
         self.canvas.glyphChanged.connect(self._on_canvas_changed)
         self.canvas.clearRequested.connect(self._on_clear)
 
@@ -543,6 +544,13 @@ class GlyphEditorPanel(QWidget):
     def set_reference_provider(self, provider) -> None:
         self.canvas.reference_provider = provider
         self.canvas.update()
+
+    def _focus_back(self, run):
+        """Run a control's action, then hand keyboard focus back to the canvas."""
+        def go(*args):
+            run()
+            self.canvas.setFocus()
+        return go
 
     def _set_tool(self, tool: str) -> None:
         self._btn_line.blockSignals(True)
@@ -769,6 +777,7 @@ class MainWindow(QMainWindow):
         g = self.strokefont.get(cp)
         if g is not None and g.strokes:
             self._editor.canvas.append_strokes(g.strokes)
+        self._editor.canvas.setFocus()  # hand focus back to the canvas
 
     def _squish_related_strokes(self, cp: int, direction: str) -> None:
         """Copy + squish the related glyph's strokes into a half of the current glyph's grid.
@@ -785,6 +794,7 @@ class MainWindow(QMainWindow):
         squished = squish_strokes(g.strokes, direction, width)
         if squished:
             self._editor.canvas.append_strokes(squished)
+        self._editor.canvas.setFocus()  # hand focus back to the canvas
 
     def _on_glyph_changed(self) -> None:
         changed_in_place = False
