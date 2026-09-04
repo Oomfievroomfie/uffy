@@ -261,11 +261,63 @@ def _orient_ccw(ops: Sequence[Op]) -> List[Op]:
 # --------------------------------------------------------------------------- #
 # stroke expansion
 # --------------------------------------------------------------------------- #
+def _snap_dir(v: Pt) -> Pt:
+    """Snap a direction to the nearest cell-edge or cell-diagonal direction (multiple of 45°)."""
+    a = math.atan2(v[1], v[0])
+    k = round(a / (math.pi / 4.0)) % 8
+    a_s = k * (math.pi / 4.0)
+    return (math.cos(a_s), math.sin(a_s))
+
+
+def _cell_min(P: Pt) -> Pt:
+    """The lower-left corner (font units) of the grid cell whose centre is ``P``."""
+    gx = round(P[0] / SCALE - 0.5)
+    gy = round(P[1] / SCALE - 0.5)
+    return (gx * SCALE, gy * SCALE)
+
+
+def _butt_on_cell(P: Pt, Q: Pt, ns: Pt) -> Tuple[Pt, Pt]:
+    """The butt (two corners) at end ``P``, snapped onto the *cell's own* edge or diagonal.
+
+    ``ns`` is the snapped butt-face direction (nearest 45°). The butt is one of:
+      * the cell's vertical/horizontal EDGE on the outward side of the stroke, or
+      * the cell's DIAGONAL matching ``ns``,
+    in both cases using the cell's actual corner coordinates (so a 45° stroke's butt is the
+    full cell diagonal ``(1,0)-(0,1)`` and a shallow stroke's butt is the full cell edge).
+    """
+    cx0, cy0 = _cell_min(P)
+    dx, dy = P[0] - Q[0], P[1] - Q[1]            # outward: away from the other end
+    L = math.hypot(dx, dy) or 1.0
+    wx, wy = dx / L, dy / L
+    if abs(ns[0]) < 1e-6:                          # vertical butt -> a vertical cell edge
+        x = cx0 if wx < 0 else cx0 + SCALE
+        return ((x, cy0), (x, cy0 + SCALE))
+    if abs(ns[1]) < 1e-6:                          # horizontal butt -> a horizontal cell edge
+        y = cy0 if wy < 0 else cy0 + SCALE
+        return ((cx0, y), (cx0 + SCALE, y))
+    if (ns[0] > 0) == (ns[1] > 0):                 # main diagonal (0,0)-(1,1)
+        return ((cx0, cy0), (cx0 + SCALE, cy0 + SCALE))
+    return ((cx0 + SCALE, cy0), (cx0, cy0 + SCALE))  # anti-diagonal (1,0)-(0,1)
+
+
+def _order_by_side(corners: List[Pt], P: Pt, u: Pt) -> List[Pt]:
+    """Order a butt's two corners so the corner on the +u-left side comes first."""
+    sc = []
+    for c in corners:
+        # cross(u, c - P): positive = one side, negative = the other
+        sc.append((u[0] * (c[1] - P[1]) - u[1] * (c[0] - P[0]), c))
+    sc.sort(key=lambda t: -t[0])
+    return [c for _, c in sc]
+
+
 def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     """Outline (closed contour) for a straight-line stroke with given butt.
 
-    Each end is extended by the pen radius (``r``) along the centreline, so the flat butt
-    lands on the cell boundary — this is the correct stroke length for every line.
+    For an **axial** line the square ends already sit on cell edges (each end extended by the
+    pen radius for the correct length). For a **non-axial** line each butt is snapped onto the
+    cell's own edge or diagonal (see :func:`_butt_on_cell`), so the ends are not square-angled:
+    a 45° stroke's butt is the cell diagonal ``(1,0)-(0,1)`` and a shallow stroke's butt is the
+    cell edge.
     """
     d = _sub(p2, p1)
     L = math.hypot(*d)
@@ -292,15 +344,25 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         ops.append(("Z",))
         return _orient_ccw(ops)
 
-    # extend each end by r so the flat butt keeps the correct stroke length
-    e1 = (p1[0] - u[0] * r, p1[1] - u[1] * r)
-    e2 = (p2[0] + u[0] * r, p2[1] + u[1] * r)
-    corners = [
-        (e1[0] + n[0] * r, e1[1] + n[1] * r),
-        (e2[0] + n[0] * r, e2[1] + n[1] * r),
-        (e2[0] - n[0] * r, e2[1] - n[1] * r),
-        (e1[0] - n[0] * r, e1[1] - n[1] * r),
-    ]
+    axial = abs(u[0]) < 1e-9 or abs(u[1]) < 1e-9
+    if axial:
+        # extend each end by r so the flat butt keeps the correct stroke length
+        e1 = (p1[0] - u[0] * r, p1[1] - u[1] * r)
+        e2 = (p2[0] + u[0] * r, p2[1] + u[1] * r)
+        corners = [
+            (e1[0] + n[0] * r, e1[1] + n[1] * r),
+            (e2[0] + n[0] * r, e2[1] + n[1] * r),
+            (e2[0] - n[0] * r, e2[1] - n[1] * r),
+            (e1[0] - n[0] * r, e1[1] - n[1] * r),
+        ]
+    else:
+        # non-axial: snap each butt onto the cell's own edge/diagonal, then order the two
+        # butts by side so the stroke sides do not cross.
+        ns = _snap_dir(n)
+        s_face = _order_by_side(_butt_on_cell(p1, p2, ns), p1, u)
+        e_face = _order_by_side(_butt_on_cell(p2, p1, ns), p2, u)
+        corners = [s_face[0], e_face[0], e_face[1], s_face[1]]
+
     ops = [("M", corners[0]), ("L", corners[1]), ("L", corners[2]), ("L", corners[3]), ("Z",)]
     return _orient_ccw(ops)
 
