@@ -337,7 +337,7 @@ def arc_control(p1: Pt, p2: Pt) -> Pt:
     """The single quadratic control point: the box corner the arc bulges toward.
 
     The arc is ONE quadratic per quarter, ``p1 -> C -> p2``, whose control point ``C`` is the
-    axis-aligned bounding-box corner on the LEFT of the directed ``p1 -> p2`` chord (positive
+    axis-aligned bounding-box corner on the RIGHT of the directed ``p1 -> p2`` chord (negative
     cross product in y-up coordinates). That makes the endpoint tangents axial and
     full-strength (the control point sits at the box corner, at full extent). Swapping the
     points bows the arc the other way.
@@ -352,7 +352,8 @@ def arc_control(p1: Pt, p2: Pt) -> Pt:
     ]
     dxd = p2[0] - p1[0]
     dyd = p2[1] - p1[1]
-    return max(candidates, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
+    # RIGHT of the directed chord (negative cross product) -> the arc bows the other way.
+    return min(candidates, key=lambda c: dxd * (c[1] - p1[1]) - dyd * (c[0] - p1[0]))
 
 
 def arc_end_tangents(p1: Pt, p2: Pt) -> Tuple[Pt, Pt]:
@@ -385,7 +386,7 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     polygon), joined by the end caps.
 
     The bend direction is a pure function of the ordering of ``p1``/``p2``: the arc bows
-    toward the box corner on the LEFT of the directed ``p1 -> p2`` chord.
+    toward the box corner on the RIGHT of the directed ``p1 -> p2`` chord.
     """
     dx = abs(p2[0] - p1[0])
     dy = abs(p2[1] - p1[1])
