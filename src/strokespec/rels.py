@@ -95,17 +95,30 @@ def _load_ids() -> Dict[int, List[int]]:
 
 def decomposition_base(cp: int) -> Optional[int]:
     """The base codepoint of a precombined character, else ``None``."""
+    comps = decomposition_components(cp)
+    return comps[0] if comps else None
+
+
+def decomposition_components(cp: int) -> List[int]:
+    """Every codepoint in a character's Unicode decomposition (base + combining marks).
+
+    E.g. U+0168 (ũ) decomposes to ``0075 0303`` -> ``[0x75 'u', 0x303 combining tilde]``.
+    Tags such as ``<compat>`` are ignored.
+    """
     dec = unicodedata.decomposition(chr(cp))
     if not dec:
-        return None
-    nums = [p for p in dec.split() if not p.startswith("<")]
-    if not nums:
-        return None
-    try:
-        base = int(nums[0], 16)
-    except ValueError:
-        return None
-    return base if base != cp else None
+        return []
+    out: List[int] = []
+    for p in dec.split():
+        if p.startswith("<"):
+            continue
+        try:
+            v = int(p, 16)
+        except ValueError:
+            continue
+        if v != cp:
+            out.append(v)
+    return out
 
 
 def ids_components(cp: int) -> List[int]:
@@ -114,11 +127,10 @@ def ids_components(cp: int) -> List[int]:
 
 
 def related_codepoints(cp: int) -> List[int]:
-    """Related codepoints for ``cp`` (base char + hanzi IDS components), de-duplicated."""
+    """Related codepoints: the base + combining marks of a precombined character, plus the
+    direct hanzi IDS components of a Han ideograph. De-duplicated and never the char itself."""
     out: List[int] = []
-    base = decomposition_base(cp)
-    if base is not None:
-        out.append(base)
+    out.extend(decomposition_components(cp))
     for c in ids_components(cp):
         if c != cp:
             out.append(c)
