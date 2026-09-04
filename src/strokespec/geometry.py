@@ -269,6 +269,20 @@ def _snap_dir(v: Pt) -> Pt:
     return (math.cos(a_s), math.sin(a_s))
 
 
+def _snap_axis(v: Pt) -> Pt:
+    """Snap a direction to the nearest axis-aligned (vertical/horizontal) direction (multiple
+    of 90°) — used for every non-axial line that is not exactly 45°."""
+    a = math.atan2(v[1], v[0])
+    k = round(a / (math.pi / 2.0)) % 4
+    a_s = k * (math.pi / 2.0)
+    return (math.cos(a_s), math.sin(a_s))
+
+
+def _is_exactly_45(p1: Pt, p2: Pt) -> bool:
+    """True if the centreline is exactly at ±45° (equal |dx| and |dy|)."""
+    return abs(abs(p2[0] - p1[0]) - abs(p2[1] - p1[1])) < 1e-9
+
+
 def _cell_min(P: Pt) -> Pt:
     """The lower-left corner (font units) of the grid cell whose centre is ``P``."""
     gx = round(P[0] / SCALE - 0.5)
@@ -357,8 +371,9 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         ]
     else:
         # non-axial: snap each butt onto the cell's own edge/diagonal, then order the two
-        # butts by side so the stroke sides do not cross.
-        ns = _snap_dir(n)
+        # butts by side so the stroke sides do not cross. The DIAGONAL is used only for an
+        # exactly-45° line; every other non-axial line uses the vertical/horizontal edge.
+        ns = _snap_dir(n) if _is_exactly_45(p1, p2) else _snap_axis(n)
         s_face = _order_by_side(_butt_on_cell(p1, p2, ns), p1, u)
         e_face = _order_by_side(_butt_on_cell(p2, p1, ns), p2, u)
         corners = [s_face[0], e_face[0], e_face[1], s_face[1]]
