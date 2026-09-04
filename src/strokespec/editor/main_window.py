@@ -461,6 +461,13 @@ class MainWindow(QMainWindow):
                 self._pending_commit = None
                 # switch the editor onto the stored glyph so further edits apply directly
                 self._editor.set_glyph(stored)
+                # A freshly-opened glyph: keep the just-placed stroke selected. set_glyph
+                # resets the canvas selection to -1, so re-select the last stroke (this also
+                # matches the behaviour when placing the 2nd, 3rd, ... strokes).
+                if stored.strokes:
+                    self._editor.canvas._selected_index = len(stored.strokes) - 1
+                    self._editor._sync_stroke_list()
+                    self._editor.canvas.update()
                 self._grid.refresh()  # a brand-new glyph may appear in this block
                 self._dirty = True
                 self._set_window_title()

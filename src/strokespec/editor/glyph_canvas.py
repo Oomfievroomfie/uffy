@@ -395,6 +395,8 @@ class GlyphCanvas(QWidget):
                 idx, ep = endpoint
                 self._drag = ("endpoint", idx, ep)
                 self._selected_index = idx
+                self._pending = None  # selecting/dragging a node cancels any half-made (click1) stroke
+                self._hover = None
                 self.update()
                 return
 
