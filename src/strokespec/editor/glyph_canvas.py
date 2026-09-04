@@ -226,6 +226,19 @@ class GlyphCanvas(QWidget):
                 self.update()
                 self.glyphChanged.emit()
 
+    def append_strokes(self, strokes) -> None:
+        """Append a list of strokes to the current glyph (up to the 32-stroke cap)."""
+        if not strokes:
+            return
+        room = 32 - len(self._glyph.strokes)
+        if room <= 0:
+            return
+        self._snapshot()
+        self._glyph.strokes.extend(
+            [Stroke(s.p1, s.p2, s.shape) for s in strokes[:room]])
+        self.update()
+        self.glyphChanged.emit()
+
     def flip_horizontal(self) -> None:
         """Mirror every stroke left-right across the glyph's cell centre.
 

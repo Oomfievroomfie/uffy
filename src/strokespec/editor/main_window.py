@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Optional
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QThread, Signal
@@ -87,12 +88,15 @@ def _icon_flip() -> QIcon:
 
 
 class ReferenceFontsDock(QWidget):
-    """List of loaded reference fonts with add/clear controls."""
+    """List of loaded reference fonts (top) + related glyphs (bottom) with add/clear controls."""
 
     def __init__(self, reflib: ReferenceLibrary, on_change, parent=None) -> None:
         super().__init__(parent)
         self._reflib = reflib
         self._on_change = on_change
+        self._copy_strokes = None   # callable(strokes) to copy a related glyph onto the canvas
+        self._strokefont = None     # used to know whether a related glyph has authored data
+
         lay = QVBoxLayout(self)
         self._list = QListWidget()
         lay.addWidget(self._list)
@@ -102,9 +106,71 @@ class ReferenceFontsDock(QWidget):
         btn_row.addWidget(add_btn)
         btn_row.addWidget(clear_btn)
         lay.addLayout(btn_row)
+
+        # related glyphs (base char / hanzi components) shown in the same vertical slot
+        self._rel_title = QLabel("Related glyphs")
+        self._rel_title.setStyleSheet("font-weight: bold;")
+        self._rel_box = QWidget()
+        self._rel_lay = QVBoxLayout(self._rel_box)
+        self._rel_lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(self._rel_title)
+        lay.addWidget(self._rel_box)
+        self._set_related([])
+
         add_btn.clicked.connect(self.add_folder)
         clear_btn.clicked.connect(self.clear)
         self._refresh()
+
+    def set_copy_callback(self, cb) -> None:
+        self._copy_strokes = cb
+
+    def set_related(self, codepoints, strokefont=None) -> None:
+        """Rebuild the related-glyph list for the given codepoints."""
+        if strokefont is not None:
+            self._strokefont = strokefont
+        rows = []
+        for cp in codepoints:
+            name = ""
+            try:
+                name = unicodedata.name(chr(cp))
+            except ValueError:
+                pass
+            g = self._strokefont.get(cp) if self._strokefont is not None else None
+            has_data = g is not None and bool(g.strokes)
+            rows.append((cp, name, has_data))
+        self._set_related(rows)
+
+    def _clear_related(self) -> None:
+        while self._rel_lay.count():
+            item = self._rel_lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+    def _set_related(self, rows) -> None:
+        self._clear_related()
+        if not rows:
+            self._rel_title.hide()
+            self._rel_box.hide()
+            return
+        self._rel_title.show()
+        self._rel_box.show()
+        for cp, name, has_data in rows:
+            row = QWidget()
+            h = QHBoxLayout(row)
+            h.setContentsMargins(0, 0, 0, 0)
+            label = QLabel(f"U+{cp:04X}  {name}")
+            h.addWidget(label, 1)
+            btn = QPushButton("Copy to canvas")
+            btn.setEnabled(has_data)
+            if has_data:
+                btn.clicked.connect(lambda _=False, c=cp: self._copy(c))
+            h.addWidget(btn)
+            self._rel_lay.addWidget(row)
+
+    def _copy(self, cp) -> None:
+        if self._copy_strokes is not None:
+            self._copy_strokes(cp)
 
     def add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Choose a folder of reference fonts")
@@ -381,6 +447,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._splitter)
 
         self._refdock = ReferenceFontsDock(self.reflib, self._on_refs_changed)
+        self._refdock.set_copy_callback(self._copy_related_strokes)
         dock = QDockWidget("Reference Fonts", self)
         dock.setWidget(self._refdock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -448,6 +515,22 @@ class MainWindow(QMainWindow):
             glyph = Glyph(cp)
             self._pending_commit = glyph
             self._editor.set_glyph(glyph)
+        self._update_related()
+
+    def _update_related(self) -> None:
+        """Refresh the 'Related glyphs' panel for the currently-edited glyph."""
+        g = self._editor.glyph()
+        if g is None:
+            self._refdock.set_related([])
+            return
+        from ..rels import related_codepoints
+        self._refdock.set_related(related_codepoints(g.codepoint), self.strokefont)
+
+    def _copy_related_strokes(self, cp: int) -> None:
+        """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas."""
+        g = self.strokefont.get(cp)
+        if g is not None and g.strokes:
+            self._editor.canvas.append_strokes(g.strokes)
 
     def _on_glyph_changed(self) -> None:
         changed_in_place = False

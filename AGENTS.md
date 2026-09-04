@@ -1,0 +1,135 @@
+# strokespec workspace — environment notes
+
+Hard-won learnings about working efficiently in this sandboxed Windows workspace.
+These are the things that repeatedly cost time when forgotten.
+
+## Python / uv (the only toolchain)
+
+- Use **uv only** for the Python environment. Every `uv run` / `uv sync` must set both
+  cache dirs to a location INSIDE the workspace (the default `%LOCALAPPDATA%` cache is
+  sandbox-denied with a cache-initialize permission error):
+
+  ```pwsh
+  $env:UV_CACHE_DIR="$PWD\.uv-cache"; $env:UV_PYTHON_INSTALL_DIR="$PWD\.uv-python"; uv ... 
+  ```
+
+  Without these, uv fails immediately with "failed to initialize cache … Access is denied".
+
+- A dependency with only an sdist **cannot build here**: uv builds into
+  `.uv-cache/builds-v0`, which the workspace-write sandbox denies. `gftools` depends on
+  `ufomerge`, which has no wheel for this venv's Python 3.14, so `uv sync --extra validate`
+  fails building it. **Workaround:** `gftools` is effectively unavailable; use **fontmake**
+  (installed, prebuilt) as the compiler. `available_compile_tools()` will report only
+  fontmake; the compiler falls back to it automatically.
+
+- Aborted uv builds leave stale `.tmp*` dirs in `.uv-cache/builds-v0`; `Remove-Item` cannot
+  delete them under the sandbox. They are gitignored, harmless residue — leave them alone.
+
+## Shell / git
+
+- Use the Git-for-Windows binary explicitly — msys64 git fails:
+  `& 'C:\Program Files\Git\cmd\git.exe' <cmd>` from `C:\Users\wareya\dev\uffy`.
+
+- Never `git add -A`. It pulls in sensitive authored data. Always stage specific paths.
+  `glyphs.strokes.json` (the live authored glyph file) and untracked `todo.txt` /
+  `* - Copy.json` must NOT be committed unless the user explicitly asks; leave them unstaged.
+
+- Capturing a child process's stdout over a pipe is denied on Windows (EPERM). Redirect to a
+  log file and read it back (the compiler already does this for fontmake/gftools logs).
+
+## Sandbox discipline
+
+- File writes run under a **workspace-write** sandbox. NO privilege escalation, NO sandbox
+  escapes, work only inside `C:\Users\wareya\dev\uffy`. Do not attempt `sandbox_permissions`.
+
+- A `[sandbox: file access denied]` message may simply **be the user pressing "no"** on an
+  escalation prompt. Treat it as a direct user instruction, not a harness bug to reason around.
+
+## Method (the most important lessons)
+
+- **Run the code, do not reason in a vacuum.** Verify the ACTUAL output against the user's
+  concrete constraints by executing it — never against a predicate you invented that happens
+  to pass. Several bugs persisted because I checked a self-written sanity test instead of the
+  real requirement (e.g. the line-butt snapping: a floating `2r` segment vs. the cell's own
+  edge/diagonal differs wildly even though both "touched a grid line").
+
+- **Read the requirement literally; the user means exactly what they say.** Terminology and
+  precision matter and are corrected harshly: flat ends are **butts**, not caps; snap to the
+  **cell's own edge/diagonal** (real corner coords), not a floating segment; diagonal case
+  only for **exactly 45°**, etc. Do not "improve" or guess — implement the stated constraint.
+
+- After any geometry change, verify per-stroke: signed area > 0, valid contours, and (for
+  snapping) bring the concrete grid-unit cases to check. Then build the TTF with fontmake and
+  render a sample string via PIL/FreeType to confirm it looks right before committing.
+
+## Project conventions that matter
+
+- Commit after finishing each feature/bug/experiment (the user can amend later). Clean up
+  test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are gitignored.
+
+- Grid geometry: points are cell-centre aligned `(g+0.5)*SCALE`; `SCALE=64`, `UPEM=1024`,
+  `PEN_RADIUS=32`, `PEN_CAP="square"`. Grid lines are at `k*SCALE`; cell diagonals are
+  `x±y = k*SCALE`.
+
+- `geometry.py` is now the single stroke→outline expansion used by the editor preview, the
+  grid previews AND the compiled font (no picosvg). The editor canvas and `uiutil` both call
+  it directly, so preview and compile can never disagree.
+
+- Large-font compilation is slow: it runs on a background `QThread` with a `QProgressDialog`
+  (determinate `done/total` while outlines build, indeterminate while the CLI compiler runs).
+  `compile_strokefont(..., on_progress=...)` and `build_ufo(..., progress=...)` accept the
+  callback.
+
+## Codebase architecture intuition
+
+The **stroke set is the single source of truth** (the authored `.strokes.json`). Everything —
+editor, previews, compiled font — derives from the stroke model alone.
+
+### Data flow (one direction)
+```
+StrokeFont (.strokes.json)         model.py     Stroke/Glyph/StrokeFont + JSON + Unicode defaults
+    │
+    ├─ geometry.py   strokes → outlines (M/L/Q/C/Z ops, font units, y-up, baseline 0)
+    │                    the CANONICAL expansion — used by everyone
+    ├─ ufo.py        contours → UFO authoring format (op_to_pen Q → qCurveTo)
+    │                    build_ufo(..., progress=...)
+    └─ compiler.py   UFO → TTF via Google CLI   compile_strokefont(..., on_progress=...)
+                         fontmake (gftools unavailable) with --keep-overlaps
+```
+The editor is a *front end* for the same model, not a parallel definition:
+- `glyph_canvas.py` paints in real time from `geometry.stroke_outline`.
+- `editor/uiutil.py` `glyph_qpainterpath` fills from `geometry.glyph_contours` (grid icons,
+  `uffy preview`, reference sheets).
+- `svgout.py` is a **debug-only** stroked-SVG emitter (no picosvg; the font/preview do not use
+  it — don't let it drift or re-introduce it as the compile source).
+
+### Intuitions / rules of thumb
+- **Never re-derive the outline a second way.** Preview and compiled font must use the same
+  `geometry.py` output; if a change only lands in one path, they drift. This is the whole point
+  of having `geometry.py` be canonical.
+- **Ops shape:** `("M",pt)  ("L",pt)  ("Q",ctrl,pt)  ("C",c1,c2,pt)  ("Z",)`, y-up font units.
+  Contour helpers in geometry (`_flatten`, `_reverse`, `_orient_ccw`, `_signed_area`) all
+  understand M/L/Q/C/Z. Keep that set closed when adding ops.
+- **Per-stroke, no boolean merge.** `glyph_contours` returns one contour per stroke; overlapping
+  strokes stay as redundant subpaths and union visually under non-zero winding. Use
+  `fontmake --keep-overlaps` — do NOT enable ufo2ft's RemoveOverlapsFilter (it only handles
+  cubics and errors on the TrueType quadratics, and would undo the design).
+- **One contour per stroke, oriented CCW** (positive area) so overlap unions instead of punching
+  holes. Verify signed area > 0 after touching `stroke_outline`/`arc_outline`.
+- **Arcs are a single quadratic per quarter** (`p1 -> C -> p2`, C = box bulge corner), giving
+  axial, full-strength end tangents; each offset side is itself one quadratic. Axis-aligned /
+  zero-length "arcs" are really lines (`arc_degenerates_to_line`). Don't reintroduce the old
+  sampled quarter-ellipse or picosvg.
+- **Line butts:** square butt extends each end by `r` (correct stroke length, baked — no SVG
+  linecap). Non-axial butts snap onto the cell's own edge/diagonal in outline space; there's a
+  committed series of requirements here (edge vs exactly-45°-only diagonal, then a
+  user-controlled 45° vertical/horizontal split via p2 above/below p1). Read them in the code
+  + comments before changing; some diagonal code is intentionally dummied out.
+- **Where to add a new module:** pure model/geometry/compile logic in `strokespec/` (no Qt);
+  any Qt/editor widget in `strokespec/editor/`. CLI entry points registered in `pyproject.toml`
+  [project.scripts] (`uffy`, `uffy-editor`).
+- **`cli.py`** exposes `build` / `preview` / `refs` / `validate` and is the fastest way to
+  exercise the compile path without the GUI (`uv run uffy build … --tool fontmake --no-fix`).
+- **UFO policy:** `ufo.py` writes the UFO authoring format only; the actual TTF/OTF binary is
+  produced by Google's CLI compiler (never fontTools TTF/OTF read/write). Keep it that way.
+
