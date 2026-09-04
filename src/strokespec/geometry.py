@@ -262,7 +262,12 @@ def _orient_ccw(ops: Sequence[Op]) -> List[Op]:
 # stroke expansion
 # --------------------------------------------------------------------------- #
 def _snap_dir(v: Pt) -> Pt:
-    """Snap a direction to the nearest cell-edge or cell-diagonal direction (multiple of 45°)."""
+    """Snap a direction to the nearest cell-edge or cell-diagonal direction (multiple of 45°).
+
+    NOTE: intentionally DUMMIED OUT. The diagonal butt is disabled (requirement change: 45°
+    uses the horizontal edge). This function is not called by the current pipeline and must be
+    LEFT IN PLACE for a future re-enable.
+    """
     a = math.atan2(v[1], v[0])
     k = round(a / (math.pi / 4.0)) % 8
     a_s = k * (math.pi / 4.0)
@@ -271,7 +276,7 @@ def _snap_dir(v: Pt) -> Pt:
 
 def _snap_axis(v: Pt) -> Pt:
     """Snap a direction to the nearest axis-aligned (vertical/horizontal) direction (multiple
-    of 90°) — used for every non-axial line that is not exactly 45°."""
+    of 90°) — the butt-face direction used for every non-axial line."""
     a = math.atan2(v[1], v[0])
     k = round(a / (math.pi / 2.0)) % 4
     a_s = k * (math.pi / 2.0)
@@ -279,7 +284,11 @@ def _snap_axis(v: Pt) -> Pt:
 
 
 def _is_exactly_45(p1: Pt, p2: Pt) -> bool:
-    """True if the centreline is exactly at ±45° (equal |dx| and |dy|)."""
+    """True if the centreline is exactly at ±45° (equal |dx| and |dy|).
+
+    NOTE: intentionally DUMMIED OUT. Currently unused (the diagonal butt is disabled); it must
+    be LEFT IN PLACE for a future re-enable.
+    """
     return abs(abs(p2[0] - p1[0]) - abs(p2[1] - p1[1])) < 1e-9
 
 
@@ -309,6 +318,9 @@ def _butt_on_cell(P: Pt, Q: Pt, ns: Pt) -> Tuple[Pt, Pt]:
     if abs(ns[1]) < 1e-6:                          # horizontal butt -> a horizontal cell edge
         y = cy0 if wy < 0 else cy0 + SCALE
         return ((cx0, y), (cx0 + SCALE, y))
+    # NOTE: the two diagonal branches below are intentionally DUMMIED OUT (requirement change:
+    # 45° uses the horizontal edge). They are only reached when `ns` is diagonal, which the
+    # current pipeline never passes (it uses _snap_axis). Keep them in place for re-enabling.
     if (ns[0] > 0) == (ns[1] > 0):                 # main diagonal (0,0)-(1,1)
         return ((cx0, cy0), (cx0 + SCALE, cy0 + SCALE))
     return ((cx0 + SCALE, cy0), (cx0, cy0 + SCALE))  # anti-diagonal (1,0)-(0,1)
@@ -370,10 +382,13 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
             (e1[0] - n[0] * r, e1[1] - n[1] * r),
         ]
     else:
-        # non-axial: snap each butt onto the cell's own edge/diagonal, then order the two
-        # butts by side so the stroke sides do not cross. The DIAGONAL is used only for an
-        # exactly-45° line; every other non-axial line uses the vertical/horizontal edge.
-        ns = _snap_dir(n) if _is_exactly_45(p1, p2) else _snap_axis(n)
+        # non-axial: snap each butt onto the cell's own edge, then order the two butts by
+        # side so the stroke sides do not cross.
+        #
+        # The diagonal butt is DUMMIED OUT (requirement change): 45° now uses the horizontal
+        # cell edge, like every other non-axial line. The diagonal code is kept in place but
+        # not reached (see _snap_dir and the diagonal branch of _butt_on_cell).
+        ns = _snap_axis(n)
         s_face = _order_by_side(_butt_on_cell(p1, p2, ns), p1, u)
         e_face = _order_by_side(_butt_on_cell(p2, p1, ns), p2, u)
         corners = [s_face[0], e_face[0], e_face[1], s_face[1]]
