@@ -11,30 +11,34 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QCloseEvent,
+    QFont,
     QIcon,
     QKeySequence,
     QPainter,
     QPen,
     QPixmap,
     QPolygonF,
+    QStandardItem,
+    QStandardItemModel,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QDockWidget,
     QFileDialog,
-    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
     QPushButton,
-    QScrollArea,
     QSplitter,
+    QStyledItemDelegate,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -52,6 +56,8 @@ _ICON_HEX = QColor(60, 60, 72)
 # related-glyph thumbnail size / reference render pixel size (matches the grid cell look)
 REL_PIX_W, REL_PIX_H = 60, 60
 REL_REF_PX = 96
+# related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
+REL_CELL_W, REL_CELL_H = 96, 116
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -93,40 +99,129 @@ def _icon_flip() -> QIcon:
     return _make_icon(20, d)
 
 
-class _RelatedCard(QWidget):
-    """A single related-glyph card: thumbnail + character + [Copy][Open] buttons.
+# related-glyph cell roles (QStandardItemModel)
+REL_CP = Qt.ItemDataRole.UserRole
+REL_HAS = Qt.ItemDataRole.UserRole + 1
+REL_PIX = Qt.ItemDataRole.UserRole + 2
 
-    Clicking the glyph body (thumbnail/character) does nothing — only the two buttons act.
-    """
 
-    def __init__(self, cp, name, has_data, pixmap, on_copy, on_open, parent=None) -> None:
-        super().__init__(parent)
+def _rel_button_rects(rect: QRectF) -> tuple:
+    """The 'Copy' and 'Open' button rects inside a related cell (shared by paint + hit-test)."""
+    m = 4.0
+    bw = (rect.width() - 2 * m - 3.0) / 2.0
+    by = rect.bottom() - m - 20.0
+    copy = QRectF(rect.left() + m, by, bw, 20.0)
+    opn = QRectF(copy.right() + 3.0, by, bw, 20.0)
+    return copy, opn
+
+
+class _RelatedDelegate(QStyledItemDelegate):
+    """Paints each related cell like the codepoint grid (thumbnail + char badge) plus two
+    buttons (Copy / Open) at the bottom. Mirrors GlyphGridDelegate's styling."""
+
+    def sizeHint(self, option, index) -> "QSize":
+        return QSize(REL_CELL_W, REL_CELL_H)
+
+    def paint(self, painter, option, index) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        rect = option.rect.adjusted(3, 3, -3, -3)
+        cp = index.data(REL_CP)
+        has = bool(index.data(REL_HAS))
+
+        bg = QColor(241, 242, 246)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bg)
+        painter.drawRoundedRect(rect, 6, 6)
+
+        # preview fills the space above the buttons
+        btn_h = 20.0
+        label_h = 14.0
+        avail_w = rect.width() - 8.0
+        avail_h = rect.height() - btn_h - label_h - 12.0
+        pm = index.data(REL_PIX)
+        if pm is not None and not pm.isNull():
+            scaled = pm.scaled(
+                avail_w, avail_h,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            px = rect.left() + (rect.width() - scaled.width()) / 2.0
+            py = rect.top() + 2.0 + max(0.0, (avail_h - scaled.height()) / 2.0)
+            painter.drawPixmap(px, py, scaled)
+
+        # char badge (top-left)
         ch = chr(cp)
-        self.setToolTip(f"U+{cp:04X}  {name}")
-        v = QVBoxLayout(self)
-        v.setContentsMargins(2, 2, 2, 2)
-        v.setSpacing(1)
-        v.addStretch(1)
-        thumb = QLabel()
-        thumb.setFixedSize(REL_PIX_W, REL_PIX_H)
-        thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if pixmap is not None:
-            thumb.setPixmap(pixmap)
-        v.addWidget(thumb)
-        lab = QLabel(ch if ch.isprintable() and ch != "\ufffd" else "")
-        lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        v.addWidget(lab)
-        v.addStretch(1)
-        btns = QHBoxLayout()
-        copy = QPushButton("Copy")
-        copy.setEnabled(has_data)  # grey when there is no authored data to copy
-        if has_data:
-            copy.clicked.connect(lambda: on_copy(cp))
-        opn = QPushButton("Open")
-        opn.clicked.connect(lambda: on_open(cp))
-        btns.addWidget(copy)
-        btns.addWidget(opn)
-        v.addLayout(btns)
+        if ch.isprintable() and ch != "\ufffd":
+            badge = QRectF(rect.left() + 2.0, rect.top() + 2.0, 16.0, 16.0)
+            painter.setBrush(QColor(255, 255, 255, 210))
+            painter.drawRoundedRect(badge, 4.0, 4.0)
+            painter.setPen(QColor(60, 60, 72))
+            painter.setFont(QFont("", 8))
+            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, ch)
+
+        # codepoint id
+        painter.setPen(QColor(130, 130, 140))
+        painter.setFont(QFont("", 8))
+        painter.drawText(
+            QRectF(rect.left(), rect.bottom() - btn_h - label_h, rect.width(), label_h),
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
+            f"U+{cp:04X}",
+        )
+
+        # buttons
+        copy_r, opn_r = _rel_button_rects(QRectF(rect))
+        self._draw_button(painter, copy_r, "Copy", enabled=has)
+        self._draw_button(painter, opn_r, "Open", enabled=True)
+        painter.restore()
+
+    @staticmethod
+    def _draw_button(painter, r: QRectF, text: str, enabled: bool) -> None:
+        bg = QColor(228, 231, 237) if enabled else QColor(238, 238, 240)
+        fg = QColor(35, 35, 42) if enabled else QColor(160, 160, 168)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bg)
+        painter.drawRoundedRect(r, 4.0, 4.0)
+        painter.setPen(fg)
+        painter.setFont(QFont("", 8))
+        painter.drawText(r, Qt.AlignmentFlag.AlignCenter, text)
+
+
+class _RelatedListView(QListView):
+    """The related-glyph list: same containerized IconMode list as the codepoint grid.
+    Clicking a cell BODY does nothing; only the Copy / Open buttons act."""
+
+    copyRequested = Signal(int)
+    openRequested = Signal(int)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setViewMode(QListView.ViewMode.IconMode)
+        self.setFlow(QListView.Flow.LeftToRight)
+        self.setWrapping(True)
+        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.setSpacing(4)
+        self.setUniformItemSizes(True)
+        self.setMovement(QListView.Movement.Static)
+        self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.setGridSize(QSize(REL_CELL_W, REL_CELL_H))
+        self.setIconSize(QSize(REL_PIX_W, REL_PIX_H))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            idx = self.indexAt(event.position().toPoint())
+            if idx.isValid():
+                cp = idx.data(REL_CP)
+                copy_r, opn_r = _rel_button_rects(QRectF(self.visualRect(idx)))
+                pos = event.position()
+                if copy_r.contains(pos) and bool(idx.data(REL_HAS)):
+                    self.copyRequested.emit(cp)
+                    return
+                if opn_r.contains(pos):
+                    self.openRequested.emit(cp)
+                    return
+        super().mouseReleaseEvent(event)  # cell body click: do nothing more
 
 
 class ReferenceFontsDock(QWidget):
@@ -150,21 +245,20 @@ class ReferenceFontsDock(QWidget):
         btn_row.addWidget(clear_btn)
         lay.addLayout(btn_row)
 
-        # related glyphs (base char / hanzi components) in the same vertical slot, as a grid
-        # of cards. Always visible (even when empty). Clicking a card body does nothing; only
-        # the Copy (grey if no data) and Open (always, jumps to that codepoint) buttons act.
+        # related glyphs (base char / hanzi components) in the same vertical slot. A
+        # containerized IconMode list identical in styling to the main codepoint list (with a
+        # white/dark area, aligned cells, scrollbars). Always visible even when empty;
+        # clicking a cell body does nothing; only the Copy (grey if no data) / Open buttons act.
         self._rel_title = QLabel("Related glyphs")
         self._rel_title.setStyleSheet("font-weight: bold;")
-        self._rel_scroll = QScrollArea()
-        self._rel_scroll.setWidgetResizable(True)
-        self._rel_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._rel_container = QWidget()
-        self._rel_grid = QGridLayout(self._rel_container)
-        self._rel_grid.setContentsMargins(0, 0, 0, 0)
-        self._rel_grid.setSpacing(2)
-        self._rel_scroll.setWidget(self._rel_container)
+        self._rel_model = QStandardItemModel(self)
+        self._rel_list = _RelatedListView()
+        self._rel_list.setModel(self._rel_model)
+        self._rel_list.setItemDelegate(_RelatedDelegate(self._rel_list))
+        self._rel_list.copyRequested.connect(self._copy)
+        self._rel_list.openRequested.connect(self._open)
         lay.addWidget(self._rel_title)
-        lay.addWidget(self._rel_scroll, 1)
+        lay.addWidget(self._rel_list, 1)
         self._set_related([])
 
         add_btn.clicked.connect(self.add_folder)
@@ -194,19 +288,15 @@ class ReferenceFontsDock(QWidget):
         self._set_related(rows)
 
     def _set_related(self, rows) -> None:
-        # Always visible, even when empty. Each row becomes a card in a grid.
-        while self._rel_grid.count():
-            it = self._rel_grid.takeAt(0)
-            w = it.widget()
-            if w is not None:
-                w.deleteLater()
-        cols = 2
-        for i, (cp, name, has_data) in enumerate(rows):
-            px = self._render_related_pixmap(cp)
-            card = _RelatedCard(cp, name, has_data, px, self._copy, self._open)
-            self._rel_grid.addWidget(card, i // cols, i % cols)
-        for c in range(cols):
-            self._rel_grid.setColumnStretch(c, 1)
+        # Always visible, even when empty. Each related glyph becomes one cell in the list.
+        self._rel_model.clear()
+        for cp, name, has_data in rows:
+            item = QStandardItem()
+            item.setData(cp, REL_CP)
+            item.setData(has_data, REL_HAS)
+            item.setData(self._render_related_pixmap(cp), REL_PIX)
+            item.setToolTip(f"U+{cp:04X}  {name}")
+            self._rel_model.appendRow(item)
 
     def _render_related_pixmap(self, cp: int):
         """A thumbnail of a related glyph: authored strokes (black) or reference font (grey)."""
