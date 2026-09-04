@@ -40,10 +40,12 @@ class GlyphCanvas(QWidget):
     """
 
     glyphChanged = Signal()
+    clearRequested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setMinimumSize(320, 320)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._glyph: Glyph = Glyph(codepoint=0x20)
         self._pending: Point | None = None
         self._drag = None
@@ -51,6 +53,8 @@ class GlyphCanvas(QWidget):
         self._selected_index: int = -1
         self._oob_count: int = 0
         self._clip: list = []
+        self._undo: list = []   # list of prior stroke-list snapshots (list[Stroke])
+        self._redo: list = []   # list of undone stroke-list snapshots
         self.tool: str = SHAPE_LINE
         self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
@@ -65,7 +69,66 @@ class GlyphCanvas(QWidget):
         self._pending = None
         self._drag = None
         self._selected_index = -1
+        self._undo = []
+        self._redo = []
         self.update()
+
+    # --- undo / redo (current glyph only) ------------------------------------
+    def _snapshot(self) -> None:
+        """Record the current strokes before a mutation, so it can be undone."""
+        self._undo.append([Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes])
+        self._redo.clear()
+
+    def undo(self) -> None:
+        if not self._undo:
+            return
+        self._redo.append([Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes])
+        self._glyph.strokes[:] = self._undo.pop()
+        self.update()
+        self.glyphChanged.emit()
+
+    def redo(self) -> None:
+        if not self._redo:
+            return
+        self._undo.append([Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes])
+        self._glyph.strokes[:] = self._redo.pop()
+        self.update()
+        self.glyphChanged.emit()
+
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        mod = event.modifiers()
+        ctrl = bool(mod & Qt.KeyboardModifier.ControlModifier)
+        shift = bool(mod & Qt.KeyboardModifier.ShiftModifier)
+        if ctrl and key == Qt.Key.Key_Z:
+            self.redo() if shift else self.undo()
+            return
+        if ctrl and key == Qt.Key.Key_C:
+            self.copy_strokes()
+            return
+        if ctrl and key == Qt.Key.Key_V:
+            self.paste_strokes()
+            return
+        if ctrl and key == Qt.Key.Key_H:
+            self.clearRequested.emit()
+            return
+        if ctrl:
+            super().keyPressEvent(event)
+            return
+        if key == Qt.Key.Key_W:
+            self.nudge(0, 1)
+        elif key == Qt.Key.Key_S:
+            self.nudge(0, -1)
+        elif key == Qt.Key.Key_A:
+            self.nudge(-1, 0)
+        elif key == Qt.Key.Key_D:
+            self.nudge(1, 0)
+        elif key == Qt.Key.Key_F:
+            self.flip_horizontal()
+        elif key == Qt.Key.Key_B:
+            self.toggle_selected_shape()
+        else:
+            super().keyPressEvent(event)
 
     @staticmethod
     def _path_from(contours: list) -> "QPainterPath":
@@ -106,6 +169,7 @@ class GlyphCanvas(QWidget):
 
     def delete_selected(self) -> bool:
         if 0 <= self._selected_index < len(self._glyph.strokes):
+            self._snapshot()
             del self._glyph.strokes[self._selected_index]
             self._selected_index = -1
             self.update()
@@ -116,6 +180,7 @@ class GlyphCanvas(QWidget):
     def reverse_selected(self) -> None:
         """Reverse the selected stroke's points — this is what flips an arc's bend."""
         if 0 <= self._selected_index < len(self._glyph.strokes):
+            self._snapshot()
             s = self._glyph.strokes[self._selected_index]
             self._glyph.strokes[self._selected_index] = s.reversed()
             self.update()
@@ -124,6 +189,7 @@ class GlyphCanvas(QWidget):
     def toggle_selected_shape(self) -> None:
         """Switch the selected stroke between a straight line and a single-quadratic arc."""
         if 0 <= self._selected_index < len(self._glyph.strokes):
+            self._snapshot()
             s = self._glyph.strokes[self._selected_index]
             new_shape = SHAPE_LINE if s.shape == SHAPE_ARC else SHAPE_ARC
             self._glyph.strokes[self._selected_index] = Stroke(s.p1, s.p2, new_shape)
@@ -133,12 +199,14 @@ class GlyphCanvas(QWidget):
     def nudge(self, dx: int, dy: int) -> None:
         """Shift every point of every stroke by ``(dx, dy)`` grid cells (a 1-pixel nudge)."""
         strokes = self._glyph.strokes
+        if not strokes:
+            return
+        self._snapshot()
         for i, s in enumerate(strokes):
             strokes[i] = Stroke(Point(s.p1.x + dx, s.p1.y + dy),
                                 Point(s.p2.x + dx, s.p2.y + dy), s.shape)
         self.update()
-        if strokes:
-            self.glyphChanged.emit()
+        self.glyphChanged.emit()
 
     def copy_strokes(self) -> None:
         """Copy the current glyph's strokes to an internal clipboard."""
@@ -152,6 +220,7 @@ class GlyphCanvas(QWidget):
         if self._clip:
             room = 32 - len(self._glyph.strokes)
             if room > 0:
+                self._snapshot()
                 self._glyph.strokes.extend(
                     [Stroke(s.p1, s.p2, s.shape) for s in self._clip[:room]])
                 self.update()
@@ -166,13 +235,15 @@ class GlyphCanvas(QWidget):
         """
         m = self._cols() - 1
         strokes = self._glyph.strokes
+        if not strokes:
+            return
+        self._snapshot()
         for i, s in enumerate(strokes):
             p1 = Point(m - s.p1.x, s.p1.y)
             p2 = Point(m - s.p2.x, s.p2.y)
             strokes[i] = Stroke(p2, p1, s.shape)
         self.update()
-        if strokes:
-            self.glyphChanged.emit()
+        self.glyphChanged.emit()
 
     # --- geometry ------------------------------------------------------------
     def _cols(self) -> int:
@@ -393,6 +464,7 @@ class GlyphCanvas(QWidget):
             endpoint = self._find_endpoint(gp)
             if endpoint is not None:
                 idx, ep = endpoint
+                self._snapshot()  # one undo step covers the whole drag
                 self._drag = ("endpoint", idx, ep)
                 self._selected_index = idx
                 self._pending = None  # selecting/dragging a node cancels any half-made (click1) stroke
@@ -423,6 +495,7 @@ class GlyphCanvas(QWidget):
             gp = self._scene_to_grid(event.position())
             if self._pending is not None and gp != self._pending:
                 try:
+                    self._snapshot()
                     self._glyph.add_stroke(Stroke(self._pending, gp, self.tool))
                 except ValueError:
                     pass

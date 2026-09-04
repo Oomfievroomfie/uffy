@@ -230,6 +230,7 @@ class GlyphEditorPanel(QWidget):
         b_w.clicked.connect(lambda: self.canvas.nudge(-1, 0))
         b_e.clicked.connect(lambda: self.canvas.nudge(1, 0))
         self.canvas.glyphChanged.connect(self._on_canvas_changed)
+        self.canvas.clearRequested.connect(self._on_clear)
 
     def _on_canvas_changed(self) -> None:
         # Canvas edits propagate up so MainWindow can initialise/commit the glyph and
