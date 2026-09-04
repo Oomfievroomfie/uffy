@@ -390,7 +390,7 @@ class GlyphCanvas(QWidget):
         shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
         if not shift:
-            endpoint = self._find_endpoint(pos)
+            endpoint = self._find_endpoint(gp)
             if endpoint is not None:
                 idx, ep = endpoint
                 self._drag = ("endpoint", idx, ep)
@@ -435,17 +435,18 @@ class GlyphCanvas(QWidget):
         self._pending = None
         self.update()
 
-    def _find_endpoint(self, pos: QPointF):
-        tol = self._cell() * 0.35
-        best = None
-        best_d = tol
-        for i, s in enumerate(self._glyph.strokes):
+    def _find_endpoint(self, gp: Point):
+        """Return ``(index, 0|1)`` for a stroke endpoint whose cell IS ``gp``, else ``None``.
+
+        Draw-vs-select is keyed on the editor grid CELL that was clicked: an existing
+        endpoint is selected only when the clicked cell's grid point equals one of a stroke's
+        endpoints exactly (no pixel-distance tolerance). Newest stroke wins at a shared node.
+        """
+        for i in range(len(self._glyph.strokes) - 1, -1, -1):
+            s = self._glyph.strokes[i]
             for ep, pt in enumerate((s.p1, s.p2)):
-                q = self._grid_to_scene(pt.x, pt.y)
-                d = (q.x() - pos.x()) ** 2 + (q.y() - pos.y()) ** 2
-                if d <= best_d * best_d:
-                    best_d = d ** 0.5
-                    best = (i, ep)
-        return best
+                if pt == gp:
+                    return (i, ep)
+        return None
 
 
