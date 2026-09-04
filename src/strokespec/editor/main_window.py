@@ -292,13 +292,16 @@ class ReferenceFontsDock(QWidget):
         lay.addWidget(self._rel_list, 1)
         self._set_related([])
 
-        # third panel: a big static "native reference" image (not an overlay) of the current
-        # glyph, rendered from the reference fonts, like the reference look in the cards.
+        # third panel: a big static "native reference" — the current codepoint shown as a
+        # plain QLabel in the widget's NATIVE font (no manual OS-font loading, no overlay).
         self._ref_title = QLabel("Native reference")
         self._ref_title.setStyleSheet("font-weight: bold;")
         self._ref_img = QLabel()
         self._ref_img.setFixedSize(REF_IMG_SIZE, REF_IMG_SIZE)
         self._ref_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        f = self._ref_img.font()
+        f.setPixelSize(110)
+        self._ref_img.setFont(f)
         self._ref_img.setStyleSheet("background:#f1f2f6;")
         lay.addWidget(self._ref_title)
         lay.addWidget(self._ref_img)
@@ -308,17 +311,13 @@ class ReferenceFontsDock(QWidget):
         self._refresh()
 
     def set_native_reference(self, cp: int) -> None:
-        """Render the reference font's image for ``cp`` (big, static) into the third panel."""
-        img = None
-        if self._reflib is not None:
-            try:
-                img = self._reflib.render_first(cp, box_px=REF_IMG_SIZE, pixel_size=REF_IMG_SIZE)
-            except Exception:
-                img = None
-        if img is not None:
-            self._ref_img.setPixmap(pil_to_qpixmap(img))
-        else:
-            self._ref_img.clear()
+        """Show the current codepoint as a big character in the widget's native font."""
+        ch = ""
+        if isinstance(cp, int) and 0 < cp < 0x110000:
+            c = chr(cp)
+            if c.isprintable():
+                ch = c
+        self._ref_img.setText(ch)
 
     def set_copy_callback(self, cb) -> None:
         self._copy_strokes = cb
