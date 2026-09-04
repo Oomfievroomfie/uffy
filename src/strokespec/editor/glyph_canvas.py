@@ -8,7 +8,7 @@ box; descenders are drawn in the cells below it.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QTransform
 from PySide6.QtWidgets import QWidget
 
@@ -96,6 +96,18 @@ class GlyphCanvas(QWidget):
         self.update()
         self.glyphChanged.emit()
 
+    def event(self, ev) -> bool:
+        # Qt handles Tab/Backtab for focus traversal at this level and sends Shift+Tab as
+        # Key_Backtab, so intercept them here BEFORE the default focus navigation. Otherwise
+        # the keypress never reaches keyPressEvent and the input is "eaten".
+        if ev.type() == QEvent.Type.KeyPress:
+            k = ev.key()
+            if k == Qt.Key.Key_Tab or k == Qt.Key.Key_Backtab:
+                shift = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                self.navRequested.emit(-1 if shift else 1)
+                return True
+        return super().event(ev)
+
     def keyPressEvent(self, event) -> None:
         key = event.key()
         mod = event.modifiers()
@@ -115,9 +127,6 @@ class GlyphCanvas(QWidget):
             return
         if ctrl:
             super().keyPressEvent(event)
-            return
-        if key == Qt.Key.Key_Tab:
-            self.navRequested.emit(-1 if shift else 1)  # shift+tab = previous, tab = next
             return
         if key == Qt.Key.Key_W:
             self.nudge(0, 1)
