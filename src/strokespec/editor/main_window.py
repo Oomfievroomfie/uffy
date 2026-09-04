@@ -734,6 +734,9 @@ class MainWindow(QMainWindow):
             self._pending_commit = glyph
             self._editor.set_glyph(glyph)
         self._update_related()
+        # opening from the codepoint list should hand keyboard focus to the canvas so its
+        # hotkeys (WASD nudge, F flip, B toggle, Ctrl+Z/C/V/H…) work immediately.
+        self._editor.canvas.setFocus(Qt.FocusReason.MouseFocusReason)
 
     def _update_related(self) -> None:
         """Refresh the 'Related glyphs' panel and the 'Native reference' image for the current glyph."""
