@@ -110,23 +110,24 @@ def _rel_button_rects(rect: QRectF) -> tuple:
     """Button rects inside a related cell (shared by paint + hit-test).
 
     Returns ``(copy, open, arrows)`` where ``arrows`` maps 'up'/'down'/'left'/'right' to its
-    rect. Copy/Open are on a row; the four arrow (copy-and-squish) buttons are on a row under
-    them at the very bottom.
+    rect. Copy/Open are on a row; the four arrow (copy-and-squish) buttons are a compact,
+    centered group on a row under them (so they stay inside the card and do not overflow into
+    the neighbouring cell).
     """
-    m = 4.0
-    row2_y = rect.bottom() - m - 20.0           # arrows (bottom row)
-    row1_y = row2_y - 24.0                      # copy/open (row above the arrows)
-    bw = (rect.width() - 2 * m - 3.0) / 2.0
-    copy = QRectF(rect.left() + m, row1_y, bw, 20.0)
-    opn = QRectF(copy.right() + 3.0, row1_y, bw, 20.0)
-    arrows = {}
+    m = 6.0
+    row2_y = rect.bottom() - m - 18.0           # arrows (bottom row)
+    row1_y = row2_y - 22.0                      # copy/open row (above the arrows)
+    bw = (rect.width() - 2 * m - 4.0) / 2.0
+    copy = QRectF(rect.left() + m, row1_y, bw, 18.0)
+    opn = QRectF(copy.right() + 4.0, row1_y, bw, 18.0)
+    # compact, centered arrow group
     dirs = ["up", "down", "left", "right"]
-    n = len(dirs)
-    gaps = 3.0 * (n - 1)
-    aw = (rect.width() - 2 * m - gaps) / n
+    aw, gap = 18.0, 2.0
+    total = len(dirs) * aw + (len(dirs) - 1) * gap
+    startx = rect.center().x() - total / 2.0
+    arrows = {}
     for i, d in enumerate(dirs):
-        ax = rect.left() + m + i * (aw + gaps)
-        arrows[d] = QRectF(ax, row2_y, aw, 20.0)
+        arrows[d] = QRectF(startx + i * (aw + gap), row2_y, aw, 18.0)
     return copy, opn, arrows
 
 
@@ -232,7 +233,9 @@ class _RelatedListView(QListView):
             if idx.isValid():
                 cp = idx.data(REL_CP)
                 has = bool(idx.data(REL_HAS))
-                copy_r, opn_r, arrows = _rel_button_rects(QRectF(self.visualRect(idx)))
+                copy_r, opn_r, arrows = _rel_button_rects(
+                    QRectF(self.visualRect(idx)).adjusted(3, 3, -3, -3)
+                )
                 pos = event.position()
                 if copy_r.contains(pos) and has:
                     self.copyRequested.emit(cp)
