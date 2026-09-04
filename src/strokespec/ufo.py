@@ -8,7 +8,7 @@ binary font tables are produced by the sanctioned tools rather than by hand.
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from ufoLib2 import Font
 from ufoLib2.objects import Glyph as UFOGlyph
@@ -92,10 +92,12 @@ def build_ufo(
     cap: str = PEN_CAP,
     pen_radius: int = PEN_RADIUS,
     notdef_width_units: Optional[int] = None,
+    progress: Optional[Callable[[int, int], None]] = None,
 ) -> str:
     """Build a UFO at ``output_dir`` and return its path.
 
     ``output_dir`` must not already exist (or will be overwritten if it is a UFO).
+    ``progress``, if given, is called as ``progress(done, total)`` after each glyph is written.
     """
     if family_name is None:
         family_name = strokefont.metadata.get("name", "strokespec")
@@ -140,7 +142,11 @@ def build_ufo(
         op_to_pen(contour, pen)
 
     order: List[str] = [".notdef"]
-    for cp in strokefont.codepoints():
+    cps = strokefont.codepoints()
+    total = len(cps)
+    for i, cp in enumerate(cps):
+        if progress is not None:
+            progress(i, total)
         glyph = strokefont.get(cp)
         if glyph is None:
             continue

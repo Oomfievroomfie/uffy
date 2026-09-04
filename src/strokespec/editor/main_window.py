@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, QThread, Signal
 from PySide6.QtGui import (
     QAction,
     QBrush,
@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSplitter,
     QToolButton,
@@ -312,6 +313,44 @@ class GlyphEditorPanel(QWidget):
         self._stroke_list.blockSignals(False)
 
 
+class _CompileThread(QThread):
+    """Compiles the font off the UI thread, reporting progress via signals.
+
+    ``progress(done, total)`` — ``total`` is the glyph count while the UFO is built
+    (determinate); ``total`` is ``None`` while the Google CLI compiler runs (indeterminate).
+    """
+
+    progress = Signal(object, object)
+    succeeded = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, strokefont, path: str, family: str) -> None:
+        super().__init__()
+        self._sf = strokefont
+        self._path = path
+        self._family = family
+
+    def run(self) -> None:
+        from ..compiler import compile_strokefont  # local import to avoid cycles
+
+        def cb(done, total):
+            # Throttle emissions so a huge glyph set does not flood the UI event queue.
+            if total is None or done == total or done % max(1, total // 100) == 0:
+                self.progress.emit(done, total)
+
+        try:
+            compile_strokefont(
+                self._sf,
+                self._path,
+                family_name=self._family,
+                on_progress=cb,
+            )
+        except Exception as e:
+            self.failed.emit(str(e))
+            return
+        self.succeeded.emit(self._path)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, path: Optional[str] = None) -> None:
         super().__init__()
@@ -551,24 +590,44 @@ class MainWindow(QMainWindow):
             return
         if not path.lower().endswith(".ttf"):
             path += ".ttf"
-        try:
-            from ..compiler import compile_strokefont
-            from PySide6.QtWidgets import QApplication
-            self.statusBar().showMessage("Compiling with Google font tools…")
-            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-            try:
-                compile_strokefont(
-                    self.strokefont,
-                    path,
-                    family_name=self.strokefont.metadata.get("name", "strokespec"),
-                )
-            finally:
-                QApplication.restoreOverrideCursor()
-            self.statusBar().showMessage(f"Wrote {path}")
-            QMessageBox.information(self, "Compile", f"Wrote TTF:\n{path}")
-        except Exception as e:
-            QMessageBox.critical(self, "Compile failed", str(e))
+
+        family = self.strokefont.metadata.get("name", "strokespec")
+        dlg = QProgressDialog(f"Compiling {path}…", None, 0, 0, self)
+        dlg.setWindowTitle("Compile")
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(0)
+        dlg.setAutoClose(False)
+        dlg.setAutoReset(False)
+        dlg.setValue(0)
+
+        thread = _CompileThread(self.strokefont, path, family)
+
+        def on_progress(done, total):
+            if total is None:
+                dlg.setRange(0, 0)  # indeterminate: CLI compiler is running
+                dlg.setLabelText("Compiling with Google font tools…")
+            else:
+                dlg.setRange(0, max(1, total))
+                dlg.setValue(int(done))
+                dlg.setLabelText(f"Building outlines… {done}/{total}")
+
+        def on_succeeded(out):
+            dlg.close()
+            self.statusBar().showMessage(f"Wrote {out}")
+            QMessageBox.information(self, "Compile", f"Wrote TTF:\n{out}")
+
+        def on_failed(msg):
+            dlg.close()
             self.statusBar().clearMessage()
+            QMessageBox.critical(self, "Compile failed", msg)
+
+        thread.progress.connect(on_progress)
+        thread.succeeded.connect(on_succeeded)
+        thread.failed.connect(on_failed)
+        self._compile_thread = thread  # keep a reference so it is not collected
+        self._compile_dlg = dlg
+        dlg.show()
+        thread.start()
 
     # --- close ---------------------------------------------------------------
     def closeEvent(self, event: QCloseEvent) -> None:

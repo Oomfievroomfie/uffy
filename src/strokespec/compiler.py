@@ -22,7 +22,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 from .model import StrokeFont, PEN_CAP
 from .ufo import build_ufo
@@ -237,8 +237,14 @@ def compile_strokefont(
     keep_ufo: Optional[str] = None,
     tool: str = "auto",
     run_fix: bool = True,
+    on_progress: Optional[Callable[[Optional[int], Optional[int]], None]] = None,
 ) -> str:
-    """Convenience: build a UFO in a temp dir and compile it to ``out_ttf``."""
+    """Convenience: build a UFO in a temp dir and compile it to ``out_ttf``.
+
+    ``on_progress``, if given, is called as ``on_progress(done, total)`` while the UFO is built
+    (``total`` is the glyph count) and then as ``on_progress(None, None)`` while the Google CLI
+    compiler runs (indeterminate).
+    """
     from .model import PEN_RADIUS  # local import to keep API tight
 
     # Build in a temp dir *inside the output's parent* so it is guaranteed writable.
@@ -258,8 +264,11 @@ def compile_strokefont(
         style_name=style_name,
         cap=cap,
         pen_radius=PEN_RADIUS,
+        progress=on_progress,
     )
     try:
+        if on_progress is not None:
+            on_progress(None, None)  # hand off to the CLI compiler (indeterminate)
         return compile_ufo_to_ttf(
             ufo_dir,
             out_ttf,
