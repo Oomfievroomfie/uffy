@@ -59,6 +59,8 @@ REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
 # related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
 REL_CELL_W, REL_CELL_H = 96, 150
+# big static "native reference" image size
+REF_IMG_SIZE = 128
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -290,9 +292,33 @@ class ReferenceFontsDock(QWidget):
         lay.addWidget(self._rel_list, 1)
         self._set_related([])
 
+        # third panel: a big static "native reference" image (not an overlay) of the current
+        # glyph, rendered from the reference fonts, like the reference look in the cards.
+        self._ref_title = QLabel("Native reference")
+        self._ref_title.setStyleSheet("font-weight: bold;")
+        self._ref_img = QLabel()
+        self._ref_img.setFixedSize(REF_IMG_SIZE, REF_IMG_SIZE)
+        self._ref_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._ref_img.setStyleSheet("background:#f1f2f6;")
+        lay.addWidget(self._ref_title)
+        lay.addWidget(self._ref_img)
+
         add_btn.clicked.connect(self.add_folder)
         clear_btn.clicked.connect(self.clear)
         self._refresh()
+
+    def set_native_reference(self, cp: int) -> None:
+        """Render the reference font's image for ``cp`` (big, static) into the third panel."""
+        img = None
+        if self._reflib is not None:
+            try:
+                img = self._reflib.render_first(cp, box_px=REF_IMG_SIZE, pixel_size=REF_IMG_SIZE)
+            except Exception:
+                img = None
+        if img is not None:
+            self._ref_img.setPixmap(pil_to_qpixmap(img))
+        else:
+            self._ref_img.clear()
 
     def set_copy_callback(self, cb) -> None:
         self._copy_strokes = cb
@@ -711,13 +737,15 @@ class MainWindow(QMainWindow):
         self._update_related()
 
     def _update_related(self) -> None:
-        """Refresh the 'Related glyphs' panel for the currently-edited glyph."""
+        """Refresh the 'Related glyphs' panel and the 'Native reference' image for the current glyph."""
         g = self._editor.glyph()
         if g is None:
             self._refdock.set_related([])
+            self._refdock.set_native_reference(None)
             return
         from ..rels import related_codepoints
         self._refdock.set_related(related_codepoints(g.codepoint), self.strokefont)
+        self._refdock.set_native_reference(g.codepoint)
 
     def _copy_related_strokes(self, cp: int) -> None:
         """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas."""
