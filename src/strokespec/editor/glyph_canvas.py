@@ -41,6 +41,7 @@ class GlyphCanvas(QWidget):
 
     glyphChanged = Signal()
     clearRequested = Signal()
+    navRequested = Signal(int)  # +1 = next codepoint, -1 = previous
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -114,6 +115,9 @@ class GlyphCanvas(QWidget):
             return
         if ctrl:
             super().keyPressEvent(event)
+            return
+        if key == Qt.Key.Key_Tab:
+            self.navRequested.emit(-1 if shift else 1)  # shift+tab = previous, tab = next
             return
         if key == Qt.Key.Key_W:
             self.nudge(0, 1)

@@ -673,6 +673,7 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._grid.glyphChosen.connect(self._open_codepoint)
         self._editor.glyphChanged.connect(self._on_glyph_changed)
+        self._editor.canvas.navRequested.connect(self._on_nav)
         self._editor.set_reference_provider(self._reference_for_codepoint)
         self._editor.canvas.set_metrics(
             self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
@@ -737,6 +738,20 @@ class MainWindow(QMainWindow):
         # opening from the codepoint list should hand keyboard focus to the canvas so its
         # hotkeys (WASD nudge, F flip, B toggle, Ctrl+Z/C/V/H…) work immediately.
         self._editor.canvas.setFocus(Qt.FocusReason.MouseFocusReason)
+
+    def _on_nav(self, delta: int) -> None:
+        """Tab / Shift+Tab: move to the next / previous codepoint in the grid list."""
+        cps = self._grid.codepoints()
+        if not cps:
+            return
+        cur = self._editor.glyph().codepoint
+        try:
+            i = cps.index(cur)
+        except ValueError:
+            return
+        j = (i + delta) % len(cps)
+        self._open_codepoint(cps[j])
+        self._grid.select_codepoint(cps[j])
 
     def _update_related(self) -> None:
         """Refresh the 'Related glyphs' panel and the 'Native reference' image for the current glyph."""

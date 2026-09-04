@@ -302,6 +302,21 @@ class GlyphGrid(QWidget):
         cp = self._model.codepoint_at(index.row())
         self.glyphChosen.emit(cp)
 
+    def codepoints(self) -> List[int]:
+        """The currently shown codepoints, in list order."""
+        return self._model.codepoints()
+
+    def select_codepoint(self, cp: int) -> None:
+        """Highlight + scroll to ``cp`` in the grid (if it is shown)."""
+        cps = self._model.codepoints()
+        try:
+            row = cps.index(cp)
+        except ValueError:
+            return
+        idx = self._model.index(row, 0)
+        self._list.setCurrentIndex(idx)
+        self._list.scrollTo(idx, QAbstractItemView.ScrollHint.PositionAtCenter)
+
     def select_block(self, name: str) -> None:
         i = self._block_combo.findText(name)
         if i >= 0:
