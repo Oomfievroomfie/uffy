@@ -261,20 +261,45 @@ def _orient_ccw(ops: Sequence[Op]) -> List[Op]:
 # --------------------------------------------------------------------------- #
 # stroke expansion
 # --------------------------------------------------------------------------- #
-def _snap_to_axis_or_diag(v: Pt) -> Pt:
-    """Snap a direction to the nearest cell edge or cell diagonal (a multiple of 45°)."""
-    a = math.atan2(v[1], v[0])
-    a_s = round(a / (math.pi / 4.0)) * (math.pi / 4.0)
-    return (math.cos(a_s), math.sin(a_s))
+def _snap_to_grid_line(p: Pt) -> Pt:
+    """Snap ``p`` to the nearest cell edge or cell diagonal line (outline/font space).
+
+    Cell edges are ``x = k*SCALE`` / ``y = k*SCALE``; cell diagonals are ``x+y = k*SCALE`` /
+    ``x-y = k*SCALE``. ``p`` is projected onto whichever of these four families is closest, so
+    the result lies *exactly* on a cell edge or cell diagonal.
+    """
+    x, y = p
+    k = round(x / SCALE)
+    best = ((k * SCALE, y), abs(x - k * SCALE))            # vertical edge
+    k = round(y / SCALE)
+    d = abs(y - k * SCALE)
+    if d < best[1]:
+        best = ((x, k * SCALE), d)                         # horizontal edge
+    c = x + y
+    k = round(c / SCALE)
+    d = abs(c - k * SCALE) / math.sqrt(2.0)
+    if d < best[1]:
+        t = (c - k * SCALE) / 2.0
+        best = ((x - t, y - t), d)                         # anti-diagonal (x+y = k*S)
+    c = x - y
+    k = round(c / SCALE)
+    d = abs(c - k * SCALE) / math.sqrt(2.0)
+    if d < best[1]:
+        t = (c - k * SCALE) / 2.0
+        best = ((x - t, y + t), d)                         # diagonal (x-y = k*S)
+    return best[0]
 
 
 def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
-    """Outline (closed contour) for a straight-line stroke with given cap.
+    """Outline (closed contour) for a straight-line stroke with given butt.
 
-    For a **non-axial** line the flat (square/butt) end is snapped to the closest cell edge
-    or cell diagonal: the cap face normal is rounded to the nearest multiple of 45°, so a
-    45° line's end verts land on the cell diagonal and a shallow (~10°) line's end verts land
-    on the corresponding cell edge. The centreline is unchanged; only the flat ends snap.
+    The correct stroke length is kept by extending each end by the pen radius (``r``) along
+    the centreline, so the flat butt lands on the cell boundary. For a **non-axial** line the
+    butt corners are then **snapped to the nearest cell edge or cell diagonal** (in outline
+    space), which is exactly the point — the ends are *not* square-angled (they are not
+    perpendicular to the centreline); a 45° stroke's corners land on the cell diagonal and a
+    shallow stroke's corners land on the corresponding cell edge. Axial strokes are untouched
+    (their square ends already sit on cell edges).
     """
     d = _sub(p2, p1)
     L = math.hypot(*d)
@@ -282,13 +307,6 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         return _degenerate(p1, r, cap)
     u = _mul(d, 1.0 / L)
     n = _perp(u)
-
-    axial = abs(u[0]) < 1e-9 or abs(u[1]) < 1e-9
-    if axial:
-        us, ns = u, n
-    else:
-        ns = _snap_to_axis_or_diag(n)       # cap face -> nearest edge/diagonal
-        us = (-ns[1], ns[0])                # extension dir perpendicular to the snapped cap
 
     def off(p: Pt, s: float) -> Pt:
         return (p[0] + s * n[0] * r, p[1] + s * n[1] * r)
@@ -302,36 +320,28 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         ang_n = math.atan2(n[1], n[0])
         ang_mn = math.atan2(-n[1], -n[0])
         ops: List[Op] = [("M", upper_a), ("L", upper_b)]
-        # end cap at p2: from outer(+n) through travel(+u) to inner(-n)
         _append_endcap(p2, r, ang_n, ang_u, ops)
         ops.append(("L", lower_a))
-        # start cap at p1: from inner(-n) through travel(-u) to outer(+n)
         _append_endcap(p1, r, ang_mn, ang_u + math.pi, ops)
         ops.append(("Z",))
         return _orient_ccw(ops)
-    if cap == "square":
-        # square cap: extend each end by half the pen width (= r) so the flat end lands on a
-        # cell boundary, and close with a straight (square) end. Non-axial ends use the
-        # snapped cap normal ns and the perpendicular extension us.
-        e1 = (p1[0] - us[0] * r, p1[1] - us[1] * r)
-        e2 = (p2[0] + us[0] * r, p2[1] + us[1] * r)
-        ops = [
-            ("M", (e1[0] + ns[0] * r, e1[1] + ns[1] * r)),
-            ("L", (e2[0] + ns[0] * r, e2[1] + ns[1] * r)),
-            ("L", (e2[0] - ns[0] * r, e2[1] - ns[1] * r)),
-            ("L", (e1[0] - ns[0] * r, e1[1] - ns[1] * r)),
-            ("Z",),
-        ]
-        return _orient_ccw(ops)
-    # butt (no extension), snapped cap face for non-axial lines
-    offs = lambda p, s: (p[0] + s * ns[0] * r, p[1] + s * ns[1] * r)
-    ops = [
-        ("M", offs(p1, 1.0)),
-        ("L", offs(p2, 1.0)),
-        ("L", offs(p2, -1.0)),
-        ("L", offs(p1, -1.0)),
-        ("Z",),
+
+    # extend each end by r so the flat butt keeps the correct stroke length
+    e1 = (p1[0] - u[0] * r, p1[1] - u[1] * r)
+    e2 = (p2[0] + u[0] * r, p2[1] + u[1] * r)
+    corners = [
+        (e1[0] + n[0] * r, e1[1] + n[1] * r),
+        (e2[0] + n[0] * r, e2[1] + n[1] * r),
+        (e2[0] - n[0] * r, e2[1] - n[1] * r),
+        (e1[0] - n[0] * r, e1[1] - n[1] * r),
     ]
+    axial = abs(u[0]) < 1e-9 or abs(u[1]) < 1e-9
+    if not axial:
+        # non-axial: round the butt corners to the nearest cell edge / cell diagonal, so the
+        # ends are NOT square-angled.
+        corners = [_snap_to_grid_line(c) for c in corners]
+
+    ops = [("M", corners[0]), ("L", corners[1]), ("L", corners[2]), ("L", corners[3]), ("Z",)]
     return _orient_ccw(ops)
 
 
@@ -448,9 +458,8 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         ops.append(("Q", IC, I1))               # inner side (back)
         _append_endcap(p1, r, math.atan2(-n1[1], -n1[0]), math.atan2(-u1[1], -u1[0]), ops)
     else:
-        # butt / square: a flat cut across the pen. The half-pen-square extension is already
-        # applied by the forward nudge (stroke_outline), so the flat cut is the correct end
-        # for both the butt and the (nudged) square arc.
+        # flat (butt) cut across the pen. The forward nudge in stroke_outline already places
+        # the butt exactly where the half-pen square extension would have reached.
         ops.append(("L", I2))                   # flat end cut at p2
         ops.append(("Q", IC, I1))               # inner side (back)
         ops.append(("L", O1))                   # flat start cut at p1
@@ -466,8 +475,9 @@ def stroke_outline(
 ) -> List[Op]:
     """Expand a single stroke to a closed outline (list of M/L/C/Z ops).
 
-    Arcs use a **flat (butt)** endcap — no half-square extension — so each arc end is half a
-    pen-width shorter, giving a visibly different (shorter) shape. Lines keep the given cap.
+    Arcs use a **flat (butt)** end — no half-pen extension along the centreline — so each arc
+    end is half a pen-width shorter than a square butt, giving a visibly different (shorter)
+    shape. Lines keep the given butt style.
     """
     p1 = stroke.p1.as_font_units(baseline)
     p2 = stroke.p2.as_font_units(baseline)
@@ -477,9 +487,9 @@ def stroke_outline(
             # straight segment between its two points. Expand it EXACTLY as a SHAPE_LINE with
             # the line's cap — never the arc/butt/nudged path.
             return line_outline(p1, p2, r, cap)
-        # FLAT (butt) cap at a FORWARD-NUDGED end: move each endpoint by the pen radius along
+        # FLAT (butt) end at a FORWARD-NUDGED end: move each endpoint by the pen radius along
         # the tangent (p1 back, p2 forward) in stroke space, then build the arc outline —
-        # the flat end lands where a half-square cap would have.
+        # the flat end lands where a square butt's half-pen extension would have reached.
         t1, t2 = arc_end_tangents(p1, p2)
         p1n = (p1[0] - r * t1[0], p1[1] - r * t1[1])
         p2n = (p2[0] + r * t2[0], p2[1] + r * t2[1])
