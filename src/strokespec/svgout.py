@@ -16,7 +16,7 @@ import math
 import re
 from typing import List, Tuple, Union, Iterable
 
-from .geometry import arc_end_tangents
+from .geometry import arc_end_tangents, arc_degenerates_to_line
 from .model import SHAPE_ARC, SHAPE_LINE, DEFAULT_BASELINE, UPEM, Glyph, Stroke, PEN_RADIUS
 from picosvg.svg import SVG
 
@@ -51,6 +51,13 @@ def glyph_svg(
         p1f = s.p1.as_font_units(baseline)
         p2f = s.p2.as_font_units(baseline)
         if s.shape == SHAPE_ARC:
+            if arc_degenerates_to_line(p1f, p2f):
+                # Axis-aligned (or zero-length) arc is really a LINE: emit it through the
+                # square-capped line path exactly as a SHAPE_LINE, never as an arc/butt path.
+                x1, y1 = to_svg(p1f)
+                x2, y2 = to_svg(p2f)
+                lines.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
+                continue
             # arcs: FLAT (butt) cap, with the ends nudged forward by the pen radius in stroke
             # space (p1 back, p2 forward along the tangent) BEFORE the arc conversion, so the
             # flat end lands where a half-square cap would have.
@@ -61,17 +68,7 @@ def glyph_svg(
             x2, y2 = to_svg(p2n)
             dx = abs(x2 - x1)
             dy = abs(y2 - y1)
-            if dx < 1e-6 and dy < 1e-6:
-                # zero-length arc (p1 == p2): valid, renders as the pen-tip square. Route it
-                # through the SQUARE-capped line path — a butt cap on a zero-length stroke
-                # produces nothing in picosvg, while a square cap emits the 2r x 2r footprint.
-                lines.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
-            elif dx < 1e-6 or dy < 1e-6:
-                # degenerate axis-aligned arc: an ellipse arc with a zero radius is invalid for
-                # picosvg — emit it as a straight (butt-capped) line instead.
-                arcs.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
-            else:
-                arcs.append(f"M {x1:.3f} {y1:.3f} A {dx:.3f} {dy:.3f} 0 0 0 {x2:.3f} {y2:.3f}")
+            arcs.append(f"M {x1:.3f} {y1:.3f} A {dx:.3f} {dy:.3f} 0 0 0 {x2:.3f} {y2:.3f}")
         else:
             x1, y1 = to_svg(p1f)
             x2, y2 = to_svg(p2f)

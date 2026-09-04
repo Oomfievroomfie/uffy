@@ -48,6 +48,22 @@ Pt = Tuple[float, float]
 
 _TWO_PI = 2.0 * math.pi
 
+# An arc whose chord is axis-aligned (or degenerate/zero-length) is NOT a quarter ellipse at
+# all: it is exactly the straight segment between its two points. Such a stroke is therefore
+# a LINE in every expansion pipeline, and must never reach the arc/butt/`A` code path.
+# This is the single source of truth for that decision, shared by the geometry preview and
+# the picosvg/SVG compile so the two can never disagree.
+_AXIS_EPS = 1e-6
+
+
+def arc_degenerates_to_line(p1: Pt, p2: Pt) -> bool:
+    """True if an arc stroke between ``p1`` and ``p2`` is really a line (axis-aligned or
+    zero length). Such an arc has no ellipse: its "quarter circle" collapses to the straight
+    segment, so every pipeline must expand it exactly as a ``SHAPE_LINE`` stroke."""
+    dx = abs(p2[0] - p1[0])
+    dy = abs(p2[1] - p1[1])
+    return dx < _AXIS_EPS or dy < _AXIS_EPS
+
 
 # --------------------------------------------------------------------------- #
 # small math helpers
@@ -524,6 +540,11 @@ def stroke_outline(
     p1 = stroke.p1.as_font_units(baseline)
     p2 = stroke.p2.as_font_units(baseline)
     if stroke.shape == SHAPE_ARC:
+        if arc_degenerates_to_line(p1, p2):
+            # Axis-aligned (or zero-length) arc: it has no ellipse, so it is exactly the
+            # straight segment between its two points. Expand it EXACTLY as a SHAPE_LINE with
+            # the line's cap — never the arc/butt/nudged path.
+            return line_outline(p1, p2, r, cap)
         # FLAT (butt) cap at a FORWARD-NUDGED end: move each endpoint by the pen radius along
         # the tangent (p1 back, p2 forward) in stroke space, then build the arc outline —
         # the flat end lands where a half-square cap would have.
