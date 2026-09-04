@@ -210,6 +210,43 @@ class Glyph:
         )
 
 
+def squish_strokes(strokes: Iterable[Stroke], direction: str, width: int) -> List[Stroke]:
+    """Copy + squish ``strokes`` into a half of the grid, as new strokes.
+
+    A linear (affine) transform maps the source grid space into the chosen half of the glyph's
+    ``width`` x ``GRID_H`` cell space — "up"/"down" squeeze the nodes into the top/bottom half
+    of the vertical range, "left"/"right" into the left/right half of the horizontal range.
+    Coordinates are rounded to integers. This acts on the strokes being *added* only (existing
+    strokes of the target glyph are untouched).
+    """
+    xmax = max(1, width - 1)
+    ymax = max(1, GRID_H - 1)
+    half_w = max(1, width // 2)
+    half_h = GRID_H // 2  # 8
+
+    if direction == "left":
+        x0, x1, axis = 0, half_w - 1, "x"
+    elif direction == "right":
+        x0, x1, axis = half_w, width - 1, "x"
+    elif direction == "up":
+        x0, x1, axis = half_h, GRID_H - 1, "y"
+    else:  # direction == "down"
+        x0, x1, axis = 0, half_h - 1, "y"
+
+    def map_v(v, rmax, t0, t1):
+        return round(t0 + v * (t1 - t0) / rmax)
+
+    def map_pt(p: Point) -> Point:
+        gx, gy = p.x, p.y
+        if axis == "x":
+            gx = _clamp_grid(map_v(gx, xmax, x0, x1))
+        else:
+            gy = _clamp_grid(map_v(gy, ymax, x0, x1))
+        return Point(gx, gy)
+
+    return [Stroke(map_pt(s.p1), map_pt(s.p2), s.shape) for s in strokes]
+
+
 class StrokeFont:
     """An ordered collection of glyphs keyed by codepoint.
 

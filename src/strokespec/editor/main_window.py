@@ -57,7 +57,8 @@ _ICON_HEX = QColor(60, 60, 72)
 REL_PIX_W, REL_PIX_H = 60, 60
 REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
-REL_CELL_W, REL_CELL_H = 96, 116
+# related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
+REL_CELL_W, REL_CELL_H = 96, 150
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -106,13 +107,27 @@ REL_PIX = Qt.ItemDataRole.UserRole + 2
 
 
 def _rel_button_rects(rect: QRectF) -> tuple:
-    """The 'Copy' and 'Open' button rects inside a related cell (shared by paint + hit-test)."""
+    """Button rects inside a related cell (shared by paint + hit-test).
+
+    Returns ``(copy, open, arrows)`` where ``arrows`` maps 'up'/'down'/'left'/'right' to its
+    rect. Copy/Open are on a row; the four arrow (copy-and-squish) buttons are on a row under
+    them at the very bottom.
+    """
     m = 4.0
+    row2_y = rect.bottom() - m - 20.0           # arrows (bottom row)
+    row1_y = row2_y - 24.0                      # copy/open (row above the arrows)
     bw = (rect.width() - 2 * m - 3.0) / 2.0
-    by = rect.bottom() - m - 20.0
-    copy = QRectF(rect.left() + m, by, bw, 20.0)
-    opn = QRectF(copy.right() + 3.0, by, bw, 20.0)
-    return copy, opn
+    copy = QRectF(rect.left() + m, row1_y, bw, 20.0)
+    opn = QRectF(copy.right() + 3.0, row1_y, bw, 20.0)
+    arrows = {}
+    dirs = ["up", "down", "left", "right"]
+    n = len(dirs)
+    gaps = 3.0 * (n - 1)
+    aw = (rect.width() - 2 * m - gaps) / n
+    for i, d in enumerate(dirs):
+        ax = rect.left() + m + i * (aw + gaps)
+        arrows[d] = QRectF(ax, row2_y, aw, 20.0)
+    return copy, opn, arrows
 
 
 class _RelatedDelegate(QStyledItemDelegate):
@@ -134,8 +149,9 @@ class _RelatedDelegate(QStyledItemDelegate):
         painter.setBrush(bg)
         painter.drawRoundedRect(rect, 6, 6)
 
-        # preview fills the space above the buttons
-        btn_h = 20.0
+        copy_r, opn_r, arrows = _rel_button_rects(QRectF(rect))
+        # preview fills the space above the two button rows
+        btn_h = rect.bottom() - copy_r.top()   # top edge of the copy/open row
         label_h = 14.0
         avail_w = rect.width() - 8.0
         avail_h = rect.height() - btn_h - label_h - 12.0
@@ -160,19 +176,20 @@ class _RelatedDelegate(QStyledItemDelegate):
             painter.setFont(QFont("", 8))
             painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, ch)
 
-        # codepoint id
+        # codepoint id (just above the copy/open row)
         painter.setPen(QColor(130, 130, 140))
         painter.setFont(QFont("", 8))
         painter.drawText(
-            QRectF(rect.left(), rect.bottom() - btn_h - label_h, rect.width(), label_h),
+            QRectF(rect.left(), copy_r.top() - label_h, rect.width(), label_h),
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom,
             f"U+{cp:04X}",
         )
 
-        # buttons
-        copy_r, opn_r = _rel_button_rects(QRectF(rect))
+        # buttons: Copy + Open, then the four copy-and-squish arrows below
         self._draw_button(painter, copy_r, "Copy", enabled=has)
         self._draw_button(painter, opn_r, "Open", enabled=True)
+        for d in ["up", "down", "left", "right"]:
+            self._draw_button(painter, arrows[d], {"up": "↑", "down": "↓", "left": "←", "right": "→"}[d], enabled=has)
         painter.restore()
 
     @staticmethod
@@ -193,6 +210,7 @@ class _RelatedListView(QListView):
 
     copyRequested = Signal(int)
     openRequested = Signal(int)
+    squishRequested = Signal(int, str)  # (codepoint, up/down/left/right)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -213,14 +231,20 @@ class _RelatedListView(QListView):
             idx = self.indexAt(event.position().toPoint())
             if idx.isValid():
                 cp = idx.data(REL_CP)
-                copy_r, opn_r = _rel_button_rects(QRectF(self.visualRect(idx)))
+                has = bool(idx.data(REL_HAS))
+                copy_r, opn_r, arrows = _rel_button_rects(QRectF(self.visualRect(idx)))
                 pos = event.position()
-                if copy_r.contains(pos) and bool(idx.data(REL_HAS)):
+                if copy_r.contains(pos) and has:
                     self.copyRequested.emit(cp)
                     return
                 if opn_r.contains(pos):
                     self.openRequested.emit(cp)
                     return
+                if has:
+                    for d, r in arrows.items():
+                        if r.contains(pos):
+                            self.squishRequested.emit(cp, d)
+                            return
         super().mouseReleaseEvent(event)  # cell body click: do nothing more
 
 
@@ -233,6 +257,7 @@ class ReferenceFontsDock(QWidget):
         self._on_change = on_change
         self._copy_strokes = None   # callable(strokes) to copy a related glyph onto the canvas
         self._open_cp = None        # callable(cp) to jump the editor to a codepoint
+        self._squish_cb = None      # callable(cp, direction) to copy + squish into a half
         self._strokefont = None     # used to know whether a related glyph has authored data
 
         lay = QVBoxLayout(self)
@@ -257,6 +282,7 @@ class ReferenceFontsDock(QWidget):
         self._rel_list.setItemDelegate(_RelatedDelegate(self._rel_list))
         self._rel_list.copyRequested.connect(self._copy)
         self._rel_list.openRequested.connect(self._open)
+        self._rel_list.squishRequested.connect(self._squish)
         lay.addWidget(self._rel_title)
         lay.addWidget(self._rel_list, 1)
         self._set_related([])
@@ -270,6 +296,9 @@ class ReferenceFontsDock(QWidget):
 
     def set_open_callback(self, cb) -> None:
         self._open_cp = cb
+
+    def set_squish_callback(self, cb) -> None:
+        self._squish_cb = cb
 
     def set_related(self, codepoints, strokefont=None) -> None:
         """Rebuild the related-glyph list for the given codepoints."""
@@ -326,6 +355,10 @@ class ReferenceFontsDock(QWidget):
     def _open(self, cp) -> None:
         if self._open_cp is not None:
             self._open_cp(cp)
+
+    def _squish(self, cp, direction) -> None:
+        if self._squish_cb is not None:
+            self._squish_cb(cp, direction)
 
     def add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Choose a folder of reference fonts")
@@ -604,6 +637,7 @@ class MainWindow(QMainWindow):
         self._refdock = ReferenceFontsDock(self.reflib, self._on_refs_changed)
         self._refdock.set_copy_callback(self._copy_related_strokes)
         self._refdock.set_open_callback(self._open_codepoint)
+        self._refdock.set_squish_callback(self._squish_related_strokes)
         dock = QDockWidget("Reference Fonts", self)
         dock.setWidget(self._refdock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -687,6 +721,22 @@ class MainWindow(QMainWindow):
         g = self.strokefont.get(cp)
         if g is not None and g.strokes:
             self._editor.canvas.append_strokes(g.strokes)
+
+    def _squish_related_strokes(self, cp: int, direction: str) -> None:
+        """Copy + squish the related glyph's strokes into a half of the current glyph's grid.
+
+        Only the added strokes are squished (a linear transform, then rounding); the current
+        glyph's existing strokes are untouched. The append is a single undo/redo step.
+        """
+        g = self.strokefont.get(cp)
+        if g is None or not g.strokes:
+            return
+        cur = self._editor.glyph()
+        width = cur.cell_width_grid if cur is not None else 16
+        from ..model import squish_strokes
+        squished = squish_strokes(g.strokes, direction, width)
+        if squished:
+            self._editor.canvas.append_strokes(squished)
 
     def _on_glyph_changed(self) -> None:
         changed_in_place = False
