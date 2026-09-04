@@ -23,16 +23,17 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDockWidget,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QListView,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QToolButton,
     QVBoxLayout,
@@ -51,7 +52,6 @@ _ICON_HEX = QColor(60, 60, 72)
 # related-glyph thumbnail size / reference render pixel size (matches the grid cell look)
 REL_PIX_W, REL_PIX_H = 60, 60
 REL_REF_PX = 96
-REL_HAS_ROLE = Qt.ItemDataRole.UserRole + 1  # whether the related glyph has authored data
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -93,6 +93,42 @@ def _icon_flip() -> QIcon:
     return _make_icon(20, d)
 
 
+class _RelatedCard(QWidget):
+    """A single related-glyph card: thumbnail + character + [Copy][Open] buttons.
+
+    Clicking the glyph body (thumbnail/character) does nothing — only the two buttons act.
+    """
+
+    def __init__(self, cp, name, has_data, pixmap, on_copy, on_open, parent=None) -> None:
+        super().__init__(parent)
+        ch = chr(cp)
+        self.setToolTip(f"U+{cp:04X}  {name}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(2, 2, 2, 2)
+        v.setSpacing(1)
+        v.addStretch(1)
+        thumb = QLabel()
+        thumb.setFixedSize(REL_PIX_W, REL_PIX_H)
+        thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        if pixmap is not None:
+            thumb.setPixmap(pixmap)
+        v.addWidget(thumb)
+        lab = QLabel(ch if ch.isprintable() and ch != "\ufffd" else "")
+        lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        v.addWidget(lab)
+        v.addStretch(1)
+        btns = QHBoxLayout()
+        copy = QPushButton("Copy")
+        copy.setEnabled(has_data)  # grey when there is no authored data to copy
+        if has_data:
+            copy.clicked.connect(lambda: on_copy(cp))
+        opn = QPushButton("Open")
+        opn.clicked.connect(lambda: on_open(cp))
+        btns.addWidget(copy)
+        btns.addWidget(opn)
+        v.addLayout(btns)
+
+
 class ReferenceFontsDock(QWidget):
     """List of loaded reference fonts (top) + related glyphs (bottom) with add/clear controls."""
 
@@ -101,6 +137,7 @@ class ReferenceFontsDock(QWidget):
         self._reflib = reflib
         self._on_change = on_change
         self._copy_strokes = None   # callable(strokes) to copy a related glyph onto the canvas
+        self._open_cp = None        # callable(cp) to jump the editor to a codepoint
         self._strokefont = None     # used to know whether a related glyph has authored data
 
         lay = QVBoxLayout(self)
@@ -113,21 +150,21 @@ class ReferenceFontsDock(QWidget):
         btn_row.addWidget(clear_btn)
         lay.addLayout(btn_row)
 
-        # related glyphs (base char / hanzi components) shown in the same vertical slot,
-        # rendered as an icon grid like the codepoint explorer; click a cell to copy it.
+        # related glyphs (base char / hanzi components) in the same vertical slot, as a grid
+        # of cards. Always visible (even when empty). Clicking a card body does nothing; only
+        # the Copy (grey if no data) and Open (always, jumps to that codepoint) buttons act.
         self._rel_title = QLabel("Related glyphs")
         self._rel_title.setStyleSheet("font-weight: bold;")
-        self._rel_list = QListWidget()
-        self._rel_list.setViewMode(QListView.ViewMode.IconMode)
-        self._rel_list.setIconSize(QSize(REL_PIX_W, REL_PIX_H))
-        self._rel_list.setGridSize(QSize(REL_PIX_W + 14, REL_PIX_H + 26))
-        self._rel_list.setResizeMode(QListView.ResizeMode.Adjust)
-        self._rel_list.setMovement(QListView.Movement.Static)
-        self._rel_list.setWordWrap(True)
-        self._rel_list.setSpacing(2)
-        self._rel_list.itemClicked.connect(self._on_rel_clicked)
+        self._rel_scroll = QScrollArea()
+        self._rel_scroll.setWidgetResizable(True)
+        self._rel_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._rel_container = QWidget()
+        self._rel_grid = QGridLayout(self._rel_container)
+        self._rel_grid.setContentsMargins(0, 0, 0, 0)
+        self._rel_grid.setSpacing(2)
+        self._rel_scroll.setWidget(self._rel_container)
         lay.addWidget(self._rel_title)
-        lay.addWidget(self._rel_list)
+        lay.addWidget(self._rel_scroll, 1)
         self._set_related([])
 
         add_btn.clicked.connect(self.add_folder)
@@ -136,6 +173,9 @@ class ReferenceFontsDock(QWidget):
 
     def set_copy_callback(self, cb) -> None:
         self._copy_strokes = cb
+
+    def set_open_callback(self, cb) -> None:
+        self._open_cp = cb
 
     def set_related(self, codepoints, strokefont=None) -> None:
         """Rebuild the related-glyph list for the given codepoints."""
@@ -153,52 +193,20 @@ class ReferenceFontsDock(QWidget):
             rows.append((cp, name, has_data))
         self._set_related(rows)
 
-    def _on_rel_clicked(self, item) -> None:
-        """Clicking a related-glyph cell copies it to the canvas (only if it has data)."""
-        if item.data(REL_HAS_ROLE) and self._copy_strokes is not None:
-            self._copy(item.data(Qt.ItemDataRole.UserRole))
-
     def _set_related(self, rows) -> None:
-        self._rel_list.clear()
-        if not rows:
-            self._rel_title.hide()
-            self._rel_list.hide()
-            return
-        self._rel_title.show()
-        self._rel_list.show()
-        for cp, name, has_data in rows:
+        # Always visible, even when empty. Each row becomes a card in a grid.
+        while self._rel_grid.count():
+            it = self._rel_grid.takeAt(0)
+            w = it.widget()
+            if w is not None:
+                w.deleteLater()
+        cols = 2
+        for i, (cp, name, has_data) in enumerate(rows):
             px = self._render_related_pixmap(cp)
-            item = QListWidgetItem()
-            if px is not None:
-                item.setIcon(QIcon(px))
-            ch = chr(cp)
-            item.setText(ch if ch.isprintable() and ch != "\ufffd" else "")
-            extra = " — click to copy" if has_data else ""
-            item.setToolTip(f"U+{cp:04X}  {name}{extra}")
-            item.setData(Qt.ItemDataRole.UserRole, cp)
-            item.setData(REL_HAS_ROLE, has_data)
-            self._rel_list.addItem(item)
-
-    def _render_related_pixmap(self, cp: int):
-        """A thumbnail of a related glyph: authored strokes (black) or reference font (grey)."""
-        from PySide6.QtGui import QPainter, QPixmap
-        from PySide6.QtCore import QRectF
-        glyph = self._strokefont.get(cp) if self._strokefont is not None else None
-        if glyph is not None and glyph.strokes:
-            pm = QPixmap(REL_PIX_W, REL_PIX_H)
-            pm.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(pm)
-            paint_stroke_glyph(
-                painter, glyph, QRectF(2, 2, REL_PIX_W - 4, REL_PIX_H - 4),
-                color=QColor(25, 25, 25), baseline=self._strokefont.baseline,
-            )
-            painter.end()
-            return pm
-        if self._reflib is not None and self._reflib.has(cp):
-            img = self._reflib.render_first(cp, box_px=REL_PIX_W, pixel_size=REL_REF_PX)
-            if img is not None:
-                return pil_to_qpixmap(_tint_grey(img))
-        return None
+            card = _RelatedCard(cp, name, has_data, px, self._copy, self._open)
+            self._rel_grid.addWidget(card, i // cols, i % cols)
+        for c in range(cols):
+            self._rel_grid.setColumnStretch(c, 1)
 
     def _render_related_pixmap(self, cp: int):
         """A thumbnail of a related glyph: authored strokes (black) or reference font (grey)."""
@@ -224,6 +232,10 @@ class ReferenceFontsDock(QWidget):
     def _copy(self, cp) -> None:
         if self._copy_strokes is not None:
             self._copy_strokes(cp)
+
+    def _open(self, cp) -> None:
+        if self._open_cp is not None:
+            self._open_cp(cp)
 
     def add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Choose a folder of reference fonts")
@@ -501,6 +513,7 @@ class MainWindow(QMainWindow):
 
         self._refdock = ReferenceFontsDock(self.reflib, self._on_refs_changed)
         self._refdock.set_copy_callback(self._copy_related_strokes)
+        self._refdock.set_open_callback(self._open_codepoint)
         dock = QDockWidget("Reference Fonts", self)
         dock.setWidget(self._refdock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
