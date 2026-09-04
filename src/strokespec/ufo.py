@@ -49,14 +49,15 @@ def op_to_pen(ops: List[Op], pen) -> None:
 
 
 def glyph_outline_from_strokes(
-    glyph: Glyph, pen_radius: float, baseline: float, *, per_stroke: bool = False
+    glyph: Glyph, pen_radius: float, baseline: float, *, per_stroke: bool = True
 ) -> List[List[Op]]:
     """Expand a glyph's strokes to outlines using Google's **picosvg** (shared with the preview).
 
-    With ``per_stroke=False`` (default) the whole glyph is fed to picosvg at once, so
-    overlapping strokes are boolean-unioned. With ``per_stroke=True`` picosvg runs on each
-    stroke independently and the outlines are concatenated with no boolean merge (this is the
-    file-size experiment; see :func:`strokespec.svgout.glyph_contours_svg_per_stroke`).
+    With ``per_stroke=True`` (default) picosvg runs on each stroke independently and the
+    outlines are concatenated with **no boolean merge**, keeping overlapping strokes as
+    redundant subpaths (produces a smaller TTF — see
+    :func:`strokespec.svgout.glyph_contours_svg_per_stroke`). With ``per_stroke=False`` the
+    whole glyph is fed to picosvg at once and overlapping strokes are boolean-unioned.
     """
     if per_stroke:
         from .svgout import glyph_contours_svg_per_stroke
@@ -101,12 +102,13 @@ def build_ufo(
     cap: str = PEN_CAP,
     pen_radius: int = PEN_RADIUS,
     notdef_width_units: Optional[int] = None,
-    per_stroke: bool = False,
+    per_stroke: bool = True,
 ) -> str:
     """Build a UFO at ``output_dir`` and return its path.
 
     ``output_dir`` must not already exist (or will be overwritten if it is a UFO).
-    ``per_stroke=True`` selects the no-boolean-merge per-stroke picosvg expansion (experiment).
+    ``per_stroke`` selects the expansion: ``True`` (default) is the no-boolean-merge
+    per-stroke picosvg expansion; ``False`` boolean-unions the whole glyph.
     """
     if family_name is None:
         family_name = strokefont.metadata.get("name", "strokespec")

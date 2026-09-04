@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QPixmap
 
 from ..geometry import Op
 from ..model import (GRID_H, GRID_N, DEFAULT_BASELINE, PEN_RADIUS, SCALE, UPEM, Glyph)
-from ..svgout import glyph_contours_svg
+from ..svgout import glyph_contours_svg_per_stroke
 
 
 def ops_to_painterpath(ops: list) -> QPainterPath:
@@ -35,12 +35,13 @@ def ops_to_painterpath(ops: list) -> QPainterPath:
 def glyph_qpainterpath(glyph: Glyph, baseline: float = DEFAULT_BASELINE) -> QPainterPath:
     """Build one QPainterPath (in font units, baseline at y=0) for all strokes.
 
-    Uses the same picosvg stroke expansion as the font compiler, so the preview and the
-    compiled glyph can never differ. Non-zero winding so overlapping strokes union.
+    Uses the same picosvg stroke expansion as the font compiler (per-stroke, no boolean
+    merge, by default), so the preview and the compiled glyph can never differ. Non-zero
+    winding so overlapping strokes union visually.
     """
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)
-    for contour in glyph_contours_svg(glyph, PEN_RADIUS, baseline):
+    for contour in glyph_contours_svg_per_stroke(glyph, PEN_RADIUS, baseline):
         path.addPath(ops_to_painterpath(contour))
     return path
 

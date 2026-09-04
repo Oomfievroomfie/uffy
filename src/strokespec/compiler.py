@@ -233,7 +233,7 @@ def compile_strokefont(
     keep_ufo: Optional[str] = None,
     tool: str = "auto",
     run_fix: bool = True,
-    per_stroke: bool = False,
+    per_stroke: bool = True,
 ) -> str:
     """Convenience: build a UFO in a temp dir and compile it to ``out_ttf``."""
     from .model import PEN_RADIUS  # local import to keep API tight
