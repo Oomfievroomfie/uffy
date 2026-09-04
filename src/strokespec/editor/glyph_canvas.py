@@ -140,6 +140,8 @@ class GlyphCanvas(QWidget):
             self.flip_horizontal()
         elif key == Qt.Key.Key_B:
             self.toggle_selected_shape()
+        elif key == Qt.Key.Key_Delete:
+            self.delete_selected()
         else:
             super().keyPressEvent(event)
 
