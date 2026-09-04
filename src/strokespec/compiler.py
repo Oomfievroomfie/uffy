@@ -1,4 +1,4 @@
-﻿"""Compile a UFO into a static TTF using Google's CLI font tooling.
+"""Compile a UFO into a static TTF using Google's CLI font tooling.
 
 We never touch ``fontTools.ttLib`` / its TTF/OTF readers or writers directly here. The
 UFO is written by :mod:`strokespec.ufo` (an *authoring* format, which is fine), and the
@@ -233,6 +233,7 @@ def compile_strokefont(
     keep_ufo: Optional[str] = None,
     tool: str = "auto",
     run_fix: bool = True,
+    per_stroke: bool = False,
 ) -> str:
     """Convenience: build a UFO in a temp dir and compile it to ``out_ttf``."""
     from .model import PEN_RADIUS  # local import to keep API tight
@@ -254,6 +255,7 @@ def compile_strokefont(
         style_name=style_name,
         cap=cap,
         pen_radius=PEN_RADIUS,
+        per_stroke=per_stroke,
     )
     try:
         return compile_ufo_to_ttf(

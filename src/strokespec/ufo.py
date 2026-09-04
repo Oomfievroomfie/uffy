@@ -48,8 +48,19 @@ def op_to_pen(ops: List[Op], pen) -> None:
             pen.closePath()
 
 
-def glyph_outline_from_strokes(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
-    """Expand a glyph's strokes to outlines using Google's **picosvg** (shared with the preview)."""
+def glyph_outline_from_strokes(
+    glyph: Glyph, pen_radius: float, baseline: float, *, per_stroke: bool = False
+) -> List[List[Op]]:
+    """Expand a glyph's strokes to outlines using Google's **picosvg** (shared with the preview).
+
+    With ``per_stroke=False`` (default) the whole glyph is fed to picosvg at once, so
+    overlapping strokes are boolean-unioned. With ``per_stroke=True`` picosvg runs on each
+    stroke independently and the outlines are concatenated with no boolean merge (this is the
+    file-size experiment; see :func:`strokespec.svgout.glyph_contours_svg_per_stroke`).
+    """
+    if per_stroke:
+        from .svgout import glyph_contours_svg_per_stroke
+        return glyph_contours_svg_per_stroke(glyph, pen_radius, baseline)
     from .svgout import glyph_contours_svg
     return glyph_contours_svg(glyph, pen_radius, baseline)
 
@@ -90,10 +101,12 @@ def build_ufo(
     cap: str = PEN_CAP,
     pen_radius: int = PEN_RADIUS,
     notdef_width_units: Optional[int] = None,
+    per_stroke: bool = False,
 ) -> str:
     """Build a UFO at ``output_dir`` and return its path.
 
     ``output_dir`` must not already exist (or will be overwritten if it is a UFO).
+    ``per_stroke=True`` selects the no-boolean-merge per-stroke picosvg expansion (experiment).
     """
     if family_name is None:
         family_name = strokefont.metadata.get("name", "strokespec")
@@ -148,7 +161,7 @@ def build_ufo(
         ufo_glyph.width = glyph.advance_units
         pen = ufo_glyph.getPen()
         try:
-            contours = glyph_outline_from_strokes(glyph, pen_radius, baseline)
+            contours = glyph_outline_from_strokes(glyph, pen_radius, baseline, per_stroke=per_stroke)
         except Exception:
             contours = []  # picosvg couldn't expand it (e.g. degenerate) -> leave empty
         for contour in contours:

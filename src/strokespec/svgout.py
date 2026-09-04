@@ -26,6 +26,39 @@ Op = Union[Tuple, tuple]
 
 
 # --- SVG emission ------------------------------------------------------------
+def _stroke_svg_d(
+    s: Stroke, baseline: float, r: float, to_svg
+) -> Tuple[str, str]:
+    """Return ``(path_d, linecap)`` for a single stroke, in SVG space.
+
+    ``to_svg`` maps a font point to an SVG point (y-down). A line (or a
+    degenerate/axis-aligned arc, which *is* a line) is a square-capped ``M/L``; a genuine
+    arc is a butt-capped ``A`` with its ends nudged forward by the pen radius.
+    """
+    p1f = s.p1.as_font_units(baseline)
+    p2f = s.p2.as_font_units(baseline)
+    if s.shape == SHAPE_ARC:
+        if arc_degenerates_to_line(p1f, p2f):
+            # Axis-aligned (or zero-length) arc is really a LINE: square-capped line path.
+            x1, y1 = to_svg(p1f)
+            x2, y2 = to_svg(p2f)
+            return f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}", "square"
+        # arcs: FLAT (butt) cap, with the ends nudged forward by the pen radius in stroke
+        # space (p1 back, p2 forward along the tangent) BEFORE the arc conversion, so the
+        # flat end lands where a half-square cap would have.
+        t1, t2 = arc_end_tangents(p1f, p2f)
+        p1n = (p1f[0] - r * t1[0], p1f[1] - r * t1[1])
+        p2n = (p2f[0] + r * t2[0], p2f[1] + r * t2[1])
+        x1, y1 = to_svg(p1n)
+        x2, y2 = to_svg(p2n)
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        return f"M {x1:.3f} {y1:.3f} A {dx:.3f} {dy:.3f} 0 0 0 {x2:.3f} {y2:.3f}", "butt"
+    x1, y1 = to_svg(p1f)
+    x2, y2 = to_svg(p2f)
+    return f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}", "square"
+
+
 def glyph_svg(
     glyph: Glyph,
     pen_radius: float = PEN_RADIUS,
@@ -48,31 +81,11 @@ def glyph_svg(
     lines: List[str] = []
     arcs: List[str] = []
     for s in glyph.strokes:
-        p1f = s.p1.as_font_units(baseline)
-        p2f = s.p2.as_font_units(baseline)
-        if s.shape == SHAPE_ARC:
-            if arc_degenerates_to_line(p1f, p2f):
-                # Axis-aligned (or zero-length) arc is really a LINE: emit it through the
-                # square-capped line path exactly as a SHAPE_LINE, never as an arc/butt path.
-                x1, y1 = to_svg(p1f)
-                x2, y2 = to_svg(p2f)
-                lines.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
-                continue
-            # arcs: FLAT (butt) cap, with the ends nudged forward by the pen radius in stroke
-            # space (p1 back, p2 forward along the tangent) BEFORE the arc conversion, so the
-            # flat end lands where a half-square cap would have.
-            t1, t2 = arc_end_tangents(p1f, p2f)
-            p1n = (p1f[0] - r * t1[0], p1f[1] - r * t1[1])
-            p2n = (p2f[0] + r * t2[0], p2f[1] + r * t2[1])
-            x1, y1 = to_svg(p1n)
-            x2, y2 = to_svg(p2n)
-            dx = abs(x2 - x1)
-            dy = abs(y2 - y1)
-            arcs.append(f"M {x1:.3f} {y1:.3f} A {dx:.3f} {dy:.3f} 0 0 0 {x2:.3f} {y2:.3f}")
+        d, cap = _stroke_svg_d(s, baseline, r, to_svg)
+        if cap == "square":
+            lines.append(d)
         else:
-            x1, y1 = to_svg(p1f)
-            x2, y2 = to_svg(p2f)
-            lines.append(f"M {x1:.3f} {y1:.3f} L {x2:.3f} {y2:.3f}")
+            arcs.append(d)
 
     paths: List[str] = []
     if lines:
@@ -211,6 +224,48 @@ def glyph_contours_svg(glyph: Glyph, pen_radius: float, baseline: float) -> List
     style = re.findall(r'<path d="([^"]+)"[^>]*stroke-linecap="([^"]+)"[^>]*/>', svg)
     out: List[List[Op]] = []
     for d, cap in style:
+        only = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{glyph.cell_width_units:.0f}" height="{UPEM:.0f}" '
+            f'viewBox="0 0 {glyph.cell_width_units:.0f} {UPEM:.0f}">'
+            f'<path d="{d}" fill="none" stroke="black" stroke-width="{2 * pen_radius:.3f}" '
+            f'stroke-linecap="{cap}" stroke-linejoin="round"/></svg>'
+        )
+        try:
+            expanded = SVG.fromstring(only).topicosvg()
+        except Exception:
+            continue
+        m = re.search(r'd="([^"]+)"', expanded.tostring())
+        ops = parse_svg_d(m.group(1) if m else "", ascent)
+        out.extend(_split_ops_to_contours(ops))
+    return out
+
+
+def glyph_contours_svg_per_stroke(
+    glyph: Glyph, pen_radius: float, baseline: float
+) -> List[List[Op]]:
+    """Expansion **experiment**: run picosvg ONCE PER STROKE, then reassemble the outlines
+    manually into a single glyph contour list.
+
+    Unlike :func:`glyph_contours_svg` (which feeds the whole glyph's strokes to picosvg as a
+    single path, so overlapping strokes are boolean-*unioned* into one outline), this runs
+    each stroke through picosvg independently and concatenates the resulting contours *as-is*
+    — **no boolean merge is performed**. Overlapping strokes therefore produce overlapping
+    (redundant) subpaths. This exists to measure whether per-stroke expansion makes the
+    exported TTF smaller or larger than the unioned per-glyph expansion.
+
+    Returns the same ``list of M/L/C/Z`` contours as :func:`glyph_contours_svg`.
+    """
+    if not glyph.strokes:
+        return []
+    ascent = (16 - baseline) * 64
+
+    def to_svg(p: Pt) -> Pt:
+        return (p[0], ascent - p[1])
+
+    out: List[List[Op]] = []
+    for s in glyph.strokes:
+        d, cap = _stroke_svg_d(s, baseline, pen_radius, to_svg)
         only = (
             f'<svg xmlns="http://www.w3.org/2000/svg" '
             f'width="{glyph.cell_width_units:.0f}" height="{UPEM:.0f}" '
