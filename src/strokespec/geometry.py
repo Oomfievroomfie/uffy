@@ -286,8 +286,9 @@ def _snap_axis(v: Pt) -> Pt:
 def _is_exactly_45(p1: Pt, p2: Pt) -> bool:
     """True if the centreline is exactly at ±45° (equal |dx| and |dy|).
 
-    NOTE: intentionally DUMMIED OUT. Currently unused (the diagonal butt is disabled); it must
-    be LEFT IN PLACE for a future re-enable.
+    Used to give 45° lines a user-controlled vertical/horizontal butt (see line_outline).
+    NOTE: the DIAGONAL butt remains DUMMIED OUT — it is not used here; only the axis-aligned
+    edge versions are.
     """
     return abs(abs(p2[0] - p1[0]) - abs(p2[1] - p1[1])) < 1e-9
 
@@ -385,10 +386,15 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         # non-axial: snap each butt onto the cell's own edge, then order the two butts by
         # side so the stroke sides do not cross.
         #
-        # The diagonal butt is DUMMIED OUT (requirement change): 45° now uses the horizontal
-        # cell edge, like every other non-axial line. The diagonal code is kept in place but
-        # not reached (see _snap_dir and the diagonal branch of _butt_on_cell).
-        ns = _snap_axis(n)
+        # The diagonal butt is DUMMIED OUT. For an exactly-45° line the vertical/horizontal
+        # choice is driven by whether the second point is BELOW or ABOVE the first, so the user
+        # can pick the butt orientation by the way the line is drawn: p2 below p1 -> vertical
+        # butt; p2 above p1 -> horizontal butt (like a vertical line). The diagonal code is kept
+        # in place but not reached (see _snap_dir and the diagonal branch of _butt_on_cell).
+        if _is_exactly_45(p1, p2):
+            ns = (1.0, 0.0) if p2[1] > p1[1] else (0.0, 1.0)
+        else:
+            ns = _snap_axis(n)
         s_face = _order_by_side(_butt_on_cell(p1, p2, ns), p1, u)
         e_face = _order_by_side(_butt_on_cell(p2, p1, ns), p2, u)
         corners = [s_face[0], e_face[0], e_face[1], s_face[1]]
