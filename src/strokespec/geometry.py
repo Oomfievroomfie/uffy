@@ -400,18 +400,25 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     # centreline tangents (axial, full-strength) and their CCW normals
     u1 = _unit(_sub(C, p1))   # tangent at p1 (points at the control corner)
     u2 = _unit(_sub(p2, C))   # tangent at p2 (points away from the control corner)
-    uc = _unit(_sub(p2, p1))  # tangent (chord direction) at the control point
     n1 = _perp(u1)
     n2 = _perp(u2)
-    nc = _perp(uc)
 
-    # offset control polygon: outer = centreline + r*n, inner = centreline - r*n
+    # offset side endpoints: outer = centreline + r*n, inner = centreline - r*n
     O1 = (p1[0] + r * n1[0], p1[1] + r * n1[1])
-    OC = (C[0] + r * nc[0], C[1] + r * nc[1])
     O2 = (p2[0] + r * n2[0], p2[1] + r * n2[1])
     I1 = (p1[0] - r * n1[0], p1[1] - r * n1[1])
-    IC = (C[0] - r * nc[0], C[1] - r * nc[1])
     I2 = (p2[0] - r * n2[0], p2[1] - r * n2[1])
+
+    # Each offset side keeps the axial end tangents (u1 at the start, u2 at the end), so its
+    # control point is the perpendicular projection of the end point onto the start's axial
+    # tangent line — NOT the centreline control point offset normally (which tips the side's
+    # tangent off-axis). This makes each single-quadratic side's end tangents precisely axial.
+    def _ctrl(start: Pt, end: Pt) -> Pt:
+        a = (end[0] - start[0]) * u1[0] + (end[1] - start[1]) * u1[1]
+        return (start[0] + a * u1[0], start[1] + a * u1[1])
+
+    OC = _ctrl(O1, O2)
+    IC = _ctrl(I1, I2)
 
     ops: List[Op] = [("M", O1), ("Q", OC, O2)]  # outer side, one quadratic
     if cap == "round":
