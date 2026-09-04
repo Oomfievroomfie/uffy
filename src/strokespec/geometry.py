@@ -261,14 +261,34 @@ def _orient_ccw(ops: Sequence[Op]) -> List[Op]:
 # --------------------------------------------------------------------------- #
 # stroke expansion
 # --------------------------------------------------------------------------- #
+def _snap_to_axis_or_diag(v: Pt) -> Pt:
+    """Snap a direction to the nearest cell edge or cell diagonal (a multiple of 45°)."""
+    a = math.atan2(v[1], v[0])
+    a_s = round(a / (math.pi / 4.0)) * (math.pi / 4.0)
+    return (math.cos(a_s), math.sin(a_s))
+
+
 def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
-    """Outline (closed contour) for a straight-line stroke with given cap."""
+    """Outline (closed contour) for a straight-line stroke with given cap.
+
+    For a **non-axial** line the flat (square/butt) end is snapped to the closest cell edge
+    or cell diagonal: the cap face normal is rounded to the nearest multiple of 45°, so a
+    45° line's end verts land on the cell diagonal and a shallow (~10°) line's end verts land
+    on the corresponding cell edge. The centreline is unchanged; only the flat ends snap.
+    """
     d = _sub(p2, p1)
     L = math.hypot(*d)
     if L == 0:
         return _degenerate(p1, r, cap)
     u = _mul(d, 1.0 / L)
     n = _perp(u)
+
+    axial = abs(u[0]) < 1e-9 or abs(u[1]) < 1e-9
+    if axial:
+        us, ns = u, n
+    else:
+        ns = _snap_to_axis_or_diag(n)       # cap face -> nearest edge/diagonal
+        us = (-ns[1], ns[0])                # extension dir perpendicular to the snapped cap
 
     def off(p: Pt, s: float) -> Pt:
         return (p[0] + s * n[0] * r, p[1] + s * n[1] * r)
@@ -291,23 +311,25 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
         return _orient_ccw(ops)
     if cap == "square":
         # square cap: extend each end by half the pen width (= r) so the flat end lands on a
-        # cell boundary, and close with a straight (square) end.
-        e1 = (p1[0] - u[0] * r, p1[1] - u[1] * r)
-        e2 = (p2[0] + u[0] * r, p2[1] + u[1] * r)
+        # cell boundary, and close with a straight (square) end. Non-axial ends use the
+        # snapped cap normal ns and the perpendicular extension us.
+        e1 = (p1[0] - us[0] * r, p1[1] - us[1] * r)
+        e2 = (p2[0] + us[0] * r, p2[1] + us[1] * r)
         ops = [
-            ("M", (e1[0] + n[0] * r, e1[1] + n[1] * r)),
-            ("L", (e2[0] + n[0] * r, e2[1] + n[1] * r)),
-            ("L", (e2[0] - n[0] * r, e2[1] - n[1] * r)),
-            ("L", (e1[0] - n[0] * r, e1[1] - n[1] * r)),
+            ("M", (e1[0] + ns[0] * r, e1[1] + ns[1] * r)),
+            ("L", (e2[0] + ns[0] * r, e2[1] + ns[1] * r)),
+            ("L", (e2[0] - ns[0] * r, e2[1] - ns[1] * r)),
+            ("L", (e1[0] - ns[0] * r, e1[1] - ns[1] * r)),
             ("Z",),
         ]
         return _orient_ccw(ops)
-    # butt (no extension)
+    # butt (no extension), snapped cap face for non-axial lines
+    offs = lambda p, s: (p[0] + s * ns[0] * r, p[1] + s * ns[1] * r)
     ops = [
-        ("M", off(p1, 1.0)),
-        ("L", off(p2, 1.0)),
-        ("L", off(p2, -1.0)),
-        ("L", off(p1, -1.0)),
+        ("M", offs(p1, 1.0)),
+        ("L", offs(p2, 1.0)),
+        ("L", offs(p2, -1.0)),
+        ("L", offs(p1, -1.0)),
         ("Z",),
     ]
     return _orient_ccw(ops)
