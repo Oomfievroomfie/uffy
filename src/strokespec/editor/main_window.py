@@ -5,7 +5,7 @@ from __future__ import annotations
 import unicodedata
 from typing import Optional
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QThread, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QThread, Signal
 from PySide6.QtGui import (
     QAction,
     QBrush,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QListView,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -41,11 +42,16 @@ from PySide6.QtWidgets import (
 from ..model import SHAPE_ARC, SHAPE_LINE, Glyph, StrokeFont
 from ..refbrowser import ReferenceLibrary
 from .glyph_canvas import GlyphCanvas
-from .grid import GlyphGrid
-from .uiutil import pil_to_qpixmap
+from .grid import GlyphGrid, _tint_grey
+from .uiutil import pil_to_qpixmap, paint_stroke_glyph
 
 
 _ICON_HEX = QColor(60, 60, 72)
+
+# related-glyph thumbnail size / reference render pixel size (matches the grid cell look)
+REL_PIX_W, REL_PIX_H = 60, 60
+REL_REF_PX = 96
+REL_HAS_ROLE = Qt.ItemDataRole.UserRole + 1  # whether the related glyph has authored data
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -107,14 +113,21 @@ class ReferenceFontsDock(QWidget):
         btn_row.addWidget(clear_btn)
         lay.addLayout(btn_row)
 
-        # related glyphs (base char / hanzi components) shown in the same vertical slot
+        # related glyphs (base char / hanzi components) shown in the same vertical slot,
+        # rendered as an icon grid like the codepoint explorer; click a cell to copy it.
         self._rel_title = QLabel("Related glyphs")
         self._rel_title.setStyleSheet("font-weight: bold;")
-        self._rel_box = QWidget()
-        self._rel_lay = QVBoxLayout(self._rel_box)
-        self._rel_lay.setContentsMargins(0, 0, 0, 0)
+        self._rel_list = QListWidget()
+        self._rel_list.setViewMode(QListView.ViewMode.IconMode)
+        self._rel_list.setIconSize(QSize(REL_PIX_W, REL_PIX_H))
+        self._rel_list.setGridSize(QSize(REL_PIX_W + 14, REL_PIX_H + 26))
+        self._rel_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self._rel_list.setMovement(QListView.Movement.Static)
+        self._rel_list.setWordWrap(True)
+        self._rel_list.setSpacing(2)
+        self._rel_list.itemClicked.connect(self._on_rel_clicked)
         lay.addWidget(self._rel_title)
-        lay.addWidget(self._rel_box)
+        lay.addWidget(self._rel_list)
         self._set_related([])
 
         add_btn.clicked.connect(self.add_folder)
@@ -140,33 +153,73 @@ class ReferenceFontsDock(QWidget):
             rows.append((cp, name, has_data))
         self._set_related(rows)
 
-    def _clear_related(self) -> None:
-        while self._rel_lay.count():
-            item = self._rel_lay.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
+    def _on_rel_clicked(self, item) -> None:
+        """Clicking a related-glyph cell copies it to the canvas (only if it has data)."""
+        if item.data(REL_HAS_ROLE) and self._copy_strokes is not None:
+            self._copy(item.data(Qt.ItemDataRole.UserRole))
 
     def _set_related(self, rows) -> None:
-        self._clear_related()
+        self._rel_list.clear()
         if not rows:
             self._rel_title.hide()
-            self._rel_box.hide()
+            self._rel_list.hide()
             return
         self._rel_title.show()
-        self._rel_box.show()
+        self._rel_list.show()
         for cp, name, has_data in rows:
-            row = QWidget()
-            h = QHBoxLayout(row)
-            h.setContentsMargins(0, 0, 0, 0)
-            label = QLabel(f"U+{cp:04X}  {name}")
-            h.addWidget(label, 1)
-            btn = QPushButton("Copy to canvas")
-            btn.setEnabled(has_data)
-            if has_data:
-                btn.clicked.connect(lambda _=False, c=cp: self._copy(c))
-            h.addWidget(btn)
-            self._rel_lay.addWidget(row)
+            px = self._render_related_pixmap(cp)
+            item = QListWidgetItem()
+            if px is not None:
+                item.setIcon(QIcon(px))
+            ch = chr(cp)
+            item.setText(ch if ch.isprintable() and ch != "\ufffd" else "")
+            extra = " — click to copy" if has_data else ""
+            item.setToolTip(f"U+{cp:04X}  {name}{extra}")
+            item.setData(Qt.ItemDataRole.UserRole, cp)
+            item.setData(REL_HAS_ROLE, has_data)
+            self._rel_list.addItem(item)
+
+    def _render_related_pixmap(self, cp: int):
+        """A thumbnail of a related glyph: authored strokes (black) or reference font (grey)."""
+        from PySide6.QtGui import QPainter, QPixmap
+        from PySide6.QtCore import QRectF
+        glyph = self._strokefont.get(cp) if self._strokefont is not None else None
+        if glyph is not None and glyph.strokes:
+            pm = QPixmap(REL_PIX_W, REL_PIX_H)
+            pm.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pm)
+            paint_stroke_glyph(
+                painter, glyph, QRectF(2, 2, REL_PIX_W - 4, REL_PIX_H - 4),
+                color=QColor(25, 25, 25), baseline=self._strokefont.baseline,
+            )
+            painter.end()
+            return pm
+        if self._reflib is not None and self._reflib.has(cp):
+            img = self._reflib.render_first(cp, box_px=REL_PIX_W, pixel_size=REL_REF_PX)
+            if img is not None:
+                return pil_to_qpixmap(_tint_grey(img))
+        return None
+
+    def _render_related_pixmap(self, cp: int):
+        """A thumbnail of a related glyph: authored strokes (black) or reference font (grey)."""
+        from PySide6.QtGui import QPainter, QPixmap
+        from PySide6.QtCore import QRectF
+        glyph = self._strokefont.get(cp) if self._strokefont is not None else None
+        if glyph is not None and glyph.strokes:
+            pm = QPixmap(REL_PIX_W, REL_PIX_H)
+            pm.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pm)
+            paint_stroke_glyph(
+                painter, glyph, QRectF(2, 2, REL_PIX_W - 4, REL_PIX_H - 4),
+                color=QColor(25, 25, 25), baseline=self._strokefont.baseline,
+            )
+            painter.end()
+            return pm
+        if self._reflib is not None and self._reflib.has(cp):
+            img = self._reflib.render_first(cp, box_px=REL_PIX_W, pixel_size=REL_REF_PX)
+            if img is not None:
+                return pil_to_qpixmap(_tint_grey(img))
+        return None
 
     def _copy(self, cp) -> None:
         if self._copy_strokes is not None:
