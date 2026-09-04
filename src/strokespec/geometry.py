@@ -261,51 +261,11 @@ def _orient_ccw(ops: Sequence[Op]) -> List[Op]:
 # --------------------------------------------------------------------------- #
 # stroke expansion
 # --------------------------------------------------------------------------- #
-def _snap_dir(v: Pt) -> Pt:
-    """Snap a direction to the nearest cell-edge or cell-diagonal direction (multiple of 45°)."""
-    a = math.atan2(v[1], v[0])
-    k = round(a / (math.pi / 4.0)) % 8
-    a_s = k * (math.pi / 4.0)
-    return (math.cos(a_s), math.sin(a_s))
-
-
-def _butt_on_grid(center: Pt, ns: Pt, r: float) -> Tuple[Pt, Pt]:
-    """Place a butt face (length 2r, direction ``ns``) on the nearest grid edge/diagonal.
-
-    Both returned corners lie on the SAME grid line (a cell edge ``x=k*S``/``y=k*S`` or a cell
-    diagonal ``x+y=k*S``/``x-y=k*S``), so the butt is one coherent grid-aligned segment rather
-    than two independently-scattered corners.
-    """
-    cx, cy = center
-    if abs(ns[0]) < 1e-6:                       # vertical face -> on a vertical cell edge
-        kx = round(cx / SCALE) * SCALE
-        return ((kx, cy - r), (kx, cy + r))
-    if abs(ns[1]) < 1e-6:                       # horizontal face -> on a horizontal cell edge
-        ky = round(cy / SCALE) * SCALE
-        return ((cx - r, ky), (cx + r, ky))
-    if (ns[0] > 0) == (ns[1] > 0):              # face along (+,+)/(-,-): on x - y = k*S
-        c = cx - cy
-        k = round(c / SCALE) * SCALE
-        t = (k - c) / 2.0
-        ccx, ccy = cx + t, cy - t
-    else:                                       # face along (+,-)/(-,+): on x + y = k*S
-        c = cx + cy
-        k = round(c / SCALE) * SCALE
-        t = (k - c) / 2.0
-        ccx, ccy = cx + t, cy + t
-    return ((ccx - r * ns[0], ccy - r * ns[1]), (ccx + r * ns[0], ccy + r * ns[1]))
-
-
 def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     """Outline (closed contour) for a straight-line stroke with given butt.
 
-    The correct stroke length is kept by extending each end by the pen radius (``r``) along
-    the centreline, so the flat butt lands on the cell boundary. For a **non-axial** line the
-    butt corners are then **snapped to the nearest cell edge or cell diagonal** (in outline
-    space), which is exactly the point — the ends are *not* square-angled (they are not
-    perpendicular to the centreline); a 45° stroke's corners land on the cell diagonal and a
-    shallow stroke's corners land on the corresponding cell edge. Axial strokes are untouched
-    (their square ends already sit on cell edges).
+    Each end is extended by the pen radius (``r``) along the centreline, so the flat butt
+    lands on the cell boundary — this is the correct stroke length for every line.
     """
     d = _sub(p2, p1)
     L = math.hypot(*d)
@@ -335,24 +295,12 @@ def line_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     # extend each end by r so the flat butt keeps the correct stroke length
     e1 = (p1[0] - u[0] * r, p1[1] - u[1] * r)
     e2 = (p2[0] + u[0] * r, p2[1] + u[1] * r)
-    axial = abs(u[0]) < 1e-9 or abs(u[1]) < 1e-9
-    if axial:
-        # axial line: the square ends already sit on cell edges, no snap needed
-        corners = [
-            (e1[0] + n[0] * r, e1[1] + n[1] * r),
-            (e2[0] + n[0] * r, e2[1] + n[1] * r),
-            (e2[0] - n[0] * r, e2[1] - n[1] * r),
-            (e1[0] - n[0] * r, e1[1] - n[1] * r),
-        ]
-    else:
-        # non-axial: snap EACH WHOLE BUTT FACE onto the nearest cell edge/diagonal, so both
-        # its corners land on the same grid line (a coherent grid-aligned segment), and the
-        # ends are NOT square-angled.
-        ns = _snap_dir(n)
-        s_face = _butt_on_grid(e1, ns, r)
-        e_face = _butt_on_grid(e2, ns, r)
-        corners = [s_face[0], e_face[0], e_face[1], s_face[1]]
-
+    corners = [
+        (e1[0] + n[0] * r, e1[1] + n[1] * r),
+        (e2[0] + n[0] * r, e2[1] + n[1] * r),
+        (e2[0] - n[0] * r, e2[1] - n[1] * r),
+        (e1[0] - n[0] * r, e1[1] - n[1] * r),
+    ]
     ops = [("M", corners[0]), ("L", corners[1]), ("L", corners[2]), ("L", corners[3]), ("Z",)]
     return _orient_ccw(ops)
 
