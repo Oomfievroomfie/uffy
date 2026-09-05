@@ -201,6 +201,8 @@ class GlyphGridDelegate(QStyledItemDelegate):
             painter.drawPixmap(px, py, scaled)
 
         # Small plaintext character, top-left corner (never overlaps the id at the bottom).
+        # Render with the widget's NATIVE font (like the 'Native reference' QLabel) so glyphs
+        # the default QFont("", n) misses (e.g. Latin Extended-A) still render.
         char = chr(cp) if _is_printable(cp) else ""
         if char:
             badge = QRectF(rect.left() + 2.0, rect.top() + 2.0, 18.0, 18.0)
@@ -208,7 +210,9 @@ class GlyphGridDelegate(QStyledItemDelegate):
             painter.setBrush(QColor(255, 255, 255, 210))
             painter.drawRoundedRect(badge, 4.0, 4.0)
             painter.setPen(QColor(60, 60, 72))
-            painter.setFont(QFont("", 9))
+            native = QFont(self.parent().font())
+            native.setPixelSize(13)
+            painter.setFont(native)
             painter.drawText(badge, Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignHCenter, char)
 
         # Codepoint id pinned to the bottom.
