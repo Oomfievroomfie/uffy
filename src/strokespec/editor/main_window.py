@@ -232,15 +232,27 @@ class _RelatedListView(QListView):
         self.setIconSize(QSize(REL_PIX_W, REL_PIX_H))
 
     def wheelEvent(self, event) -> None:
-        # The related cells are tall (150px) while the list uses Qt's default ScrollPerItem
-        # wheel, so a single notch scrolls ~3 tall cells = a full page in the dock (glyphs get
-        # cut off top/bottom, which is unhelpful). Scroll HALF a page per tick instead.
-        dyn = event.angleDelta().y()
-        if dyn:
+        # Smooth scrollwheels / trackpads deliver pixel deltas; scroll by those pixels directly
+        # so they stay smooth and continuous (Qt's QAbstractItemView default ignores pixelDelta
+        # and would otherwise scroll nothing for a pixel-only event).
+        pd = event.pixelDelta().y()
+        if pd:
+            sb = self.verticalScrollBar()
+            if sb.maximum() > sb.minimum():
+                sb.setValue(sb.value() - pd)
+                event.accept()
+                return
+            super().wheelEvent(event)
+            return
+        dy = event.angleDelta().y()
+        if dy:
+            # Discrete notch: the related cells are tall (150px) and the list keeps Qt's default
+            # ScrollPerItem wheel, so one notch scrolls ~3 tall cells = a full page in the dock
+            # (glyphs get cut off top/bottom, which is unhelpful). Scroll HALF a page per notch.
             sb = self.verticalScrollBar()
             if sb.maximum() > sb.minimum():
                 step = max(1, sb.pageStep() // 2)
-                sb.setValue(sb.value() + (step if dyn < 0 else -step))
+                sb.setValue(sb.value() + (step if dy < 0 else -step))
                 event.accept()
                 return
         super().wheelEvent(event)
