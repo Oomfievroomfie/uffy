@@ -20,6 +20,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     # line/cell, so a notch scrolls a controlled amount instead of a full page.
     app.setWheelScrollLines(1)
 
+    # Qt's default glyph fallback chain (qwindowsfontdatabasebase.cpp) is a hardcoded,
+    # CJK-centric try-font list that covers ~90% of scripts (the platform chain is kept).
+    # It has NO entry for several scripts even though Windows ships first-party fonts for
+    # them (Segoe UI Historic, Microsoft Yi Baiti, Ebrima, Gadugi, Nirmala UI). Prepend
+    # those fonts to the app font's family list; setting families only ADDS to the fallback
+    # chain (loadEngine still appends the platform try-fonts after them), never replaces it.
+    default_font = app.font()
+    default_font.setFamilies([default_font.family()] + [
+        "Microsoft Yi Baiti",      # Yi Syllables, Yi Radicals
+        "Segoe UI Historic",       # Linear B, Runic, Old Italic, Gothic, Cuneiform, Egyptian
+                                   # Hieroglyphs, Phoenician, Glagolitic, Old Turkic, Brahmi, ...
+        "Ebrima",                  # Osmanya, Tifinagh, Vai, NKo
+        "Gadugi",                  # Canadian Aboriginal syllabics, Cherokee
+        "Nirmala UI",              # Meetei Mayek (and Indic)
+    ])
+    app.setFont(default_font)
+
     path = argv[0] if argv and not argv[0].startswith("-") else None
     window = MainWindow(path)
     window.show()
