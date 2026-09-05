@@ -24,21 +24,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     # CJK-centric try-font list that covers ~90% of scripts (the platform chain is kept).
     # It has NO entry for several scripts even though Windows ships first-party fonts for
     # them (Segoe UI Historic, Microsoft Yi Baiti, Ebrima, Gadugi, Nirmala UI). Prepend
-    # those fonts to the app font's family list; setting families only ADDS to the fallback
-    # chain (loadEngine still appends the platform try-fonts after them), never replaces it.
+    # those fonts, then the bundled Noto fallback fonts, to the app font's family list.
+    # Setting families only ADDS to the fallback chain (loadEngine still appends the
+    # platform try-fonts after them), never replaces it.
+    from PySide6.QtGui import QFontDatabase
+    from pathlib import Path
     default_font = app.font()
-    default_font.setFamilies([default_font.family()] + [
-        "Microsoft Yi Baiti",      # Yi Syllables, Yi Radicals
-        "Segoe UI Historic",       # Linear B, Runic, Old Italic, Gothic, Cuneiform, Egyptian
-                                   # Hieroglyphs, Phoenician, Glagolitic, Old Turkic, Brahmi, ...
-        "Ebrima",                  # Osmanya, Tifinagh, Vai, NKo
-        "Gadugi",                  # Canadian Aboriginal syllabics, Cherokee
-        "Nirmala UI",              # Meetei Mayek (and Indic)
-        # GNU Unifont is a per-user all-Unicode fallback covering the remaining scripts that
-        # no Windows font provides (Tagalog, Avestan, Bamum, Miao/Pollard, Anatolian
-        # Hieroglyphs, Tangut, ...). Last in the list so it only picks up what nothing else can.
-        "Unifont",
-    ])
+    fallback = [default_font.family()]
+    for fam in ["Microsoft Yi Baiti", "Segoe UI Historic", "Ebrima", "Gadugi", "Nirmala UI"]:
+        fallback.append(fam)
+    # Bundled Noto + Unifont fonts: cover every remaining script no Windows font provides.
+    # Tried after the Windows fonts but before the Unifont catch-all.
+    fonts_dir = Path(__file__).resolve().parent.parent / "data" / "fonts"
+    fdb = QFontDatabase()
+    for f in sorted(list(fonts_dir.glob("*.ttf")) + list(fonts_dir.glob("*.otf"))):
+        fid = fdb.addApplicationFont(str(f))
+        if fid >= 0:
+            for fam in fdb.applicationFontFamilies(fid):
+                if fam not in fallback:
+                    fallback.append(fam)
+    # GNU Unifont (BMP) + Unifont Upper (supplementary planes): last-resort catch-all
+    # for anything still missing.
+    for fam in ("Unifont", "Unifont Upper"):
+        if fam not in fallback:
+            fallback.append(fam)
+    default_font.setFamilies(fallback)
     app.setFont(default_font)
 
     path = argv[0] if argv and not argv[0].startswith("-") else None

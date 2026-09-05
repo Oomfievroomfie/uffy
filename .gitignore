@@ -19,9 +19,11 @@ strokespec_build_*/
 probe_*/
 *.build.log
 *.fix.log
+# Sample/stub fonts at the repo root only (the bundled fallback fonts in
+# src/strokespec/data/fonts/ must be versioned, so *.ttf is NOT global here).
 Sample.ttf
 StrokeTest.ttf
-*.ttf
+/*.ttf
 
 # Test render/scratch outputs
 scratch_*.py

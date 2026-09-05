@@ -1,0 +1,31 @@
+GNU Unifont
+===========
+
+Copyright (C) 1998-2024 Roman Czyborra, Paul Hardy, Qianqian Fang, Andrew
+Miller, Johnnie Weaver, David Corbett, and other contributors.
+
+This font (unifont-15.0.01.ttf) and the supplementary-plane font
+(unifont_upper-17.0.05.otf) are licensed under the GNU General Public
+License, version 2 or later (GPLv2+).
+
+  This program is free software: you can redistribute it and/or modify it
+  under the terms of the GNU General Public License as published by the
+  Free Software Foundation, either version 2 of the License, or (at your
+  option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+With the following font-embedding exception: you may embed this font or any
+modified or unmodified derivative, in whole or in part, in digital or analog
+documents (including web pages, applications, and other outputs) without
+restriction or additional permission, and this embedding does not impose any
+license obligations on the embedding document or its use; the font's own GPL
+terms continue to apply to the font and its derivatives themselves.
+
+Full terms: https://unifoundry.com/LICENSE.txt
