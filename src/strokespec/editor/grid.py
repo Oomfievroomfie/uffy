@@ -361,7 +361,7 @@ class GlyphGrid(QWidget):
         scroll), so huge blocks (e.g. CJK Unified Ideographs) load fast instead of creating
         thousands of upfront widgets.
         """
-        from PySide6.QtWidgets import QLabel
+        from PySide6.QtWidgets import QLabel, QWidget
         from PySide6.QtCore import QPoint, QSize
         vp = self._list.viewport()
         if not vp.rect().isValid():
@@ -382,12 +382,16 @@ class GlyphGrid(QWidget):
                 continue
             cp = self._model.codepoint_at(row)
             ch = chr(cp) if _is_printable(cp) else ""
-            lbl = QLabel(ch)
-            lbl.setFixedSize(22, 22)
+            # transparent container matches the cell; the badge is a fixed 18x18 label at the
+            # same (2,2) inset as before, so the view resizing the container can never grow it.
+            container = QWidget()
+            container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            container.setAutoFillBackground(False)
+            lbl = QLabel(ch, container)
+            lbl.setGeometry(2, 2, 18, 18)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:17px;")
-            self._list.setIndexWidget(self._model.index(row, 0), lbl)
+            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:13px;")
+            self._list.setIndexWidget(self._model.index(row, 0), container)
             self._badge_rows.add(row)
 
     def _compute_candidate_list(self, start: int, end: int) -> List[int]:
