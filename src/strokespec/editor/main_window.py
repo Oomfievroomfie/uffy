@@ -213,7 +213,7 @@ class _RelatedListView(QListView):
 
     copyRequested = Signal(int)
     openRequested = Signal(int)
-    squishRequested = Signal(int, str)  # (codepoint, up/down/left/right)
+    squishRequested = Signal(int, str, float)  # (codepoint, up/down/left/right, fraction)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -248,7 +248,9 @@ class _RelatedListView(QListView):
                 if has:
                     for d, r in arrows.items():
                         if r.contains(pos):
-                            self.squishRequested.emit(cp, d)
+                            shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                            frac = 2.0 / 3.0 if shift else 0.5
+                            self.squishRequested.emit(cp, d, frac)
                             return
         super().mouseReleaseEvent(event)  # cell body click: do nothing more
 
@@ -384,9 +386,9 @@ class ReferenceFontsDock(QWidget):
         if self._open_cp is not None:
             self._open_cp(cp)
 
-    def _squish(self, cp, direction) -> None:
+    def _squish(self, cp, direction, fraction) -> None:
         if self._squish_cb is not None:
-            self._squish_cb(cp, direction)
+            self._squish_cb(cp, direction, fraction)
 
     def add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Choose a folder of reference fonts")
@@ -792,11 +794,12 @@ class MainWindow(QMainWindow):
             self._editor.canvas.append_strokes(g.strokes)
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
-    def _squish_related_strokes(self, cp: int, direction: str) -> None:
-        """Copy + squish the related glyph's strokes into a half of the current glyph's grid.
+    def _squish_related_strokes(self, cp: int, direction: str, fraction: float = 0.5) -> None:
+        """Copy + squish the related glyph's strokes into a fraction of the current glyph's grid.
 
-        Only the added strokes are squished (a linear transform, then rounding); the current
-        glyph's existing strokes are untouched. The append is a single undo/redo step.
+        ``fraction`` is 1/2 normally, or 2/3 when Shift is held. Only the added strokes are
+        squished (a linear transform, then rounding); existing strokes are untouched. The append
+        is a single undo/redo step.
         """
         g = self.strokefont.get(cp)
         if g is None or not g.strokes:
@@ -804,7 +807,7 @@ class MainWindow(QMainWindow):
         cur = self._editor.glyph()
         width = cur.cell_width_grid if cur is not None else 16
         from ..model import squish_strokes
-        squished = squish_strokes(g.strokes, direction, width)
+        squished = squish_strokes(g.strokes, direction, width, fraction=fraction)
         if squished:
             self._editor.canvas.append_strokes(squished)
         self._editor.canvas.setFocus()  # hand focus back to the canvas
