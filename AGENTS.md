@@ -45,6 +45,12 @@ These are the things that repeatedly cost time when forgotten.
 - A `[sandbox: file access denied]` message may simply **be the user pressing "no"** on an
   escalation prompt. Treat it as a direct user instruction, not a harness bug to reason around.
 
+- **Harness bug (temp test files):** once you `Remove-Item` a temp file (e.g. `_t.py`), the
+  `write` tool later rejects re-creating that exact path ("file no longer exists — re-read the
+  file, then retry") but `read` also fails because the path is gone, so you cannot satisfy the
+  re-read. Workaround: **use a fresh filename** for each throwaway test script (`_t.py`,
+  `_t2.py`, …) rather than deleting and re-creating the same one.
+
 ## Method (the most important lessons)
 
 - **Run the code, do not reason in a vacuum.** Verify the ACTUAL output against the user's
