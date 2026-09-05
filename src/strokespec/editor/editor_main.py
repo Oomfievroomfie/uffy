@@ -34,6 +34,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         "Ebrima",                  # Osmanya, Tifinagh, Vai, NKo
         "Gadugi",                  # Canadian Aboriginal syllabics, Cherokee
         "Nirmala UI",              # Meetei Mayek (and Indic)
+        # GNU Unifont is a per-user all-Unicode fallback covering the remaining scripts that
+        # no Windows font provides (Tagalog, Avestan, Bamum, Miao/Pollard, Anatolian
+        # Hieroglyphs, Tangut, ...). Last in the list so it only picks up what nothing else can.
+        "Unifont",
     ])
     app.setFont(default_font)
 
