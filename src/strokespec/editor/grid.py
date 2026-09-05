@@ -444,19 +444,18 @@ class GlyphGrid(QWidget):
 
     def _matches(self, cp: int, q: str) -> bool:
         q = q.lower()
-        if q.startswith("u+") or (q and all(c in "0123456789abcdefx" for c in q)):
-            try:
-                return cp == int(q.replace("u+", ""), 16)
-            except ValueError:
-                return False
-        # character match
-        if q and chr(cp).lower() == q:
+        if not q:
             return True
-        if f"u+{cp:04x}".startswith(q):
-            return True
-        # character-name substring match, case-insensitive
-        name = unicodedata.name(chr(cp), "")
-        return bool(name) and q in name.lower()
+        ch = chr(cp)
+        name = unicodedata.name(ch, "")
+        # Plain case-insensitive substring search across the character name, the character
+        # itself, and the codepoint's hex forms (e.g. "ed" finds names containing "turned"
+        # and also U+00ED via its "00ed" hex; "4e2d" finds U+4E2D via its "u+4e2d").
+        hay = " ".join(filter(None, [
+            name.lower(), ch.lower(),
+            f"u+{cp:04x}", f"{cp:x}", f"{cp:04x}",
+        ]))
+        return q in hay
 
 
 # --- block table bridge -------------------------------------------------------
