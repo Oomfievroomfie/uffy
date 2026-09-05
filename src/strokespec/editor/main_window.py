@@ -302,9 +302,7 @@ class ReferenceFontsDock(QWidget):
         self._ref_title.setStyleSheet("font-weight: bold;")
         self._ref_img = QLabel()
         self._ref_img.setFixedSize(REF_IMG_SIZE, REF_IMG_H)
-        # keep the glyph the same size, but align it toward the top so the extra room (from the
-        # taller label) sits BELOW the glyph, giving tall descenders room.
-        self._ref_img.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        self._ref_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
         f = self._ref_img.font()
         f.setPixelSize(110)
         self._ref_img.setFont(f)
