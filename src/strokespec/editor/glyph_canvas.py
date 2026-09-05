@@ -291,6 +291,24 @@ class GlyphCanvas(QWidget):
         self.update()
         self.glyphChanged.emit()
 
+    def flip_vertical(self) -> None:
+        """Mirror every stroke top-bottom across the glyph's cell centre.
+
+        Same handedness caveat as :meth:`flip_horizontal`: the point order is swapped too,
+        so arcs keep bending the right way.
+        """
+        m = GRID_H - 1
+        strokes = self._glyph.strokes
+        if not strokes:
+            return
+        self._snapshot()
+        for i, s in enumerate(strokes):
+            p1 = Point(s.p1.x, m - s.p1.y)
+            p2 = Point(s.p2.x, m - s.p2.y)
+            strokes[i] = Stroke(p2, p1, s.shape)
+        self.update()
+        self.glyphChanged.emit()
+
     # --- geometry ------------------------------------------------------------
     def _cols(self) -> int:
         """The glyph's cell width (8 for half-width, 16 for full-width)."""

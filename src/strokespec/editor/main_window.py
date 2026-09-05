@@ -104,6 +104,17 @@ def _icon_flip() -> QIcon:
     return _make_icon(20, d)
 
 
+def _icon_flip_v() -> QIcon:
+    def d(p):
+        p.setPen(QPen(_ICON_HEX, 1.4))
+        p.setBrush(_ICON_HEX)
+        # vertical-flip: two mirrored triangles (visual mirror of _icon_flip)
+        p.drawPolygon(QPolygonF([QPointF(4, 3), QPointF(16, 3), QPointF(10, 15)]))
+        p.setBrush(QColor(255, 255, 255))
+        p.drawPolygon(QPolygonF([QPointF(5, 17), QPointF(15, 17), QPointF(10, 10)]))
+    return _make_icon(20, d)
+
+
 # related-glyph cell roles (QStandardItemModel)
 REL_CP = Qt.ItemDataRole.UserRole
 REL_HAS = Qt.ItemDataRole.UserRole + 1
@@ -487,6 +498,8 @@ class GlyphEditorPanel(QWidget):
         b_paste.setToolTip("Paste (append) strokes (Ctrl+V)")
         b_flip = QToolButton(); b_flip.setIcon(_icon_flip()); b_flip.setFixedSize(22, 22)
         b_flip.setToolTip("Flip horizontally (F)")
+        b_flip_v = QToolButton(); b_flip_v.setIcon(_icon_flip_v()); b_flip_v.setFixedSize(22, 22)
+        b_flip_v.setToolTip("Flip vertically")
         b_n = QToolButton(); b_n.setArrowType(Qt.ArrowType.UpArrow); b_n.setFixedSize(20, 20)
         b_n.setToolTip("Nudge whole glyph up (W)")
         b_s = QToolButton(); b_s.setArrowType(Qt.ArrowType.DownArrow); b_s.setFixedSize(20, 20)
@@ -495,7 +508,7 @@ class GlyphEditorPanel(QWidget):
         b_w.setToolTip("Nudge whole glyph left (A)")
         b_e = QToolButton(); b_e.setArrowType(Qt.ArrowType.RightArrow); b_e.setFixedSize(20, 20)
         b_e.setToolTip("Nudge whole glyph right (D)")
-        for w in (b_copy, b_paste, b_flip):
+        for w in (b_copy, b_paste, b_flip, b_flip_v):
             nudge_row.addWidget(w)
         nudge_row.addSpacing(6)
         for w in (b_n, b_s, b_w, b_e):
@@ -537,6 +550,7 @@ class GlyphEditorPanel(QWidget):
         b_copy.clicked.connect(self._focus_back(self.canvas.copy_strokes))
         b_paste.clicked.connect(self._focus_back(self.canvas.paste_strokes))
         b_flip.clicked.connect(self._focus_back(self.canvas.flip_horizontal))
+        b_flip_v.clicked.connect(self._focus_back(self.canvas.flip_vertical))
         b_n.clicked.connect(self._focus_back(lambda: self.canvas.nudge(0, 1)))
         b_s.clicked.connect(self._focus_back(lambda: self.canvas.nudge(0, -1)))
         b_w.clicked.connect(self._focus_back(lambda: self.canvas.nudge(-1, 0)))
