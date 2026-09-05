@@ -59,8 +59,9 @@ REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
 # related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
 REL_CELL_W, REL_CELL_H = 96, 150
-# big static "native reference" image: width, and a TALLER height so tall descenders fit
-REF_IMG_SIZE = 128
+# big static "native reference" image: width enough for wide glyphs (e.g. Arabic), and a TALLER
+# height so tall descenders fit
+REF_IMG_SIZE = 240
 REF_IMG_H = 180
 
 
@@ -307,7 +308,9 @@ class ReferenceFontsDock(QWidget):
         f = self._ref_img.font()
         f.setPixelSize(110)
         self._ref_img.setFont(f)
-        self._ref_img.setStyleSheet("background:#f1f2f6;")
+        # a faint border + distinct background so the label's bounds are visible (you can tell
+        # when a wide/tall glyph is being cut off at an edge).
+        self._ref_img.setStyleSheet("background:#eceef2; border:1px solid #b8bcc4;")
         lay.addWidget(self._ref_title)
         lay.addWidget(self._ref_img)
 
