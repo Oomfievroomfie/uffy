@@ -338,11 +338,24 @@ class GlyphGrid(QWidget):
     def _refresh(self) -> None:
         self._compute_and_refresh()
 
+    def _current_codepoint(self) -> Optional[int]:
+        """The codepoint currently selected in the grid, or ``None``."""
+        idx = self._list.currentIndex()
+        if idx.isValid():
+            return self._model.codepoint_at(idx.row())
+        return None
+
     def _compute_and_refresh(self) -> None:
+        # Remember the selected card and restore it after the model reset, so refreshing (e.g.
+        # toggling 'Show unassigned', or a grid.refresh() from committing a glyph) does not
+        # make the list forget which card is selected.
+        selected = self._current_codepoint()
         start, end = block_range(self._block_combo.currentText())
         cps = self._compute_candidate_list(start, end)
         self._model.set_codepoints(cps)
         self._count_label.setText(f"{len(cps)} glyphs")
+        if selected is not None and selected in cps:
+            self.select_codepoint(selected)
 
     def _compute_candidate_list(self, start: int, end: int) -> List[int]:
         from PySide6.QtWidgets import QApplication
