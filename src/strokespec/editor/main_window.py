@@ -846,34 +846,54 @@ class MainWindow(QMainWindow):
             self._editor.canvas.append_strokes(squished)
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
+    def _store_glyph(self, glyph: Glyph) -> Glyph:
+        """Persist the current editor glyph into the stroke set (add or update)."""
+        stored = self.strokefont.ensure(glyph.codepoint)
+        stored.strokes[:] = glyph.strokes
+        stored.width = glyph.width
+        stored.combining = glyph.combining
+        stored.name = glyph.name
+        stored.empty = glyph.empty
+        return stored
+
     def _on_glyph_changed(self) -> None:
-        changed_in_place = False
-        if self._pending_commit is not None:
-            glyph = self._pending_commit
-            if glyph.strokes or glyph.combining or glyph.width != 16 or glyph.empty:
-                stored = self.strokefont.ensure(glyph.codepoint)
-                stored.strokes[:] = glyph.strokes
-                stored.width = glyph.width
-                stored.combining = glyph.combining
-                stored.name = glyph.name
-                stored.empty = glyph.empty
+        """Resolve the glyph's assigned/unassigned state.
+
+        A glyph is ASSIGNED iff it has strokes, is marked ``empty`` (an intentional blank), or is
+        a combining mark. A regular glyph that has been cleared to no strokes and is not marked
+        empty is UNASSIGNED: it is dropped from the stroke set (so 'Show unassigned' shows it
+        again). The 'Empty' checkbox is the control for keeping a blank glyph.
+        """
+        glyph = self._editor.glyph()
+        if glyph is None:
+            return
+        assigned = bool(glyph.strokes) or glyph.empty or glyph.combining
+        in_set = self.strokefont.has(glyph.codepoint)
+
+        if assigned:
+            stored = self._store_glyph(glyph)
+            if self._pending_commit is not None or not in_set:
+                # a brand-new glyph (or one reassigned after being cleared): switch onto the
+                # stored glyph and refresh the grid so it appears in the block.
                 self._pending_commit = None
-                # switch the editor onto the stored glyph so further edits apply directly
                 self._editor.set_glyph(stored)
-                # A freshly-opened glyph: keep the just-placed stroke selected. set_glyph
-                # resets the canvas selection to -1, so re-select the last stroke (this also
-                # matches the behaviour when placing the 2nd, 3rd, ... strokes).
                 if stored.strokes:
                     self._editor.canvas._selected_index = len(stored.strokes) - 1
                     self._editor._sync_stroke_list()
                     self._editor.canvas.update()
-                self._grid.refresh()  # a brand-new glyph may appear in this block
+                self._grid.refresh()
                 self._dirty = True
                 self._set_window_title()
-            return  # opening a not-yet-edited glyph is not a change
-        # editing an existing glyph in place: repaint only the single cell, never the whole grid
-        self._mark_dirty(invalidate_grid=False)
-        self._grid.invalidate_preview(self._editor.glyph().codepoint)
+            else:
+                # editing an existing glyph in place: repaint only its single cell.
+                self._mark_dirty(invalidate_grid=False)
+                self._grid.invalidate_preview(glyph.codepoint)
+        else:
+            # cleared to empty without the Empty flag -> unassigned, drop from the set
+            if in_set:
+                self.strokefont.remove(glyph.codepoint)
+                self._grid.refresh()
+            self._pending_commit = None
 
     def _mark_dirty(self, invalidate_grid: bool = False) -> None:
         self._dirty = True
