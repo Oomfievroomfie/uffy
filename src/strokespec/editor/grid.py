@@ -266,7 +266,10 @@ class GlyphGrid(QWidget):
         self._search.setClearButtonEnabled(True)
 
         self._show_all = QCheckBox("Show unassigned")
-        self._show_all.setToolTip("Show every codepoint in the block, not only authored/reference ones.")
+        self._show_all.setToolTip(
+            "Checked: show ONLY unassigned codepoints (no authored glyph and no reference "
+            "render). Unchecked: no filtering — show every codepoint in the block."
+        )
 
         bar = QHBoxLayout()
         bar.addWidget(QLabel("Block:"))
@@ -344,7 +347,7 @@ class GlyphGrid(QWidget):
     def _compute_candidate_list(self, start: int, end: int) -> List[int]:
         from PySide6.QtWidgets import QApplication
         from PySide6.QtGui import QCursor
-        show_all = self._show_all.isChecked()
+        unassigned_only = self._show_all.isChecked()
         q = self._search.text().strip()
         cps: List[int] = []
         app = QApplication.instance()
@@ -358,11 +361,12 @@ class GlyphGrid(QWidget):
                     # search filter
                     if not self._matches(cp, q):
                         continue
-                if self.strokefont.has(cp):
-                    cps.append(cp)
-                elif show_all:
-                    cps.append(cp)
-                elif self.reflib.has(cp):
+                if unassigned_only:
+                    # checked: show ONLY codepoints with no authored glyph and no reference render
+                    if not (self.strokefont.has(cp) or self.reflib.has(cp)):
+                        cps.append(cp)
+                else:
+                    # unchecked: no filtering — show every codepoint in the block
                     cps.append(cp)
         finally:
             if app is not None:
