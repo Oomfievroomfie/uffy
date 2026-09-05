@@ -42,6 +42,8 @@ class GlyphCanvas(QWidget):
     glyphChanged = Signal()
     clearRequested = Signal()
     navRequested = Signal(str)  # 'up'/'down'/'left'/'right' in the codepoint list
+    toggleWidthRequested = Signal()
+    toggleCombiningRequested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -152,6 +154,10 @@ class GlyphCanvas(QWidget):
             self.toggle_selected_shape()
         elif key == Qt.Key.Key_Delete:
             self.delete_selected()
+        elif key == Qt.Key.Key_N:
+            self.toggleWidthRequested.emit()
+        elif key == Qt.Key.Key_M:
+            self.toggleCombiningRequested.emit()
         else:
             super().keyPressEvent(event)
 

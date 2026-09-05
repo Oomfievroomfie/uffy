@@ -429,8 +429,10 @@ class GlyphEditorPanel(QWidget):
         self._width_combo = QComboBox()
         self._width_combo.addItem("16 (full)", 16)
         self._width_combo.addItem("8 (half)", 8)
+        self._width_combo.setToolTip("Glyph width: 8 (half) or 16 (full) — N toggles")
         top.addWidget(self._width_combo)
         self._combining = QCheckBox("Combining")
+        self._combining.setToolTip("Combining mark (zero advance width) — M toggles")
         top.addWidget(self._combining)
         self._clear_btn = QPushButton("Clear")
         self._clear_btn.setToolTip("Remove all strokes from this glyph (Ctrl+H)")
@@ -529,6 +531,18 @@ class GlyphEditorPanel(QWidget):
         self._stroke_list.itemClicked.connect(lambda _item: self.canvas.setFocus())
         self.canvas.glyphChanged.connect(self._on_canvas_changed)
         self.canvas.clearRequested.connect(self._on_clear)
+        self.canvas.toggleWidthRequested.connect(self._toggle_width)
+        self.canvas.toggleCombiningRequested.connect(self._toggle_combining)
+
+    def _toggle_width(self) -> None:
+        cur = self._width_combo.currentData()
+        new = 8 if cur == 16 else 16
+        idx = self._width_combo.findData(new)
+        if idx >= 0:
+            self._width_combo.setCurrentIndex(idx)  # triggers _on_width_changed
+
+    def _toggle_combining(self) -> None:
+        self._combining.toggle()  # triggers _on_combining_changed
 
     def _on_canvas_changed(self) -> None:
         # Canvas edits propagate up so MainWindow can initialise/commit the glyph and
