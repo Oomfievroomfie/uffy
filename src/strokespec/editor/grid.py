@@ -383,10 +383,10 @@ class GlyphGrid(QWidget):
             cp = self._model.codepoint_at(row)
             ch = chr(cp) if _is_printable(cp) else ""
             lbl = QLabel(ch)
-            lbl.setFixedSize(26, 24)
+            lbl.setFixedSize(22, 22)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:14px;")
+            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:17px;")
             self._list.setIndexWidget(self._model.index(row, 0), lbl)
             self._badge_rows.add(row)
 
