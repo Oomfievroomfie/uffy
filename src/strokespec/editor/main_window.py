@@ -59,8 +59,9 @@ REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
 # related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
 REL_CELL_W, REL_CELL_H = 96, 150
-# big static "native reference" image size
+# big static "native reference" image: width, and a TALLER height so tall descenders fit
 REF_IMG_SIZE = 128
+REF_IMG_H = 180
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -299,8 +300,10 @@ class ReferenceFontsDock(QWidget):
         self._ref_title = QLabel("Native reference")
         self._ref_title.setStyleSheet("font-weight: bold;")
         self._ref_img = QLabel()
-        self._ref_img.setFixedSize(REF_IMG_SIZE, REF_IMG_SIZE)
-        self._ref_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._ref_img.setFixedSize(REF_IMG_SIZE, REF_IMG_H)
+        # keep the glyph the same size, but align it toward the top so the extra room (from the
+        # taller label) sits BELOW the glyph, giving tall descenders room.
+        self._ref_img.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         f = self._ref_img.font()
         f.setPixelSize(110)
         self._ref_img.setFont(f)
