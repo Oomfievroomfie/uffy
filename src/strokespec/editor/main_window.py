@@ -231,6 +231,20 @@ class _RelatedListView(QListView):
         self.setGridSize(QSize(REL_CELL_W, REL_CELL_H))
         self.setIconSize(QSize(REL_PIX_W, REL_PIX_H))
 
+    def wheelEvent(self, event) -> None:
+        # The related cells are tall (150px) while the list uses Qt's default ScrollPerItem
+        # wheel, so a single notch scrolls ~3 tall cells = a full page in the dock (glyphs get
+        # cut off top/bottom, which is unhelpful). Scroll HALF a page per tick instead.
+        dyn = event.angleDelta().y()
+        if dyn:
+            sb = self.verticalScrollBar()
+            if sb.maximum() > sb.minimum():
+                step = max(1, sb.pageStep() // 2)
+                sb.setValue(sb.value() + (step if dyn < 0 else -step))
+                event.accept()
+                return
+        super().wheelEvent(event)
+
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             idx = self.indexAt(event.position().toPoint())
