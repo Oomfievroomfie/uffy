@@ -434,6 +434,9 @@ class GlyphEditorPanel(QWidget):
         self._combining = QCheckBox("Combining")
         self._combining.setToolTip("Combining mark (zero advance width) — M toggles")
         top.addWidget(self._combining)
+        self._empty = QCheckBox("Empty")
+        self._empty.setToolTip("Intentionally blank but assigned glyph (e.g. a space) — persists it")
+        top.addWidget(self._empty)
         self._clear_btn = QPushButton("Clear")
         self._clear_btn.setToolTip("Remove all strokes from this glyph (Ctrl+H)")
         top.addWidget(self._clear_btn)
@@ -517,6 +520,7 @@ class GlyphEditorPanel(QWidget):
         btn_toggle.clicked.connect(self._focus_back(self.canvas.toggle_selected_shape))
         self._width_combo.currentIndexChanged.connect(self._on_width_changed)
         self._combining.toggled.connect(self._on_combining_changed)
+        self._empty.toggled.connect(self._on_empty_changed)
         self._clear_btn.clicked.connect(self._focus_back(self._on_clear))
         self._btn_line.clicked.connect(self._focus_back(lambda: self._set_tool(SHAPE_LINE)))
         self._btn_arc.clicked.connect(self._focus_back(lambda: self._set_tool(SHAPE_ARC)))
@@ -561,6 +565,9 @@ class GlyphEditorPanel(QWidget):
         self._combining.blockSignals(True)
         self._combining.setChecked(glyph.combining)
         self._combining.blockSignals(False)
+        self._empty.blockSignals(True)
+        self._empty.setChecked(glyph.empty)
+        self._empty.blockSignals(False)
         self._sync_stroke_list()
 
     def glyph(self) -> Optional[Glyph]:
@@ -606,6 +613,11 @@ class GlyphEditorPanel(QWidget):
     def _on_combining_changed(self, on: bool) -> None:
         if self._glyph is not None and self._glyph.combining != on:
             self._glyph.combining = on
+            self.glyphChanged.emit()
+
+    def _on_empty_changed(self, on: bool) -> None:
+        if self._glyph is not None and self._glyph.empty != on:
+            self._glyph.empty = on
             self.glyphChanged.emit()
 
     def _on_clear(self) -> None:
@@ -838,12 +850,13 @@ class MainWindow(QMainWindow):
         changed_in_place = False
         if self._pending_commit is not None:
             glyph = self._pending_commit
-            if glyph.strokes or glyph.combining or glyph.width != 16:
+            if glyph.strokes or glyph.combining or glyph.width != 16 or glyph.empty:
                 stored = self.strokefont.ensure(glyph.codepoint)
                 stored.strokes[:] = glyph.strokes
                 stored.width = glyph.width
                 stored.combining = glyph.combining
                 stored.name = glyph.name
+                stored.empty = glyph.empty
                 self._pending_commit = None
                 # switch the editor onto the stored glyph so further edits apply directly
                 self._editor.set_glyph(stored)

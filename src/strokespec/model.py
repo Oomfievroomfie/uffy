@@ -151,6 +151,7 @@ class Glyph:
     width: Optional[int] = None        # None -> derive from Unicode East Asian Width
     combining: Optional[bool] = None   # None -> derive from Unicode mark category
     name: Optional[str] = None
+    empty: bool = False                # intentionally assigned but blank (e.g. space)
 
     def __post_init__(self) -> None:
         if self.width is None:
@@ -193,6 +194,8 @@ class Glyph:
         }
         if self.name:
             d["name"] = self.name
+        if self.empty:
+            d["empty"] = True
         return d
 
     @classmethod
@@ -207,6 +210,7 @@ class Glyph:
             width=(int(width) if width is not None else None),
             combining=(bool(combining) if combining is not None else None),
             name=d.get("name"),
+            empty=bool(d.get("empty", False)),
         )
 
 
