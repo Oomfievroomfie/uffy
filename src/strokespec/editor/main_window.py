@@ -494,7 +494,7 @@ class GlyphEditorPanel(QWidget):
         btn_delete = QPushButton("Delete selected")
         btn_delete.setToolTip("Delete the selected stroke (Delete)")
         btn_reverse = QPushButton("Reverse points (flip arc)")
-        btn_reverse.setToolTip("Reverse the selected stroke's points (flips an arc's bend)")
+        btn_reverse.setToolTip("Reverse the selected stroke's points (flips an arc's bend) (R)")
         btn_toggle = QPushButton("Toggle line/arc")
         btn_toggle.setToolTip("Switch the selected stroke between line and arc (B)")
         col.addWidget(btn_delete)
