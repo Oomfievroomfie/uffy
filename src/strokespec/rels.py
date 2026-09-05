@@ -47,16 +47,24 @@ def _parse_terms(s: str, i: int) -> Tuple[List[tuple], int]:
 
 
 def _ids_components(ids: str) -> List[int]:
-    """The direct component codepoints of an IDS string (the top-level operands).
+    """The component codepoints of an IDS string — every leaf character in the tree.
 
-    The root is the leading operator; its operand terms that are single characters are the
-    direct components. Nested compounds are not descended into (they are not *direct*), and a
-    lone-character "IDS" has no components.
+    Compounds are descended into, so ``⿰亻⿱ユ矢`` (侯) yields ``[亻, ユ, 矢]``, not just the
+    top-level operand 亻. A lone-character "IDS" has no components.
     """
     terms, _ = _parse_terms(ids, 0)
     if not terms or terms[0][0] != "compound":
         return []
-    out = [t[1] for t in terms[0][1] if t[0] == "char"]
+    out: List[int] = []
+
+    def walk(node: tuple) -> None:
+        if node[0] == "char":
+            out.append(node[1])
+        else:
+            for kid in node[1]:
+                walk(kid)
+
+    walk(terms[0])
     return out
 
 
