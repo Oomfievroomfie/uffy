@@ -1,5 +1,25 @@
 # strokespec
 
+## Important
+
+DO NOT trace the reference fonts. They are only present for metric alignment and glyph form
+reference purposes. We are NOT doing font design laundering. All existing work has followed
+this rule. (Tracing fonts, as opposed to digitally pirating them, is considered legally
+okayish in the US and japan and most reasonable countries, unless the font is protected by
+something like a design patent, but we still explicitly do not trace fonts.)
+
+In cases where there is simply no reason not to end up with the same shape as another font,
+like capital H or L, you do not need to avoid creating the same shape. That isn't how IP law
+works; such things are considered too trivial, obvious, or unavoidable to be copyrightable.
+This is not an assertion that all simple characters are uncopyrightable. Some are. Do not
+trace or make 1:1 copies. If in the process of trying to make a given glyph look good within
+the constraints of the weirdly limited font format this tool produces, it results in a shape
+that is annoyingly similar to or overlaps almost perfectly against a reference font, accept
+that it's almost certainly just the only obvious way to produce that glyph at this resolution.
+But do not use this as an excuse to trace the reference fonts.
+
+## About
+
 Author a **universal fallback font** as *strokes* instead of outlines or bitmaps, then compile
 it to a real TTF using Google's CLI font tools. This is a **fallback** font, not a universal
 one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It is a
