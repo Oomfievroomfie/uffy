@@ -200,21 +200,8 @@ class GlyphGridDelegate(QStyledItemDelegate):
             py = rect.top() + 2.0 + max(0.0, (avail_h - scaled.height()) / 2.0)
             painter.drawPixmap(px, py, scaled)
 
-        # Small plaintext character, top-left corner (never overlaps the id at the bottom).
-        # Render with the widget's NATIVE font (like the 'Native reference' QLabel) so glyphs
-        # the default QFont("", n) misses (e.g. Latin Extended-A) still render.
-        char = chr(cp) if _is_printable(cp) else ""
-        if char:
-            badge = QRectF(rect.left() + 2.0, rect.top() + 2.0, 18.0, 18.0)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(255, 255, 255, 210))
-            painter.drawRoundedRect(badge, 4.0, 4.0)
-            painter.setPen(QColor(60, 60, 72))
-            native = QFont(self.parent().font())
-            native.setPixelSize(13)
-            painter.setFont(native)
-            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignHCenter, char)
-
+        # Small plaintext character is supplied by a NATIVE QLabel per cell (setIndexWidget in
+        # _populate_badges), so it is NOT drawn here via drawText.
         # Codepoint id pinned to the bottom.
         painter.setPen(QColor(130, 130, 140))
         painter.setFont(QFont("", 8))
@@ -354,8 +341,28 @@ class GlyphGrid(QWidget):
         cps = self._compute_candidate_list(start, end)
         self._model.set_codepoints(cps)
         self._count_label.setText(f"{len(cps)} glyphs")
+        self._populate_badges()
         if selected is not None and selected in cps:
             self.select_codepoint(selected)
+
+    def _populate_badges(self) -> None:
+        """Give every cell a NATIVE text widget (QLabel) for the character in the top-left.
+
+        The badge is a real QLabel per cell via setIndexWidget (not delegate drawText), so Qt
+        renders the text natively and efficiently instead of the delegate re-drawing it (with
+        font fallback) on every repaint of the visible cells.
+        """
+        from PySide6.QtWidgets import QLabel
+        from PySide6.QtCore import QSize
+        for row in range(self._model.rowCount()):
+            cp = self._model.codepoint_at(row)
+            ch = chr(cp) if _is_printable(cp) else ""
+            lbl = QLabel(ch)
+            lbl.setFixedSize(20, 20)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:10px;")
+            self._list.setIndexWidget(self._model.index(row, 0), lbl)
 
     def _compute_candidate_list(self, start: int, end: int) -> List[int]:
         from PySide6.QtWidgets import QApplication
