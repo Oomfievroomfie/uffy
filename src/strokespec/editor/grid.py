@@ -244,6 +244,9 @@ class GlyphGrid(QWidget):
         self._list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._list.setGridSize(QSize(CELL_W, CELL_H))
         self._list.setIconSize(QSize(PIX_W, PIX_H))
+        # track which rows currently have a native badge QLabel (only the visible ones)
+        self._badge_rows: set = set()
+        self._list.verticalScrollBar().valueChanged.connect(self._update_visible_badges)
 
         self._block_combo = QComboBox()
         self._block_combo.addItems(block_names())
@@ -341,28 +344,51 @@ class GlyphGrid(QWidget):
         cps = self._compute_candidate_list(start, end)
         self._model.set_codepoints(cps)
         self._count_label.setText(f"{len(cps)} glyphs")
-        self._populate_badges()
+        self._clear_badges()
+        self._update_visible_badges()
         if selected is not None and selected in cps:
             self.select_codepoint(selected)
 
-    def _populate_badges(self) -> None:
-        """Give every cell a NATIVE text widget (QLabel) for the character in the top-left.
+    def _clear_badges(self) -> None:
+        for row in list(self._badge_rows):
+            self._list.setIndexWidget(self._model.index(row, 0), None)
+        self._badge_rows.clear()
 
-        The badge is a real QLabel per cell via setIndexWidget (not delegate drawText), so Qt
-        renders the text natively and efficiently instead of the delegate re-drawing it (with
-        font fallback) on every repaint of the visible cells.
+    def _update_visible_badges(self) -> None:
+        """Give every *visible* cell a native text label (QLabel) for the character badge.
+
+        Only the cells currently in the viewport get a widget (created lazily, refreshed on
+        scroll), so huge blocks (e.g. CJK Unified Ideographs) load fast instead of creating
+        thousands of upfront widgets.
         """
         from PySide6.QtWidgets import QLabel
-        from PySide6.QtCore import QSize
-        for row in range(self._model.rowCount()):
+        from PySide6.QtCore import QPoint, QSize
+        vp = self._list.viewport()
+        if not vp.rect().isValid():
+            return
+        first = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().top() + 2))
+        last = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().bottom() - 2))
+        if not first.isValid() or not last.isValid():
+            return
+        lo, hi = min(first.row(), last.row()), max(first.row(), last.row())
+        # drop widgets for rows that scrolled out of view
+        for row in list(self._badge_rows):
+            if not (lo <= row <= hi):
+                self._list.setIndexWidget(self._model.index(row, 0), None)
+                self._badge_rows.discard(row)
+        # create widgets for visible rows
+        for row in range(lo, hi + 1):
+            if row in self._badge_rows:
+                continue
             cp = self._model.codepoint_at(row)
             ch = chr(cp) if _is_printable(cp) else ""
             lbl = QLabel(ch)
-            lbl.setFixedSize(20, 20)
+            lbl.setFixedSize(26, 24)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:10px;")
+            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:14px;")
             self._list.setIndexWidget(self._model.index(row, 0), lbl)
+            self._badge_rows.add(row)
 
     def _compute_candidate_list(self, start: int, end: int) -> List[int]:
         from PySide6.QtWidgets import QApplication
