@@ -307,6 +307,7 @@ class ReferenceFontsDock(QWidget):
         self._ref_img.setStyleSheet("background:#f1f2f6;")
         lay.addWidget(self._ref_title)
         lay.addWidget(self._ref_img)
+        lay.addSpacing(24)  # extra space BELOW the label for tall glyphs/descenders
 
         add_btn.clicked.connect(self.add_folder)
         clear_btn.clicked.connect(self.clear)
