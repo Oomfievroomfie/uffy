@@ -859,15 +859,17 @@ class MainWindow(QMainWindow):
     def _on_glyph_changed(self) -> None:
         """Resolve the glyph's assigned/unassigned state.
 
-        A glyph is ASSIGNED iff it has strokes, is marked ``empty`` (an intentional blank), or is
-        a combining mark. A regular glyph that has been cleared to no strokes and is not marked
-        empty is UNASSIGNED: it is dropped from the stroke set (so 'Show unassigned' shows it
-        again). The 'Empty' checkbox is the control for keeping a blank glyph.
+        A glyph is ASSIGNED iff it has strokes or is marked ``empty`` (an intentional blank).
+        Otherwise (no strokes, not marked empty) it is UNASSIGNED: it is dropped from the stroke
+        set (so 'Show unassigned' shows it again). Combining marks are treated exactly like any
+        other glyph — they are zero-ADVANCE, not zero-ink, so an authored mark has strokes and
+        an intentional blank mark must be marked Empty. The 'Empty' checkbox is the control for
+        keeping any blank glyph as assigned.
         """
         glyph = self._editor.glyph()
         if glyph is None:
             return
-        assigned = bool(glyph.strokes) or glyph.empty or glyph.combining
+        assigned = bool(glyph.strokes) or glyph.empty
         in_set = self.strokefont.has(glyph.codepoint)
 
         if assigned:
