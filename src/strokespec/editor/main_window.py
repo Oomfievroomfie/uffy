@@ -48,6 +48,7 @@ from ..model import SHAPE_ARC, SHAPE_LINE, Glyph, StrokeFont
 from ..refbrowser import ReferenceLibrary
 from .glyph_canvas import GlyphCanvas
 from .grid import GlyphGrid, _tint_grey
+from .fontfallback import native_text_families
 from .uiutil import pil_to_qpixmap, paint_stroke_glyph
 
 
@@ -339,6 +340,11 @@ class ReferenceFontsDock(QWidget):
             c = chr(cp)
             if c.isprintable():
                 ch = c
+        from PySide6.QtGui import QFont
+        f = QFont()
+        f.setFamilies(native_text_families(cp))
+        f.setPixelSize(110)
+        self._ref_img.setFont(f)
         self._ref_img.setText(ch)
 
     def set_copy_callback(self, cb) -> None:

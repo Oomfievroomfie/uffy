@@ -6,6 +6,23 @@ import sys
 from typing import List, Optional
 
 
+def apply_fallback_fonts(app) -> None:
+    """Register the bundled rare-script fallback fonts so QFont can use them.
+
+    The app default font is left alone (Segoe UI + Qt's own platform fallback chain). The
+    native-text previews (big "native reference" panel + per-cell character badge) build a
+    PER-BLOCK family list in fontfallback.native_text_families(), attaching only the fonts
+    relevant to the codepoint's block, so the intentional fonts never run before the system
+    chain and Unifont stays the last resort.
+    """
+    from PySide6.QtGui import QFontDatabase
+    from pathlib import Path
+    fonts_dir = Path(__file__).resolve().parent.parent / "data" / "fonts"
+    fdb = QFontDatabase()
+    for f in sorted(list(fonts_dir.glob("*.ttf")) + list(fonts_dir.glob("*.otf"))):
+        fdb.addApplicationFont(str(f))
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     from PySide6.QtWidgets import QApplication
@@ -19,37 +36,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # page (Qt caps at pageStep, cutting glyphs off). One wheel line = one rubber-band
     # line/cell, so a notch scrolls a controlled amount instead of a full page.
     app.setWheelScrollLines(1)
-
-    # Qt's default glyph fallback chain (qwindowsfontdatabasebase.cpp) is a hardcoded,
-    # CJK-centric try-font list that covers ~90% of scripts (the platform chain is kept).
-    # It has NO entry for several scripts even though Windows ships first-party fonts for
-    # them (Segoe UI Historic, Microsoft Yi Baiti, Ebrima, Gadugi, Nirmala UI). Prepend
-    # those fonts, then the bundled Noto fallback fonts, to the app font's family list.
-    # Setting families only ADDS to the fallback chain (loadEngine still appends the
-    # platform try-fonts after them), never replaces it.
-    from PySide6.QtGui import QFontDatabase
-    from pathlib import Path
-    default_font = app.font()
-    fallback = [default_font.family()]
-    for fam in ["Microsoft Yi Baiti", "Segoe UI Historic", "Ebrima", "Gadugi", "Nirmala UI"]:
-        fallback.append(fam)
-    # Bundled Noto + Unifont fonts: cover every remaining script no Windows font provides.
-    # Tried after the Windows fonts but before the Unifont catch-all.
-    fonts_dir = Path(__file__).resolve().parent.parent / "data" / "fonts"
-    fdb = QFontDatabase()
-    for f in sorted(list(fonts_dir.glob("*.ttf")) + list(fonts_dir.glob("*.otf"))):
-        fid = fdb.addApplicationFont(str(f))
-        if fid >= 0:
-            for fam in fdb.applicationFontFamilies(fid):
-                if fam not in fallback:
-                    fallback.append(fam)
-    # GNU Unifont (BMP) + Unifont Upper (supplementary planes): last-resort catch-all
-    # for anything still missing.
-    for fam in ("Unifont", "Unifont Upper"):
-        if fam not in fallback:
-            fallback.append(fam)
-    default_font.setFamilies(fallback)
-    app.setFont(default_font)
+    apply_fallback_fonts(app)
 
     path = argv[0] if argv and not argv[0].startswith("-") else None
     window = MainWindow(path)

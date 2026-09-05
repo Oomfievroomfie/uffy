@@ -22,11 +22,13 @@ from PySide6.QtCore import (
     QRectF,
     QSize,
     Qt,
+    QTimer,
     Signal,
 )
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QListView,
     QStyledItemDelegate,
     QStyle,
@@ -35,6 +37,7 @@ from PySide6.QtWidgets import (
 
 from ..model import StrokeFont, Glyph, GRID_H
 from ..refbrowser import ReferenceLibrary
+from .fontfallback import native_text_families
 from .uiutil import pil_to_qpixmap, paint_stroke_glyph
 
 CP_ROLE = Qt.ItemDataRole.UserRole
@@ -355,6 +358,11 @@ class GlyphGrid(QWidget):
         self._count_label.setText(f"{len(cps)} glyphs")
         self._clear_badges()
         self._update_visible_badges()
+        # Badge creation needs the view to be laid out (indexAt must find real cells). It runs
+        # once here, but short blocks (e.g. Ogham, 32 items) fit in the viewport and never
+        # scroll, so valueChanged never re-triggers it. Schedule a re-run for after the event
+        # loop lays the view out, so those blocks get their native-text badges too.
+        QTimer.singleShot(0, self._update_visible_badges)
         current = self._block_combo.currentText()
         if selected is not None and selected in cps:
             self.select_codepoint(selected)
@@ -386,8 +394,23 @@ class GlyphGrid(QWidget):
             return
         first = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().top() + 2))
         last = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().bottom() - 2))
-        if not first.isValid() or not last.isValid():
+        if not first.isValid():
             return
+        if not last.isValid():
+            # The bottom of the viewport is empty space (a short block, e.g. Ogham's 32 items,
+            # leaves a gap below the last row, so indexAt at the bottom returns nothing). Find the
+            # actual last visible row by walking down until an item's rect leaves the viewport.
+            # This only runs when the bottom corner is empty — long blocks have a valid `last`,
+            # so the lazy per-visible-row attachment is unchanged and there is no perf regression.
+            vp_h = vp.rect().height()
+            last = first
+            for r in range(first.row(), self._model.rowCount()):
+                idx = self._model.index(r, 0)
+                vr = self._list.visualRect(idx)
+                if not vr.isEmpty() and vr.top() < vp_h:
+                    last = idx
+                else:
+                    break
         lo, hi = min(first.row(), last.row()), max(first.row(), last.row())
         # drop widgets for rows that scrolled out of view
         for row in list(self._badge_rows):
@@ -405,10 +428,20 @@ class GlyphGrid(QWidget):
             container = QWidget()
             container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             container.setAutoFillBackground(False)
-            lbl = QLabel(ch, container)
+            lbl = QLabel(container)
             lbl.setGeometry(2, 2, 18, 18)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48; font-size:13px;")
+            # Native-text font, mirroring the big "native reference" panel (_ref_img): take the
+            # application font (which carries the fallback families, incl. Unifont), set the
+            # pixel size, re-apply, and set the text after. Do NOT set font-size via a stylesheet
+            # (that replaces the font with a single-family one and drops the fallback chain, so
+            # e.g. Ogham rendered as a blank box instead of via a fallback font).
+            f = QFont()
+            f.setFamilies(native_text_families(cp))
+            f.setPixelSize(13)
+            lbl.setFont(f)
+            lbl.setText(ch)
+            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48;")
             self._list.setIndexWidget(self._model.index(row, 0), container)
             self._badge_rows.add(row)
 
