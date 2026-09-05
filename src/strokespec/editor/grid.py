@@ -306,6 +306,12 @@ class GlyphGrid(QWidget):
         """The currently shown codepoints, in list order."""
         return self._model.codepoints()
 
+    def column_count(self) -> int:
+        """How many cells fit across the grid (used for up/down navigation)."""
+        cell = self._list.gridSize().width()
+        vw = self._list.viewport().width()
+        return max(1, (vw if vw else cell) // max(1, cell))
+
     def select_codepoint(self, cp: int) -> None:
         """Highlight + scroll to ``cp`` in the grid (if it is shown)."""
         cps = self._model.codepoints()

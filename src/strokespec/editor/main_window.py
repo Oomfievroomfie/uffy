@@ -762,8 +762,11 @@ class MainWindow(QMainWindow):
         # hotkeys (WASD nudge, F flip, B toggle, Ctrl+Z/C/V/H…) work immediately.
         self._editor.canvas.setFocus(Qt.FocusReason.MouseFocusReason)
 
-    def _on_nav(self, delta: int) -> None:
-        """Tab / Shift+Tab: move to the next / previous codepoint in the grid list."""
+    def _on_nav(self, direction: str) -> None:
+        """Tab / arrow keys: move in the codepoint list and auto-open the moved-to glyph.
+
+        'left'/'right' step one cell (wrapping); 'up'/'down' step a whole row (clamped).
+        """
         cps = self._grid.codepoints()
         if not cps:
             return
@@ -772,7 +775,12 @@ class MainWindow(QMainWindow):
             i = cps.index(cur)
         except ValueError:
             return
-        j = (i + delta) % len(cps)
+        step = {"left": -1, "right": 1, "up": -self._grid.column_count(),
+                "down": self._grid.column_count()}[direction]
+        if direction in ("left", "right"):
+            j = (i + step) % len(cps)
+        else:
+            j = min(max(0, i + step), len(cps) - 1)
         self._open_codepoint(cps[j])
         self._grid.select_codepoint(cps[j])
 

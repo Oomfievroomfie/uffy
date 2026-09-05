@@ -41,7 +41,7 @@ class GlyphCanvas(QWidget):
 
     glyphChanged = Signal()
     clearRequested = Signal()
-    navRequested = Signal(int)  # +1 = next codepoint, -1 = previous
+    navRequested = Signal(str)  # 'up'/'down'/'left'/'right' in the codepoint list
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -102,9 +102,11 @@ class GlyphCanvas(QWidget):
         # the keypress never reaches keyPressEvent and the input is "eaten".
         if ev.type() == QEvent.Type.KeyPress:
             k = ev.key()
-            if k == Qt.Key.Key_Tab or k == Qt.Key.Key_Backtab:
-                shift = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-                self.navRequested.emit(-1 if shift else 1)
+            if k == Qt.Key.Key_Tab:
+                self.navRequested.emit("right")
+                return True
+            if k == Qt.Key.Key_Backtab:
+                self.navRequested.emit("left")
                 return True
         return super().event(ev)
 
@@ -128,7 +130,15 @@ class GlyphCanvas(QWidget):
         if ctrl:
             super().keyPressEvent(event)
             return
-        if key == Qt.Key.Key_W:
+        if key == Qt.Key.Key_Left:
+            self.navRequested.emit("left")
+        elif key == Qt.Key.Key_Right:
+            self.navRequested.emit("right")
+        elif key == Qt.Key.Key_Up:
+            self.navRequested.emit("up")
+        elif key == Qt.Key.Key_Down:
+            self.navRequested.emit("down")
+        elif key == Qt.Key.Key_W:
             self.nudge(0, 1)
         elif key == Qt.Key.Key_S:
             self.nudge(0, -1)
