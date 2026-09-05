@@ -247,6 +247,11 @@ class GlyphGrid(QWidget):
         # track which rows currently have a native badge QLabel (only the visible ones)
         self._badge_rows: set = set()
         self._list.verticalScrollBar().valueChanged.connect(self._update_visible_badges)
+        # Per-block vertical-scroll memory, keyed by block name. Switching to another block and
+        # back restores this block's last scroll offset. ``_prev_block`` is the block the list is
+        # still showing (captured before the model reset discards the old content).
+        self._scroll_memory: dict = {}
+        self._prev_block: Optional[str] = None
 
         self._block_combo = QComboBox()
         self._block_combo.addItems(block_names())
@@ -341,13 +346,26 @@ class GlyphGrid(QWidget):
         # make the list forget which card is selected.
         selected = self._current_codepoint()
         start, end = block_range(self._block_combo.currentText())
+        # Save the block the list is *still showing* (self._prev_block) before the model reset
+        # below discards its scroll offset, so a later switch back can restore it.
+        if self._prev_block is not None:
+            self._scroll_memory[self._prev_block] = self._list.verticalScrollBar().value()
         cps = self._compute_candidate_list(start, end)
         self._model.set_codepoints(cps)
         self._count_label.setText(f"{len(cps)} glyphs")
         self._clear_badges()
         self._update_visible_badges()
+        current = self._block_combo.currentText()
         if selected is not None and selected in cps:
             self.select_codepoint(selected)
+        else:
+            # Restore this block's own remembered scroll offset (covers block switches where
+            # the previously selected card is not in the new block).
+            saved = self._scroll_memory.get(current)
+            if saved is not None:
+                self._list.verticalScrollBar().setValue(saved)
+            self._update_visible_badges()
+        self._prev_block = current
 
     def _clear_badges(self) -> None:
         for row in list(self._badge_rows):
