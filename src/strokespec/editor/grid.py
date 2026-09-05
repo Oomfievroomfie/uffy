@@ -450,7 +450,13 @@ class GlyphGrid(QWidget):
             except ValueError:
                 return False
         # character match
-        return (q and chr(cp).lower() == q) or f"u+{cp:04x}".startswith(q)
+        if q and chr(cp).lower() == q:
+            return True
+        if f"u+{cp:04x}".startswith(q):
+            return True
+        # character-name substring match, case-insensitive
+        name = unicodedata.name(chr(cp), "")
+        return bool(name) and q in name.lower()
 
 
 # --- block table bridge -------------------------------------------------------
