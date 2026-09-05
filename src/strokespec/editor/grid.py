@@ -267,8 +267,8 @@ class GlyphGrid(QWidget):
 
         self._show_all = QCheckBox("Show unassigned")
         self._show_all.setToolTip(
-            "Checked: show ONLY unassigned codepoints (no authored glyph and no reference "
-            "render). Unchecked: no filtering — show every codepoint in the block."
+            "Checked: show ONLY codepoints not yet authored in the stroke set (a reference "
+            "render does not count as assigned). Unchecked: no filtering — show every codepoint."
         )
 
         bar = QHBoxLayout()
@@ -362,8 +362,9 @@ class GlyphGrid(QWidget):
                     if not self._matches(cp, q):
                         continue
                 if unassigned_only:
-                    # checked: show ONLY codepoints with no authored glyph and no reference render
-                    if not (self.strokefont.has(cp) or self.reflib.has(cp)):
+                    # checked: show ONLY codepoints not authored in the stroke set (a reference
+                    # render does not count as assigned)
+                    if not self.strokefont.has(cp):
                         cps.append(cp)
                 else:
                     # unchecked: no filtering — show every codepoint in the block
