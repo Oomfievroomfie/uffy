@@ -32,55 +32,27 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 > and reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
 > (uharfbuzz)**, again without fontTools' TTF/OTF code.
 
-## How a stroke set becomes a font
-
-Strokes are the **source of truth**. Each glyph's strokes are expanded into filled outlines by
-our own stroke geometry (`geometry.py`): every stroke is swept by a pen of one grid-cell
-diameter into a closed contour, one contour per stroke, with **no boolean merge** — overlapping
-strokes stay as redundant subpaths and union visually under the non-zero winding rule. Arcs are
-a **single quadratic** per quarter (control point at the box bulge corner, so the endpoint
-tangents are axial and full-strength). The outlines are written to a UFO and compiled to a TTF
-by `gftools`/`fontmake`.
-
-> `.glyphs` is *not* used: the `glyphsLib` pipeline that `fontmake` uses has **no stroke
-> support** (no stroke attributes/classes on paths), so strokes would not survive it. The
-> strokes are expanded ourselves instead.
-
-My stroke geometry is used directly (it is **not** preview-only): the editor canvas, the grid
-previews and the compiled font all use the same expansion, so they can never disagree.
-
 ## The model
 
-* A glyph is defined on a **16×16 grid** of cells. Each grid index `g` (0..15) is the
-  **centre** of cell `g`, so points are **cell-centre aligned** — think "zoomed in on a
-  16×16 unifont glyph". The outermost vertices sit half a cell inside the em box, which
-  leaves visible padding around them in the editor.
-* A glyph is a set of **up to 32 strokes**.
-* The only data a stroke carries is **exactly two grid points plus a line-vs-single-quadratic
-  flag**:
-  * `line` — a straight segment between the two points;
-  * `arc` — a **single quadratic** per quarter, confined to the axis-aligned bounding box of
-    the two points. Its control point is the box corner the arc bows toward, so at each
-    endpoint the tangent is **axial and full-strength** (horizontal/vertical). It never bulges
-    past the chord. Its **bend direction is a pure function of the ordering of the two
-    points** — there is no bend flag. Swapping the two points bends the arc the other way.
-* Each stroke is "painted" with a pen of **one grid-cell diameter** that follows the
-  centreline and expands it into an outline. The pen/cap shape is a **tool-level choice**
-  (a round pen by default), not per-glyph data. The outline is filled with the **non-zero
-  winding rule** (like TrueType/OpenType; *not* even-odd), so overlapping strokes **union**
-  instead of punching holes.
-* The **baseline is globally configurable**, in grid cells above the bottom edge of the em
-  box (default 3.0). Descenders are drawn in the cells *below* the baseline and map to a
-  negative font y. **x-height** and **cap-height** are also configurable and are written
-  to the font's metrics. Set them via **Font → Metrics Options…** in the editor (or in the
-  stroke set's metadata).
-* A glyph may be flagged **combining** (e.g. a diacritic). Combining glyphs get **zero
-  advance** (typographically correct); note the fallback ships **no** GPOS mark
-  positioning, so fully correct mark attachment is out of scope (consistent with
-  "no shaping").
-* Defaults come from Unicode: a codepoint whose East Asian Width is **W/F** starts at
-  **16** cells, otherwise **8**; codepoints of general category **Mn/Mc/Me** start as
-  **combining**. You can still override either per glyph.
+* A glyph is defined on a **16×16 grid** of cells; points are **cell-centre aligned**.
+* A glyph holds **up to 32 strokes**. The only data a stroke carries is **two grid points plus
+  a line-vs-single-quadratic flag**:
+  * `line` — a straight segment between the two points.
+  * `arc` — a single quadratic per quarter, confined to the axis-aligned bounding box of the
+    two points. Its **bend direction is a pure function of the ordering of the two points** —
+    there is no bend flag; swapping the two points bends the arc the other way.
+* Each stroke is painted with a **one-grid-cell-diameter pen**, expanded into a closed outline,
+  filled with the **non-zero winding rule** so overlapping strokes **union**.
+* The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
+  the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
+  set's metadata.
+* A glyph may be flagged **combining** (zero advance). Combining glyphs get a zero advance;
+  the fallback ships no GPOS mark positioning, so full mark attachment is out of scope.
+* Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
+  general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
+
+The full design rationale (why arcs are a single quadratic, why no boolean merge, and so on) is
+in `DESIGN.md`.
 
 ## Design units
 
@@ -97,9 +69,6 @@ The grid is the em box. One grid cell = **64 font units**:
 | x-height (default)   | 10.0 cells above the em-box bottom (Unifont)            |
 | cap-height (default) | 12.0 cells above the em-box bottom (Unifont)            |
 
-The pen radius (32) is chosen so a minimum-size arc/semicircle stays well inside the box.
-Coordinates are rounded to integers when written to the font.
-
 ## Directory layout
 
 ```
@@ -115,34 +84,74 @@ src/strokespec/
     grid.py        interactive, FontForge-style glyph grid (clickable cells)
     glyph_canvas.py 16×16 stroke-authoring canvas (line/arc, drag endpoints, reverse to flip)
     main_window.py  main window (grid left, editor right, reference-font dock)
+    fontfallback.py  per-codepoint native-text font fallback for the editor previews
     uiutil.py       stroke -> QPainterPath painting + PIL -> QImage
+  data/fonts/      bundled fallback fonts (Noto scripts + GNU Unifont) + their licenses
   examples/sample.strokes.json
 ```
 
-## The GUI (the main deliverable)
+## The GUI
 
 `uffy-editor` opens a window with:
 
 * an **interactive glyph grid** on the left — a scrollable `QListView` of individually
   clickable cells, grouped by Unicode block, with a search box and a "show unassigned"
-  toggle. Each cell shows
-  * the authored stroke glyph, **or**
-  * a **reference-font preview** for codepoints with no stroke glyph yet, **or**
-  * an empty slot.
-  Clicking a cell opens that glyph in the editor.
-* a **glyph editor** on the right:
-  * a 16×16 grid canvas where you **click two points** to add a stroke; **drag an endpoint**
-    to move it; a **Line / Arc** tool toggle; an arc's bend is flipped by **reversing the
-    stroke's points**;
-  * a **stroke list** (select / delete / reverse to flip an arc), a **combining** checkbox
-    and a **width** selector (8 / 16);
-  * a faint **reference ghost** behind your strokes, scaled by the reference font's
-    cap-height and aligned to its baseline so it lines up with your grid's metric guides
-    (toggleable);
-  * **Font → Metrics Options…** to set the baseline, x-height and cap-height.
-* a **Reference Fonts** dock where you point the app at a folder of fonts to preview while
-  authoring;
+  toggle. Each cell shows the authored stroke glyph, or a **reference-font preview** for
+  codepoints with no stroke glyph yet, or an empty slot. Clicking a cell opens that glyph in
+  the editor. Each visible cell also carries a small **native-text character badge** (the
+  codepoint's character rendered with the fallback chain).
+* a **glyph editor** on the right (the 16×16 canvas + stroke list + tool row).
+* a **Reference Fonts** dock with a big **native reference** panel and a **related-glyphs**
+  list.
 * **File → Compile TTF…** to build the font with Google's tools.
+
+The full set of keyboard and mouse controls is below.
+
+## Controls
+
+### Glyph editor (canvas — needs keyboard focus)
+
+* **Click two grid points** to add a stroke; **drag an endpoint** to move it.
+* Tool toggle: **Line** / **Arc** (toolbar).
+* **Ctrl+Z** undo · **Ctrl+Shift+Z** redo
+* **Ctrl+C** copy all strokes · **Ctrl+V** paste (append) · **Ctrl+H** clear the glyph
+* **Ctrl+V** while **holding an arrow key** squishes the paste toward that side/corner:
+  one arrow = side (`Up`/`Down`/`Left`/`Right`), two arrows = corner (e.g. `Up`+`Left` =
+  top-left). Holding **Shift** gives 2/3 size, otherwise 1/2.
+* **Arrow keys** `Left`/`Right`/`Up`/`Down` — move to the neighbouring codepoint (and open it).
+* **W/A/S/D** — nudge the whole glyph up/left/down/right by one cell.
+* **PageUp / PageDown** — nudge the whole glyph up / down.
+* **F** — flip horizontally · **Flip vertically** (toolbar) · **Rotate 90°** (toolbar) —
+  rotate 90° clockwise (in 16×16 space).
+* **B** — toggle the selected stroke between line and arc.
+* **R** — reverse the selected stroke's points (flips an arc's bend).
+* **Delete** — delete the selected stroke.
+* **N** — toggle the glyph width between 8 and 16.
+* **M** — toggle the combining flag.
+* **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes.
+
+### Codepoint grid (left)
+
+* **Block** selector, **search** box (substring over the character's name, the character
+  itself and its hex form), **Show unassigned** toggle.
+* The count label under the list shows how many of the block's **allocated** codepoints are
+  actually covered, as a percentage.
+* Each block remembers its own scroll position when you switch blocks and come back.
+* Click a cell to open that glyph; the list only scrolls when *you* scroll it (opening/editing
+  a codepoint does not move the view).
+
+### Reference Fonts dock (right)
+
+* **Add folder** to load reference fonts; **Clear** to drop them.
+* **Native reference** panel — the current codepoint as a big character.
+* **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open** /
+  **squish arrows**. Clicking a squish arrow copies the related glyph into a fraction of the
+  current glyph's grid toward that edge; **Shift** gives 2/3 size instead of 1/2.
+
+### Menus
+
+* **File → Compile TTF…** (with progress).
+* **Font → Metrics Options…** — set baseline, x-height, cap-height.
 
 ## Quick start
 
