@@ -321,8 +321,14 @@ class GlyphGrid(QWidget):
         vw = self._list.viewport().width()
         return max(1, (vw if vw else cell) // max(1, cell))
 
-    def select_codepoint(self, cp: int) -> None:
-        """Highlight + scroll to ``cp`` in the grid (if it is shown)."""
+    def select_codepoint(self, cp: int, scroll: bool = True) -> None:
+        """Highlight ``cp`` in the grid (if it is shown).
+
+        ``scroll`` centres the item on screen — used for explicit navigation so the view follows
+        the cursor. Callers that must NOT move the view (e.g. restoring the selection after an
+        edit that fired a refresh) pass ``scroll=False`` so the list only moves when the user
+        actually scrolls it.
+        """
         cps = self._model.codepoints()
         try:
             row = cps.index(cp)
@@ -330,7 +336,8 @@ class GlyphGrid(QWidget):
             return
         idx = self._model.index(row, 0)
         self._list.setCurrentIndex(idx)
-        self._list.scrollTo(idx, QAbstractItemView.ScrollHint.PositionAtCenter)
+        if scroll:
+            self._list.scrollTo(idx, QAbstractItemView.ScrollHint.PositionAtCenter)
 
     def select_block(self, name: str) -> None:
         i = self._block_combo.findText(name)
@@ -371,7 +378,9 @@ class GlyphGrid(QWidget):
         QTimer.singleShot(0, self._update_visible_badges)
         current = self._block_combo.currentText()
         if selected is not None and selected in cps:
-            self.select_codepoint(selected)
+            # Restore the highlight WITHOUT re-centring: opening/editing a codepoint must not
+            # make the list jump (the user only wants it to move when they scroll it).
+            self.select_codepoint(selected, scroll=False)
         else:
             # Restore this block's own remembered scroll offset (covers block switches where
             # the previously selected card is not in the new block).
