@@ -355,7 +355,9 @@ class GlyphGrid(QWidget):
             self._scroll_memory[self._prev_block] = self._list.verticalScrollBar().value()
         cps = self._compute_candidate_list(start, end)
         self._model.set_codepoints(cps)
-        self._count_label.setText(f"{len(cps)} glyphs")
+        covered, allocated = self._block_coverage(start, end)
+        pct = (100.0 * covered / allocated) if allocated else 0.0
+        self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of allocated covered")
         self._clear_badges()
         self._update_visible_badges()
         # Badge creation needs the view to be laid out (indexAt must find real cells). It runs
@@ -444,6 +446,23 @@ class GlyphGrid(QWidget):
             lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48;")
             self._list.setIndexWidget(self._model.index(row, 0), container)
             self._badge_rows.add(row)
+
+    def _block_coverage(self, start: int, end: int) -> tuple:
+        """(covered, allocated) for the block's allocated codepoints.
+
+        ``allocated`` = Unicode-assigned codepoints in [start, end]; ``covered`` = the allocated
+        codepoints that actually have authored strokes in the stroke set.
+        """
+        allocated = covered = 0
+        for cp in range(start, end + 1):
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            if not unicodedata.name(chr(cp), ""):
+                continue
+            allocated += 1
+            if self.strokefont.has(cp):
+                covered += 1
+        return covered, allocated
 
     def _compute_candidate_list(self, start: int, end: int) -> List[int]:
         from PySide6.QtWidgets import QApplication
