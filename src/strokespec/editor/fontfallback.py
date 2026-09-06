@@ -32,6 +32,11 @@ WINDOWS_SCRIPT = [
     "Microsoft Yi Baiti", "Segoe UI Historic", "Ebrima", "Gadugi", "Nirmala UI",
 ]
 
+# Blocks that are always rendered by the standard system CJK fonts and must never get a
+# rare-script override. "CJK Compatibility" is an ENCODING label, not a rarity signal: its
+# codepoints are ordinary CJK characters the system covers.
+_NO_OVERRIDE_RANGES = [range(0x3300, 0x3400)]  # CJK Compatibility
+
 _family_cps: dict[str, set] | None = None
 _bundled_families: list[str] | None = None
 _primary_cps: set = set()
@@ -110,6 +115,9 @@ def native_text_families(cp: int) -> list[str]:
     cps = _load_family_cps()
     app = QApplication.instance()
     primary = app.font().family() if app is not None else "Segoe UI"
+    # Never override an always-system-covered block (e.g. CJK Compatibility).
+    if any(cp in rng for rng in _NO_OVERRIDE_RANGES):
+        return [primary]
     # Default chain renders it? -> no override.
     if cp in cps.get(primary, ()) or any(cp in cps.get(f, ()) for f in SYSTEM_FALLBACKS):
         return [primary]
