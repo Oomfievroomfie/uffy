@@ -116,6 +116,20 @@ def _icon_flip_v() -> QIcon:
     return _make_icon(20, d)
 
 
+def _icon_rotate() -> QIcon:
+    def d(p):
+        p.setPen(QPen(_ICON_HEX, 1.5))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        # a clockwise circular arrow (open arc) with an arrowhead suggesting 90-degree rotation
+        p.drawArc(QRectF(3.5, 3.5, 13, 13), 40 * 16, 250 * 16)
+        p.setBrush(_ICON_HEX)
+        # arrowhead at the end of the arc (top-left, pointing clockwise)
+        p.drawPolygon(QPolygonF([
+            QPointF(3.2, 6.2), QPointF(7.2, 3.4), QPointF(5.4, 8.4),
+        ]))
+    return _make_icon(20, d)
+
+
 # related-glyph cell roles (QStandardItemModel)
 REL_CP = Qt.ItemDataRole.UserRole
 REL_HAS = Qt.ItemDataRole.UserRole + 1
@@ -494,7 +508,7 @@ class GlyphEditorPanel(QWidget):
         opt_row.addStretch(1)
         col.addLayout(opt_row)
 
-        # single-row tool controls: copy / paste / flip + the 1-pixel nudge arrows (icons only)
+        # tool controls row: copy / paste / flip / rotate (icons only)
         nudge_row = QHBoxLayout()
         nudge_row.setSpacing(2)
         nudge_row.setContentsMargins(0, 0, 0, 0)
@@ -506,6 +520,9 @@ class GlyphEditorPanel(QWidget):
         b_flip.setToolTip("Flip horizontally (F)")
         b_flip_v = QToolButton(); b_flip_v.setIcon(_icon_flip_v()); b_flip_v.setFixedSize(22, 22)
         b_flip_v.setToolTip("Flip vertically")
+        b_rot = QToolButton(); b_rot.setIcon(_icon_rotate()); b_rot.setFixedSize(22, 22)
+        b_rot.setToolTip("Rotate 90\u00b0 clockwise")
+        # 1-pixel nudge arrows live on their own row so this row stays narrow.
         b_n = QToolButton(); b_n.setArrowType(Qt.ArrowType.UpArrow); b_n.setFixedSize(20, 20)
         b_n.setToolTip("Nudge whole glyph up (W)")
         b_s = QToolButton(); b_s.setArrowType(Qt.ArrowType.DownArrow); b_s.setFixedSize(20, 20)
@@ -514,13 +531,18 @@ class GlyphEditorPanel(QWidget):
         b_w.setToolTip("Nudge whole glyph left (A)")
         b_e = QToolButton(); b_e.setArrowType(Qt.ArrowType.RightArrow); b_e.setFixedSize(20, 20)
         b_e.setToolTip("Nudge whole glyph right (D)")
-        for w in (b_copy, b_paste, b_flip, b_flip_v):
-            nudge_row.addWidget(w)
-        nudge_row.addSpacing(6)
-        for w in (b_n, b_s, b_w, b_e):
+        for w in (b_copy, b_paste, b_flip, b_flip_v, b_rot):
             nudge_row.addWidget(w)
         nudge_row.addStretch(1)
         col.addLayout(nudge_row)
+        # nudge arrows on their own row
+        nudge_row2 = QHBoxLayout()
+        nudge_row2.setSpacing(2)
+        nudge_row2.setContentsMargins(0, 0, 0, 0)
+        for w in (b_n, b_s, b_w, b_e):
+            nudge_row2.addWidget(w)
+        nudge_row2.addStretch(1)
+        col.addLayout(nudge_row2)
 
         btn_delete = QPushButton("Delete selected")
         btn_delete.setToolTip("Delete the selected stroke (Delete)")
@@ -557,6 +579,7 @@ class GlyphEditorPanel(QWidget):
         b_paste.clicked.connect(self._focus_back(self.canvas.paste_strokes))
         b_flip.clicked.connect(self._focus_back(self.canvas.flip_horizontal))
         b_flip_v.clicked.connect(self._focus_back(self.canvas.flip_vertical))
+        b_rot.clicked.connect(self._focus_back(self.canvas.rotate_90_cw))
         b_n.clicked.connect(self._focus_back(lambda: self.canvas.nudge(0, 1)))
         b_s.clicked.connect(self._focus_back(lambda: self.canvas.nudge(0, -1)))
         b_w.clicked.connect(self._focus_back(lambda: self.canvas.nudge(-1, 0)))

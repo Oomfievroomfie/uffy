@@ -313,6 +313,25 @@ class GlyphCanvas(QWidget):
         self.update()
         self.glyphChanged.emit()
 
+    def rotate_90_cw(self) -> None:
+        """Rotate every stroke 90 degrees clockwise, in 16x16 space.
+
+        The rotation is carried out on the 16x16 lattice even when the glyph is 8x16 (a narrow
+        glyph becomes wide and lands somewhere in the 16x16 box; the user nudges it into place
+        afterwards). Rotation is orientation-preserving, so the point order is NOT swapped.
+        """
+        n = 16
+        strokes = self._glyph.strokes
+        if not strokes:
+            return
+        self._snapshot()
+        for i, s in enumerate(strokes):
+            p1 = Point(s.p1.y, n - 1 - s.p1.x)
+            p2 = Point(s.p2.y, n - 1 - s.p2.x)
+            strokes[i] = Stroke(p1, p2, s.shape)
+        self.update()
+        self.glyphChanged.emit()
+
     # --- geometry ------------------------------------------------------------
     def _cols(self) -> int:
         """The glyph's cell width (8 for half-width, 16 for full-width)."""
