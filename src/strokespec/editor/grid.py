@@ -17,6 +17,7 @@ from PIL import Image
 
 from PySide6.QtCore import (
     QAbstractListModel,
+    QEvent,
     QModelIndex,
     QRect,
     QRectF,
@@ -250,6 +251,9 @@ class GlyphGrid(QWidget):
         # track which rows currently have a native badge QLabel (only the visible ones)
         self._badge_rows: set = set()
         self._list.verticalScrollBar().valueChanged.connect(self._update_visible_badges)
+        # A window resize that grows the viewport reveals rows that were off-screen before;
+        # scroll's valueChanged does NOT fire for that, so run the lazy badge update on resize too.
+        self._list.viewport().installEventFilter(self)
         # Per-block vertical-scroll memory, keyed by block name. Switching to another block and
         # back restores this block's last scroll offset. ``_prev_block`` is the block the list is
         # still showing (captured before the model reset discards the old content).
@@ -381,6 +385,14 @@ class GlyphGrid(QWidget):
         for row in list(self._badge_rows):
             self._list.setIndexWidget(self._model.index(row, 0), None)
         self._badge_rows.clear()
+
+    def eventFilter(self, obj, event) -> bool:
+        # Recreate badges lazily when the viewport is resized (e.g. window grown), so rows that
+        # were off-screen and now visible get their native-text badge. Deferred so the new layout
+        # is in place before indexAt is queried.
+        if obj is self._list.viewport() and event.type() == QEvent.Type.Resize:
+            QTimer.singleShot(0, self._update_visible_badges)
+        return super().eventFilter(obj, event)
 
     def _update_visible_badges(self) -> None:
         """Give every *visible* cell a native text label (QLabel) for the character badge.
