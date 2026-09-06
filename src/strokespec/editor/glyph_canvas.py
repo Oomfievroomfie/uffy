@@ -148,6 +148,10 @@ class GlyphCanvas(QWidget):
             self.nudge(-1, 0)
         elif key == Qt.Key.Key_D:
             self.nudge(1, 0)
+        elif key == Qt.Key.Key_PageUp:
+            self.nudge(0, 1)
+        elif key == Qt.Key.Key_PageDown:
+            self.nudge(0, -1)
         elif key == Qt.Key.Key_F:
             self.flip_horizontal()
         elif key == Qt.Key.Key_B:
