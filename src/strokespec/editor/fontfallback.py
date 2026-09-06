@@ -2,14 +2,15 @@
 
 The big "native reference" panel and the small per-cell character badge render a codepoint as
 text. Qt's default glyph fallback (qwindowsfontdatabasebase.cpp) is a hardcoded CJK-centric try
-font list that covers ~90% of scripts; our intentional/bundled fonts must run AFTER that system
-chain (so they never steal, e.g., Japanese from MS UI Gothic) and Unifont must be the absolute
-last resort.
+font list that covers ~90% of scripts; our intentional/bundled fonts must run after that system
+chain and Unifont must be the absolute last resort.
 
 There is no Qt API to append glyph fallbacks after the platform chain (application fallbacks are
-always prepended), so we build the family list ourselves, ON A PER-BLOCK BASIS: for a codepoint
-in block X we attach only the fallback fonts that actually cover X's rare scripts -- not every
-bundled font.
+always prepended), so we build the family list ourselves, and it must always include the actual
+font(s) that support the codepoint's script. If a script's proper font is *omitted* (e.g. an
+Ethiopic stack without Ebrima or Nyala), Qt renders it through a font that doesn't really support
+it, and its measuring-vs-layout font-stack mismatch makes that visible as a clipped/broken glyph.
+So the rule is simple: attach every rare-script fallback font whose cmap covers the codepoint.
 """
 from __future__ import annotations
 
@@ -19,27 +20,20 @@ from pathlib import Path
 
 from fontTools.ttLib import TTFont
 from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QFontMetrics
 
 _FONTS_DIR = Path(__file__).resolve().parent.parent / "data" / "fonts"
 
-# First-party Windows script fonts (not in the system try list) covering specific scripts.
+# First-party Windows script fonts (not in Qt's system try list) covering specific scripts that
+# Segoe UI does not render properly. Ebrima/Nyala cover Ethiopic (and other African scripts),
+# Historic covers the ancient scripts, Gadugi the Canadian/Cherokee syllabics, Nirmala the Indic
+# scripts, Yi Baiti Yi. A script's stack MUST include its supporting font from here.
 WINDOWS_SCRIPT = [
-    "Microsoft Yi Baiti", "Segoe UI Historic", "Ebrima", "Gadugi", "Nirmala UI",
+    "Microsoft Yi Baiti", "Segoe UI Historic", "Ebrima", "Nyala", "Gadugi", "Nirmala UI",
 ]
 
 _family_cps: dict[str, set] | None = None
 _bundled_families: list[str] | None = None
-_metrics_cache: QFontMetrics | None = None
-
-
-def _sys_metrics() -> QFontMetrics | None:
-    """QFontMetrics for the default application font (cached; stable after app startup)."""
-    global _metrics_cache
-    if _metrics_cache is None:
-        app = QApplication.instance()
-        _metrics_cache = QFontMetrics(app.font()) if app is not None else None
-    return _metrics_cache
+_primary_cps: set = set()
 
 
 def _family_name(tt: TTFont) -> str | None:
@@ -56,8 +50,8 @@ def _cps(font: TTFont) -> set:
 
 
 def _load_family_cps() -> dict[str, set]:
-    """family -> set(codepoints) for the rare-script fallback candidates (bundled + Windows script)."""
-    global _family_cps, _bundled_families
+    """family -> set(codepoints) for the fallback candidates (bundled + Windows script fonts)."""
+    global _family_cps, _bundled_families, _primary_cps
     if _family_cps is not None:
         return _family_cps
     cps: dict[str, set] = {}
@@ -76,7 +70,9 @@ def _load_family_cps() -> dict[str, set]:
             tt.close()
         except Exception:
             continue
-    # First-party Windows script fonts (system + per-user dirs).
+    # First-party Windows script fonts + the primary (Segoe UI) font's own cmap, from disk.
+    app = QApplication.instance()
+    primary = app.font().family() if app is not None else "Segoe UI"
     for d in (r"C:\Windows\Fonts",
               os.path.join(os.environ.get("LOCALAPPDATA", ""), "Microsoft", "Windows", "Fonts")):
         if not os.path.isdir(d):
@@ -89,6 +85,8 @@ def _load_family_cps() -> dict[str, set]:
                 fam = _family_name(tt)
                 if fam in WINDOWS_SCRIPT:
                     cps.setdefault(fam, set()).update(_cps(tt))
+                if fam == primary:
+                    _primary_cps |= _cps(tt)
                 tt.close()
             except Exception:
                 continue
@@ -98,25 +96,29 @@ def _load_family_cps() -> dict[str, set]:
 
 
 def native_text_families(cp: int) -> list[str]:
-    """Native-text family list for a codepoint — NO override unless the system can't render it.
+    """Native-text family list for a codepoint.
 
-    "system-covered" is decided by Qt itself: inFontUcs4 on the default application font
-    reflects Qt's real platform fallback chain (Segoe UI + the try fonts + Segoe UI Symbol/Emoji,
-    including e.g. Arial Unicode MS), so a codepoint is system-covered iff the default chain
-    actually renders it. Only when it doesn't do we attach the minimal rare-script font(s) that
-    cover the codepoint, with Unifont as the absolute last resort.
+    Always includes every rare-script fallback font (Windows script font or bundled Noto) whose
+    cmap covers ``cp``, so a script is never rendered through a font that doesn't support it — Qt
+    draws such a codepoint via the wrong stack and clips it. When no rare-script font is needed
+    (Latin, CJK, … — handled by Qt's own platform chain) we return just the primary family.
     """
+    cps = _load_family_cps()
     app = QApplication.instance()
     primary = app.font().family() if app is not None else "Segoe UI"
-    metrics = _sys_metrics()
-    if metrics is not None and metrics.inFontUcs4(cp):
+    # The primary font (Segoe UI) genuinely covers it -> its own stack handles it; no rare font.
+    if cp in _primary_cps:
         return [primary]
-    # Truly not rendered by the system chain: attach only the rare-script fonts that cover it.
-    cps = _load_family_cps()
+    # Attach every rare-script fallback font whose cmap covers this codepoint so the script is
+    # rendered through a font that truly supports it (e.g. Ebrima/Nyala for Ethiopic, Historic
+    # for ancient scripts, a bundled Noto for a rare block). If none is needed, fall through to
+    # Qt's own platform chain.
     relevant: list[str] = []
     for fam in WINDOWS_SCRIPT + (_bundled_families or []):
         if fam in ("Unifont", "Unifont Upper"):
             continue
         if cp in cps.get(fam, ()):
             relevant.append(fam)
+    if not relevant:
+        return [primary]
     return [primary] + relevant + ["Unifont", "Unifont Upper"]
