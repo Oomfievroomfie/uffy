@@ -28,6 +28,7 @@ from ..model import (
     Glyph,
     Point,
     Stroke,
+    squish_strokes,
 )
 from .uiutil import ops_to_painterpath
 
@@ -55,6 +56,8 @@ class GlyphCanvas(QWidget):
         self._hover: Point | None = None
         self._selected_index: int = -1
         self._oob_count: int = 0
+        # currently-held arrow keys (for paste-into-side/corner squish via Ctrl+arrow+V)
+        self._held_arrows: set = set()
         self._clip: list = []
         self._undo: list = []   # list of prior stroke-list snapshots (list[Stroke])
         self._redo: list = []   # list of undone stroke-list snapshots
@@ -117,6 +120,9 @@ class GlyphCanvas(QWidget):
         mod = event.modifiers()
         ctrl = bool(mod & Qt.KeyboardModifier.ControlModifier)
         shift = bool(mod & Qt.KeyboardModifier.ShiftModifier)
+        # remember which arrow keys are held, so Ctrl+V can squish into a side/corner
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right):
+            self._held_arrows.add(key)
         if ctrl and key == Qt.Key.Key_Z:
             self.redo() if shift else self.undo()
             return
@@ -124,7 +130,7 @@ class GlyphCanvas(QWidget):
             self.copy_strokes()
             return
         if ctrl and key == Qt.Key.Key_V:
-            self.paste_strokes()
+            self._paste_with_squish(shift)
             return
         if ctrl and key == Qt.Key.Key_H:
             self.clearRequested.emit()
@@ -262,6 +268,43 @@ class GlyphCanvas(QWidget):
                     [Stroke(s.p1, s.p2, s.shape) for s in self._clip[:room]])
                 self.update()
                 self.glyphChanged.emit()
+
+    def _paste_with_squish(self, shift: bool) -> None:
+        """Ctrl+V. If arrow keys are held, squish the paste toward that side/corner
+        (Shift -> 2/3 size, otherwise 1/2); otherwise it's a plain append paste."""
+        if not self._clip:
+            return
+        direction = self._squish_direction(self._held_arrows)
+        if not direction:
+            self.paste_strokes()
+            return
+        room = 32 - len(self._glyph.strokes)
+        if room <= 0:
+            return
+        fraction = 2.0 / 3.0 if shift else 0.5
+        self._snapshot()
+        self._glyph.strokes.extend(
+            squish_strokes(self._clip[:room], direction, self._cols(), fraction))
+        self.update()
+        self.glyphChanged.emit()
+
+    def _squish_direction(self, held: set) -> str:
+        """'up'/'down'/'left'/'right' (one arrow), a corner like 'upleft' (two arrows), or ''."""
+        v = "up" if Qt.Key.Key_Up in held else ("down" if Qt.Key.Key_Down in held else "")
+        h = "left" if Qt.Key.Key_Left in held else ("right" if Qt.Key.Key_Right in held else "")
+        if v and h:
+            return v + h
+        return v or h
+
+    def keyReleaseEvent(self, event) -> None:
+        key = event.key()
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down, Qt.Key.Key_Left, Qt.Key.Key_Right):
+            self._held_arrows.discard(key)
+        super().keyReleaseEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        self._held_arrows.clear()
+        super().focusOutEvent(event)
 
     def append_strokes(self, strokes) -> None:
         """Append a list of strokes to the current glyph (up to the 32-stroke cap)."""

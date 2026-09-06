@@ -221,34 +221,37 @@ def squish_strokes(
 
     A linear (affine) transform maps the source grid space into a block of ``fraction`` of the
     glyph's ``width`` x ``GRID_H`` cell space, aligned as far as possible toward the given edge
-    — "up"/"down" squeeze into the top/bottom fraction of the vertical range, "left"/"right"
-    into the left/right fraction of the horizontal range. ``fraction`` is 1/2 normally, or 2/3
-    with Shift held. Coordinates are rounded to integers. This acts on the strokes being *added*
-    only (existing strokes of the target glyph are untouched).
+    (or corner): ``"up"/"down"/"left"/"right"`` squeeze toward the single edge; a diagonal like
+    ``"up-left"`` squeezes toward that corner along BOTH axes. ``fraction`` is 1/2 normally, or
+    2/3 with Shift held. Coordinates are rounded to integers. This acts on the strokes being
+    *added* only (existing strokes of the target glyph are untouched).
     """
     W, H = width, GRID_H
     xmax = max(1, W - 1)
     ymax = max(1, H - 1)
     f = fraction
 
-    if direction == "left":
-        x0, x1, axis = 0, max(0, round(W * f) - 1), "x"
-    elif direction == "right":
-        x0, x1, axis = min(max(0, W - 1), round(W * (1.0 - f))), W - 1, "x"
-    elif direction == "up":
-        x0, x1, axis = min(max(0, H - 1), round(H * (1.0 - f))), H - 1, "y"
-    else:  # direction == "down"
-        x0, x1, axis = 0, max(0, round(H * f) - 1), "y"
+    # Horizontal squeeze (None -> leave x untouched).
+    if "left" in direction:
+        x0, x1 = 0, max(0, round(W * f) - 1)
+    elif "right" in direction:
+        x0, x1 = min(max(0, W - 1), round(W * (1.0 - f))), W - 1
+    else:
+        x0 = x1 = None
+    # Vertical squeeze (None -> leave y untouched).
+    if "down" in direction:
+        y0, y1 = 0, max(0, round(H * f) - 1)
+    elif "up" in direction:
+        y0, y1 = min(max(0, H - 1), round(H * (1.0 - f))), H - 1
+    else:
+        y0 = y1 = None
 
     def map_v(v, rmax, t0, t1):
         return round(t0 + v * (t1 - t0) / rmax)
 
     def map_pt(p: Point) -> Point:
-        gx, gy = p.x, p.y
-        if axis == "x":
-            gx = _clamp_grid(map_v(gx, xmax, x0, x1))
-        else:
-            gy = _clamp_grid(map_v(gy, ymax, x0, x1))
+        gx = _clamp_grid(map_v(p.x, xmax, x0, x1)) if x0 is not None else p.x
+        gy = _clamp_grid(map_v(p.y, ymax, y0, y1)) if y0 is not None else p.y
         return Point(gx, gy)
 
     return [Stroke(map_pt(s.p1), map_pt(s.p2), s.shape) for s in strokes]
