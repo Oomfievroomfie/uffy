@@ -2311,6 +2311,7 @@ dependencies = [
     { name = "pyside6" },
     { name = "ufo2ft" },
     { name = "uharfbuzz" },
+    { name = "unicodedata2" },
 ]
 
 [package.optional-dependencies]
@@ -2335,6 +2336,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "ufo2ft", specifier = ">=2.30" },
     { name = "uharfbuzz", specifier = ">=0.40" },
+    { name = "unicodedata2" },
 ]
 provides-extras = ["validate", "dev"]
 
