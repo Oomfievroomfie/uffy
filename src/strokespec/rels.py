@@ -12,7 +12,7 @@ Two relations are provided:
 from __future__ import annotations
 
 import os
-import unicodedata
+import unicodedata2 as unicodedata
 from typing import Dict, List, Optional, Tuple
 
 # IDS data is parsed once and cached in-process (88k lines -> a codepoint->components map).

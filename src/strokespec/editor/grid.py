@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-import unicodedata
+import unicodedata2 as unicodedata
 
 from PIL import Image
 

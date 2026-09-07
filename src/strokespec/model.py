@@ -41,7 +41,7 @@ _SUPPORTED_SHAPES = frozenset({SHAPE_LINE, SHAPE_ARC})
 
 def unicode_fullwidth(codepoint: int) -> bool:
     """True if the codepoint is full-width per Unicode East Asian Width (W or F)."""
-    import unicodedata
+    import unicodedata2 as unicodedata
     try:
         return unicodedata.east_asian_width(chr(codepoint)) in ("W", "F")
     except Exception:
@@ -50,7 +50,7 @@ def unicode_fullwidth(codepoint: int) -> bool:
 
 def unicode_combining(codepoint: int) -> bool:
     """True if the codepoint is a combining mark (general category Mn/Mc/Me)."""
-    import unicodedata
+    import unicodedata2 as unicodedata
     try:
         return unicodedata.category(chr(codepoint)) in ("Mn", "Mc", "Me")
     except Exception:

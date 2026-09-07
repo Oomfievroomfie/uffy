@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import unicodedata
+import unicodedata2 as unicodedata
 from typing import Optional
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QThread, Signal
