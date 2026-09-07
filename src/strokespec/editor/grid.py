@@ -416,24 +416,23 @@ class GlyphGrid(QWidget):
         if not vp.rect().isValid():
             return
         first = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().top() + 2))
-        last = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().bottom() - 2))
         if not first.isValid():
             return
-        if not last.isValid():
-            # The bottom of the viewport is empty space (a short block, e.g. Ogham's 32 items,
-            # leaves a gap below the last row, so indexAt at the bottom returns nothing). Find the
-            # actual last visible row by walking down until an item's rect leaves the viewport.
-            # This only runs when the bottom corner is empty — long blocks have a valid `last`,
-            # so the lazy per-visible-row attachment is unchanged and there is no perf regression.
-            vp_h = vp.rect().height()
-            last = first
-            for r in range(first.row(), self._model.rowCount()):
-                idx = self._model.index(r, 0)
-                vr = self._list.visualRect(idx)
-                if not vr.isEmpty() and vr.top() < vp_h:
-                    last = idx
-                else:
-                    break
+        # Find the true last visible row by walking down until an item's rect leaves the viewport.
+        # Using indexAt(bottom-left) here only returns the FIRST card of the bottom visual row,
+        # so the rest of that row (which wraps to the right, at higher row indices) would be left
+        # without a badge. Walking captures every card actually on screen — including the whole
+        # last row. It is bounded by the viewport content (stops at the first off-screen row), so
+        # the lazy per-visible-row attachment stays cheap even for huge blocks.
+        vp_h = vp.rect().height()
+        last = first
+        for r in range(first.row(), self._model.rowCount()):
+            idx = self._model.index(r, 0)
+            vr = self._list.visualRect(idx)
+            if not vr.isEmpty() and vr.top() < vp_h:
+                last = idx
+            else:
+                break
         lo, hi = min(first.row(), last.row()), max(first.row(), last.row())
         # drop widgets for rows that scrolled out of view
         for row in list(self._badge_rows):
