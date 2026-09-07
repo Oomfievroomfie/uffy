@@ -25,6 +25,22 @@ These are the things that repeatedly cost time when forgotten.
 - Aborted uv builds leave stale `.tmp*` dirs in `.uv-cache/builds-v0`; `Remove-Item` cannot
   delete them under the sandbox. They are gitignored, harmless residue — leave them alone.
 
+- **Never use pip / `uv pip install`.** The project environment is managed by `uv` — adding a
+  dependency goes in `pyproject.toml` and is installed by `uv sync`/`uv add`.
+
+- **`uv run` / `uv sync` / `uv add` that re-install the `strokespec` project fail here:**
+  uv reinstalls the project package, which rewrites the entry-point console script
+  `.venv\Scripts\uffy-editor.exe`, and the workspace-write sandbox denies that write
+  ("failed to remove file … uffy-editor.exe: Access is denied (os error 5)" / `[sandbox: file
+  access denied under workspace-write mode]`). This is a **sandbox write denial, NOT a locked
+  process** — do NOT go hunting for or killing processes on the user's machine. Proceed:
+
+  - To run code that avoids the rebuild: `uv run --no-sync python …` (skips reinstalling the
+    project, so it never touches the console script).
+  - To add a dependency: edit `pyproject.toml` directly (a plain workspace write), then let
+    `uv sync` install it when the sandbox permits the console-script write; otherwise test with
+    `uv run --no-sync` (works as long as the package is already present in the venv).
+
 ## Shell / git
 
 - Use the Git-for-Windows binary explicitly — msys64 git fails:
