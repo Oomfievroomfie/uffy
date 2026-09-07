@@ -5,9 +5,14 @@ These are the things that repeatedly cost time when forgotten.
 
 ## Python / uv (the only toolchain)
 
-- Use **uv only** for the Python environment. Every `uv run` / `uv sync` must set both
-  cache dirs to a location INSIDE the workspace (the default `%LOCALAPPDATA%` cache is
-  sandbox-denied with a cache-initialize permission error):
+- **uv is the ONLY Python/dependency toolchain — mandatory.** All other Python project tooling
+  and dependency tooling is forbidden (**no pip, no `uv pip install`, no poetry/conda**, etc.).
+  Adding a dependency goes in `pyproject.toml`; it is installed by `uv sync`/`uv add`.
+
+- **uv must be given a LOCAL workspace directory, because we're inside a sandbox.** Set the
+  cache dirs to paths INSIDE the **current project folder** (`$PWD`); the default
+  `%LOCALAPPDATA%` cache is sandbox-denied with a cache-initialize permission error. The venv is
+  also project-local (`$PWD\.venv`).
 
   ```pwsh
   $env:UV_CACHE_DIR="$PWD\.uv-cache"; $env:UV_PYTHON_INSTALL_DIR="$PWD\.uv-python"; uv ... 
@@ -24,9 +29,6 @@ These are the things that repeatedly cost time when forgotten.
 
 - Aborted uv builds leave stale `.tmp*` dirs in `.uv-cache/builds-v0`; `Remove-Item` cannot
   delete them under the sandbox. They are gitignored, harmless residue — leave them alone.
-
-- **Never use pip / `uv pip install`.** The project environment is managed by `uv` — adding a
-  dependency goes in `pyproject.toml` and is installed by `uv sync`/`uv add`.
 
 - **`uv run` / `uv sync` / `uv add` that re-install the `strokespec` project fail here:**
   uv reinstalls the project package, which rewrites the entry-point console script
