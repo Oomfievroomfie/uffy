@@ -131,6 +131,12 @@ def build_ufo(
     font.lib["com.strokespec.type"] = "stroke-fallback"
     font.lib["com.strokespec.penRadius"] = str(PEN_RADIUS)
     font.lib["com.strokespec.cap"] = cap
+    # Drop per-glyph PostScript names from the compiled font. The 'post' table is otherwise
+    # written in format 2.0 with a glyph name for every glyph (one per cmap entry), which grows
+    # enormously for a large fallback font (it was ~1/10th of the compiled file). Format 3.0
+    # keeps a valid but near-empty post table; name/post are still present, just minimal. The
+    # glyphs stay addressable via the cmap, which is all a fallback font needs.
+    font.lib["com.github.googlei18n.ufo2ft.keepGlyphNames"] = False
 
     # .notdef always first.
     nd_cmds = _notdef_ops(UPEM, cap, pen_radius, descent, ascent)
