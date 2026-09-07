@@ -27,6 +27,19 @@ def glyph_name(codepoint: int) -> str:
     return "u%X" % codepoint
 
 
+def _outline_key(contours) -> tuple:
+    """A hashable identity for an outline (list of contour op lists).
+
+    Ops are tuples of hashable primitives (``('M', (x, y))`` etc.), so the whole sequence is
+    hashable — glyphs with identical outlines share a key and can be merged.
+    """
+    parts = []
+    for contour in contours:
+        parts.extend(op for op in contour)
+        parts.append(("@contour",))
+    return tuple(parts)
+
+
 def op_to_pen(ops: List[Op], pen) -> None:
     """Feed a list of M/L/Q/C/Z ops into a segment pen (supports quadratic+curves)."""
     for op in ops:
@@ -150,18 +163,29 @@ def build_ufo(
     order: List[str] = [".notdef"]
     cps = strokefont.codepoints()
     total = len(cps)
+    # Merge glyphs with identical outlines (same contour ops AND same advance width) into a
+    # single glyph that all those codepoints map to, so the compiled font doesn't store a
+    # duplicate outline for each duplicated codepoint. Group key = (outline ops, advance units).
+    groups: "dict[Any, List[int]]" = {}
     for i, cp in enumerate(cps):
         if progress is not None:
             progress(i, total)
         glyph = strokefont.get(cp)
         if glyph is None:
             continue
-        name = glyph_name(cp)
+        key = (_outline_key(glyph_outline_from_strokes(glyph, pen_radius, baseline)),
+               glyph.advance_units)
+        groups.setdefault(key, []).append(cp)
+
+    for key, group in groups.items():
+        rep_cp = group[0]
+        rep_glyph = strokefont.get(rep_cp)
+        name = glyph_name(rep_cp)
         ufo_glyph = font.newGlyph(name)
-        ufo_glyph.unicode = cp
-        ufo_glyph.width = glyph.advance_units
+        ufo_glyph.unicodes = group          # map every codepoint in the group to this glyph
+        ufo_glyph.width = rep_glyph.advance_units
         pen = ufo_glyph.getPen()
-        contours = glyph_outline_from_strokes(glyph, pen_radius, baseline)
+        contours = glyph_outline_from_strokes(rep_glyph, pen_radius, baseline)
         for contour in contours:
             op_to_pen(contour, pen)
         order.append(name)
