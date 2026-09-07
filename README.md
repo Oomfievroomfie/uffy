@@ -32,6 +32,8 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 > and reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
 > (uharfbuzz)**, again without fontTools' TTF/OTF code.
 
+<img width="1920" height="1027" alt="image" src="https://github.com/user-attachments/assets/99d5c838-1df9-4d75-a5c5-26719e4f45ed" />
+
 ## The model
 
 * A glyph is defined on a **16×16 grid** of cells; points are **cell-centre aligned**.
