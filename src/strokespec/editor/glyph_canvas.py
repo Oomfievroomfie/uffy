@@ -322,9 +322,10 @@ class GlyphCanvas(QWidget):
     def flip_horizontal(self) -> None:
         """Mirror every stroke left-right across the glyph's cell centre.
 
-        The point order is also swapped: the mirror flips the handedness of the geometry, and
-        an arc's bulge comes from the point ordering, so without the swap arcs would re-bow in
-        the *opposite* direction. (Swapping a line's endpoints is harmless.)
+        Only an arc's point order is swapped: the mirror flips the handedness of the geometry,
+        and an arc's bulge comes from the point ordering, so without the swap arcs would re-bow
+        in the *opposite* direction. A straight line has no bend, so its points are mirrored but
+        NOT reversed.
         """
         m = self._cols() - 1
         strokes = self._glyph.strokes
@@ -334,15 +335,15 @@ class GlyphCanvas(QWidget):
         for i, s in enumerate(strokes):
             p1 = Point(m - s.p1.x, s.p1.y)
             p2 = Point(m - s.p2.x, s.p2.y)
-            strokes[i] = Stroke(p2, p1, s.shape)
+            strokes[i] = Stroke(p2, p1, s.shape) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape)
         self.update()
         self.glyphChanged.emit()
 
     def flip_vertical(self) -> None:
         """Mirror every stroke top-bottom across the glyph's cell centre.
 
-        Same handedness caveat as :meth:`flip_horizontal`: the point order is swapped too,
-        so arcs keep bending the right way.
+        Same handedness caveat as :meth:`flip_horizontal`: only an arc's points are swapped so
+        it keeps bending the right way; a straight line's points are mirrored but not reversed.
         """
         m = GRID_H - 1
         strokes = self._glyph.strokes
@@ -352,7 +353,7 @@ class GlyphCanvas(QWidget):
         for i, s in enumerate(strokes):
             p1 = Point(s.p1.x, m - s.p1.y)
             p2 = Point(s.p2.x, m - s.p2.y)
-            strokes[i] = Stroke(p2, p1, s.shape)
+            strokes[i] = Stroke(p2, p1, s.shape) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape)
         self.update()
         self.glyphChanged.emit()
 
