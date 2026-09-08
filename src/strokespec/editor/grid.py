@@ -30,9 +30,16 @@ from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
     QListView,
     QStyledItemDelegate,
     QStyle,
+    QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -221,21 +228,26 @@ class GlyphGridDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-class GlyphGrid(QWidget):
-    """The grid container: a block selector + search + the clickable cell list."""
+class BlockPane(QWidget):
+    """One independent grid view: a block selector + its own clickable cell list.
+
+    A pane owns its own block combo, model, list, badges and per-block scroll memory, so two
+    panes can show two different blocks at the same time. A shared search box and 'Show
+    unassigned' checkbox (owned by the parent GlyphGrid) filter every pane; clicking a cell emits
+    ``glyphChosen`` so the single editor opens that codepoint.
+    """
 
     glyphChosen = Signal(int)  # emits the codepoint
 
-    def __init__(self, strokefont: StrokeFont, reflib: ReferenceLibrary, parent=None) -> None:
+    def __init__(self, strokefont: StrokeFont, reflib: ReferenceLibrary,
+                 search: QLineEdit, show_all: QCheckBox, parent=None) -> None:
         super().__init__(parent)
-        from PySide6.QtWidgets import (
-            QVBoxLayout, QComboBox, QLineEdit, QCheckBox, QHBoxLayout, QLabel, QToolButton,
-        )
-
         self.strokefont = strokefont
         self.reflib = reflib
-        self._model = GlyphGridModel(strokefont, reflib, self)
+        self._search = search
+        self._show_all = show_all
 
+        self._model = GlyphGridModel(strokefont, reflib, self)
         self._list = QListView(self)
         self._list.setModel(self._model)
         self._list.setItemDelegate(GlyphGridDelegate(self._model, self._list))
@@ -250,103 +262,51 @@ class GlyphGrid(QWidget):
         self._list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._list.setGridSize(QSize(CELL_W, CELL_H))
         self._list.setIconSize(QSize(PIX_W, PIX_H))
-        # track which rows currently have a native badge QLabel (only the visible ones)
         self._badge_rows: set = set()
         self._list.verticalScrollBar().valueChanged.connect(self._update_visible_badges)
-        # A window resize that grows the viewport reveals rows that were off-screen before;
-        # scroll's valueChanged does NOT fire for that, so run the lazy badge update on resize too.
         self._list.viewport().installEventFilter(self)
-        # Per-block vertical-scroll memory, keyed by block name. Switching to another block and
-        # back restores this block's last scroll offset. ``_prev_block`` is the block the list is
-        # still showing (captured before the model reset discards the old content).
         self._scroll_memory: dict = {}
         self._prev_block: Optional[str] = None
 
         self._block_combo = QComboBox()
         self._block_combo.addItems(block_names())
 
-        # Optional second block: a checkable toggle reveals a second combo. When a second block
-        # is selected the grid shows both blocks concatenated (still one flat list, one panel).
-        self._block2_combo = QComboBox()
-        self._block2_combo.addItem("— none —")
-        self._block2_combo.addItems(block_names())
-        self._block2_combo.setCurrentIndex(0)
-        self._block2_combo.hide()
-        self._second_block_btn = QToolButton()
-        self._second_block_btn.setText("2nd")
-        self._second_block_btn.setCheckable(True)
-        self._second_block_btn.setToolTip("Show a second block alongside the first")
-        self._second_block_btn.toggled.connect(self._toggle_second_block)
-
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("Find codepoint (hex or char)…")
-        self._search.setClearButtonEnabled(True)
-
-        self._show_all = QCheckBox("Show unassigned")
-        self._show_all.setToolTip(
-            "Checked: show ONLY codepoints not yet authored in the stroke set (a reference "
-            "render does not count as assigned). Unchecked: no filtering — show every codepoint."
-        )
-
-        bar = QHBoxLayout()
-        bar.addWidget(QLabel("Block:"))
-        bar.addWidget(self._block_combo, 1)
-        bar.addWidget(self._second_block_btn)
-        bar.addWidget(self._block2_combo, 1)
-        bar.addWidget(self._search, 2)
-        bar.addWidget(self._show_all)
-
         self._count_label = QLabel("0 glyphs")
+        header = QHBoxLayout()
+        header.addWidget(QLabel("Block:"))
+        header.addWidget(self._block_combo, 1)
+        header.addWidget(self._count_label)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(6, 6, 6, 6)
-        lay.addLayout(bar)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addLayout(header)
         lay.addWidget(self._list, 1)
-        lay.addWidget(self._count_label)
 
-        self._block_combo.currentIndexChanged.connect(self._refresh)
-        self._block2_combo.currentIndexChanged.connect(self._refresh)
-        self._search.textChanged.connect(self._refresh)
-        self._show_all.toggled.connect(self._refresh)
+        self._block_combo.currentIndexChanged.connect(self.refresh)
         self._list.clicked.connect(self._on_clicked)
         self._list.doubleClicked.connect(self._on_clicked)
+        self.refresh()
 
-        self._compute_and_refresh()
-
+    # --- public API used by the parent GlyphGrid ------------------------------
     def refresh(self) -> None:
         self._model.invalidate_previews()
-        self._refresh()
+        self._recompute()
 
     def invalidate_previews(self) -> None:
-        """Repaint only (do not recompute which codepoints are shown)."""
         self._model.invalidate_previews()
 
     def invalidate_preview(self, cp: int) -> None:
-        """Repaint only the single cell for ``cp``."""
         self._model.invalidate_preview(cp)
 
-    def _on_clicked(self, index) -> None:
-        cp = self._model.codepoint_at(index.row())
-        self.glyphChosen.emit(cp)
-
     def codepoints(self) -> List[int]:
-        """The currently shown codepoints, in list order."""
         return self._model.codepoints()
 
     def column_count(self) -> int:
-        """How many cells fit across the grid (used for up/down navigation)."""
         cell = self._list.gridSize().width()
         vw = self._list.viewport().width()
         return max(1, (vw if vw else cell) // max(1, cell))
 
     def select_codepoint(self, cp: int, scroll: bool = True) -> None:
-        """Highlight ``cp`` in the grid (if it is shown).
-
-        ``scroll`` centres the item on screen — used for explicit navigation so the view follows
-        the cursor. Callers that must NOT move the view (e.g. restoring the selection after an
-        edit that fired a refresh) pass ``scroll=False`` so the list only moves when the user
-        actually scrolls it.
-        """
         cps = self._model.codepoints()
         try:
             row = cps.index(cp)
@@ -362,74 +322,38 @@ class GlyphGrid(QWidget):
         if i >= 0:
             self._block_combo.setCurrentIndex(i)
 
-    def _toggle_second_block(self, on: bool) -> None:
-        # Reveal/hide the second-block combo; selecting "— none —" keeps it a no-op.
-        self._block2_combo.setVisible(on)
-        self._refresh()
+    def block_name(self) -> str:
+        return self._block_combo.currentText()
 
-    def _selected_blocks(self) -> List[tuple]:
-        """The active ``(name, start, end)`` blocks, in grid order.
-
-        The primary block is always present. The secondary block is included only when the
-        toggle is on and a real block (not "— none —") is chosen.
-        """
-        blocks: List[tuple] = []
-        primary = self._block_combo.currentText()
-        blocks.append((primary, *block_range(primary)))
-        if self._second_block_btn.isChecked() and self._block2_combo.currentIndex() > 0:
-            name2 = self._block2_combo.currentText()
-            blocks.append((name2, *block_range(name2)))
-        return blocks
-
-    def _refresh(self) -> None:
-        self._compute_and_refresh()
+    # --- internal ------------------------------------------------------------
+    def _on_clicked(self, index) -> None:
+        self.glyphChosen.emit(self._model.codepoint_at(index.row()))
 
     def _current_codepoint(self) -> Optional[int]:
-        """The codepoint currently selected in the grid, or ``None``."""
         idx = self._list.currentIndex()
         if idx.isValid():
             return self._model.codepoint_at(idx.row())
         return None
 
-    def _compute_and_refresh(self) -> None:
-        # Remember the selected card and restore it after the model reset, so refreshing (e.g.
-        # toggling 'Show unassigned', or a grid.refresh() from committing a glyph) does not
-        # make the list forget which card is selected.
+    def _recompute(self) -> None:
         selected = self._current_codepoint()
-        blocks = self._selected_blocks()
-        # Save the block the list is *still showing* (self._prev_block) before the model reset
-        # below discards its scroll offset, so a later switch back can restore it.
-        if self._prev_block is not None:
-            self._scroll_memory[self._prev_block] = self._list.verticalScrollBar().value()
-        cps = self._compute_candidate_list([b[1:] for b in blocks])
+        name = self._block_combo.currentText()
+        start, end = block_range(name)
+        cps = self._compute_candidate_list(start, end)
         self._model.set_codepoints(cps)
-        covered, allocated = self._block_coverage(blocks)
+        covered, allocated = self._block_coverage(start, end)
         pct = (100.0 * covered / allocated) if allocated else 0.0
-        names = ", ".join(b[0] for b in blocks)
-        self._count_label.setText(
-            f"{len(cps)} glyphs · {pct:.0f}% of allocated covered"
-            + (f" · {names}" if len(blocks) > 1 else "")
-        )
+        self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of {allocated} allocated")
         self._clear_badges()
         self._update_visible_badges()
-        # Badge creation needs the view to be laid out (indexAt must find real cells). It runs
-        # once here, but short blocks (e.g. Ogham, 32 items) fit in the viewport and never
-        # scroll, so valueChanged never re-triggers it. Schedule a re-run for after the event
-        # loop lays the view out, so those blocks get their native-text badges too.
         QTimer.singleShot(0, self._update_visible_badges)
-        current = self._block_combo.currentText()
         if selected is not None and selected in cps:
-            # Restore the highlight WITHOUT re-centring: opening/editing a codepoint must not
-            # make the list jump (the user only wants it to move when they scroll it).
             self.select_codepoint(selected, scroll=False)
         else:
-            # Restore this block's own remembered scroll offset (covers block switches where
-            # the previously selected card is not in the new block).
-            saved = self._scroll_memory.get(current)
+            saved = self._scroll_memory.get(name)
             if saved is not None:
                 self._list.verticalScrollBar().setValue(saved)
-            self._update_visible_badges()
-        self._prev_block = current
+        self._prev_block = name
 
     def _clear_badges(self) -> None:
         for row in list(self._badge_rows):
@@ -437,20 +361,11 @@ class GlyphGrid(QWidget):
         self._badge_rows.clear()
 
     def eventFilter(self, obj, event) -> bool:
-        # Recreate badges lazily when the viewport is resized (e.g. window grown), so rows that
-        # were off-screen and now visible get their native-text badge. Deferred so the new layout
-        # is in place before indexAt is queried.
         if obj is self._list.viewport() and event.type() == QEvent.Type.Resize:
             QTimer.singleShot(0, self._update_visible_badges)
         return super().eventFilter(obj, event)
 
     def _update_visible_badges(self) -> None:
-        """Give every *visible* cell a native text label (QLabel) for the character badge.
-
-        Only the cells currently in the viewport get a widget (created lazily, refreshed on
-        scroll), so huge blocks (e.g. CJK Unified Ideographs) load fast instead of creating
-        thousands of upfront widgets.
-        """
         from PySide6.QtWidgets import QLabel, QWidget
         from PySide6.QtCore import QPoint, QSize
         vp = self._list.viewport()
@@ -459,12 +374,6 @@ class GlyphGrid(QWidget):
         first = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().top() + 2))
         if not first.isValid():
             return
-        # Find the true last visible row by walking down until an item's rect leaves the viewport.
-        # Using indexAt(bottom-left) here only returns the FIRST card of the bottom visual row,
-        # so the rest of that row (which wraps to the right, at higher row indices) would be left
-        # without a badge. Walking captures every card actually on screen — including the whole
-        # last row. It is bounded by the viewport content (stops at the first off-screen row), so
-        # the lazy per-visible-row attachment stays cheap even for huge blocks.
         vp_h = vp.rect().height()
         last = first
         for r in range(first.row(), self._model.rowCount()):
@@ -475,30 +384,21 @@ class GlyphGrid(QWidget):
             else:
                 break
         lo, hi = min(first.row(), last.row()), max(first.row(), last.row())
-        # drop widgets for rows that scrolled out of view
         for row in list(self._badge_rows):
             if not (lo <= row <= hi):
                 self._list.setIndexWidget(self._model.index(row, 0), None)
                 self._badge_rows.discard(row)
-        # create widgets for visible rows
         for row in range(lo, hi + 1):
             if row in self._badge_rows:
                 continue
             cp = self._model.codepoint_at(row)
             ch = chr(cp) if _is_printable(cp) else ""
-            # transparent container matches the cell; the badge is a fixed 18x18 label at the
-            # same (2,2) inset as before, so the view resizing the container can never grow it.
             container = QWidget()
             container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             container.setAutoFillBackground(False)
             lbl = QLabel(container)
             lbl.setGeometry(2, 2, 18, 18)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            # Native-text font, mirroring the big "native reference" panel (_ref_img): take the
-            # application font (which carries the fallback families, incl. Unifont), set the
-            # pixel size, re-apply, and set the text after. Do NOT set font-size via a stylesheet
-            # (that replaces the font with a single-family one and drops the fallback chain, so
-            # e.g. Ogham rendered as a blank box instead of via a fallback font).
             f = QFont()
             f.setFamilies(native_text_families(cp))
             f.setPixelSize(13)
@@ -508,26 +408,19 @@ class GlyphGrid(QWidget):
             self._list.setIndexWidget(self._model.index(row, 0), container)
             self._badge_rows.add(row)
 
-    def _block_coverage(self, blocks: List[tuple]) -> tuple:
-        """(covered, allocated) for the active blocks' allocated codepoints, summed.
-
-        ``allocated`` = Unicode-assigned codepoints across the blocks; ``covered`` = the allocated
-        codepoints that actually have authored strokes in the stroke set.
-        """
+    def _block_coverage(self, start: int, end: int) -> tuple:
         allocated = covered = 0
-        for _name, start, end in blocks:
-            for cp in range(start, end + 1):
-                if 0xD800 <= cp <= 0xDFFF:
-                    continue
-                if not unicodedata.name(chr(cp), ""):
-                    continue
-                allocated += 1
-                if self.strokefont.has(cp):
-                    covered += 1
+        for cp in range(start, end + 1):
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            if not unicodedata.name(chr(cp), ""):
+                continue
+            allocated += 1
+            if self.strokefont.has(cp):
+                covered += 1
         return covered, allocated
 
-    def _compute_candidate_list(self, ranges: List[tuple]) -> List[int]:
-        from PySide6.QtWidgets import QApplication
+    def _compute_candidate_list(self, start: int, end: int) -> List[int]:
         from PySide6.QtGui import QCursor
         unassigned_only = self._show_all.isChecked()
         q = self._search.text().strip()
@@ -536,41 +429,153 @@ class GlyphGrid(QWidget):
         if app is not None:
             app.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
         try:
-            for start, end in ranges:
-                for cp in range(start, end + 1):
-                    if 0xD800 <= cp <= 0xDFFF:
-                        continue
-                    if q:
-                        # search filter
-                        if not self._matches(cp, q):
-                            continue
-                    if unassigned_only:
-                        # checked: show ONLY codepoints not authored in the stroke set (a
-                        # reference render does not count as assigned)
-                        if not self.strokefont.has(cp):
-                            cps.append(cp)
-                    else:
-                        # unchecked: no filtering — show every codepoint in the block
+            for cp in range(start, end + 1):
+                if 0xD800 <= cp <= 0xDFFF:
+                    continue
+                if q and not self._matches(cp, q):
+                    continue
+                if unassigned_only:
+                    if not self.strokefont.has(cp):
                         cps.append(cp)
+                else:
+                    cps.append(cp)
         finally:
             if app is not None:
                 app.restoreOverrideCursor()
         return cps
 
-    def _matches(self, cp: int, q: str) -> bool:
+    @staticmethod
+    def _matches(cp: int, q: str) -> bool:
         q = q.lower()
         if not q:
             return True
         ch = chr(cp)
         name = unicodedata.name(ch, "")
-        # Plain case-insensitive substring search across the character name, the character
-        # itself, and the codepoint's hex forms (e.g. "ed" finds names containing "turned"
-        # and also U+00ED via its "00ed" hex; "4e2d" finds U+4E2D via its "u+4e2d").
         hay = " ".join(filter(None, [
             name.lower(), ch.lower(),
             f"u+{cp:04x}", f"{cp:x}", f"{cp:04x}",
         ]))
         return q in hay
+
+
+class GlyphGrid(QWidget):
+    """The left panel: a toolbar + one or two BlockPanes (grid views) shown at once.
+
+    A single editor is shared: clicking a cell in any pane opens that codepoint in the one glyph
+    editor. The '2nd' toggle reveals a second BlockPane so two blocks are visible simultaneously.
+    Search and 'Show unassigned' are shared across all panes; per-block scroll memory lives per
+    pane.
+    """
+
+    glyphChosen = Signal(int)  # emits the codepoint
+
+    def __init__(self, strokefont: StrokeFont, reflib: ReferenceLibrary, parent=None) -> None:
+        super().__init__(parent)
+        self.strokefont = strokefont
+        self.reflib = reflib
+
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Find codepoint (hex or char)…")
+        self._search.setClearButtonEnabled(True)
+
+        self._show_all = QCheckBox("Show unassigned")
+        self._show_all.setToolTip(
+            "Checked: show ONLY codepoints not yet authored in the stroke set (a reference "
+            "render does not count as assigned). Unchecked: no filtering — show every codepoint."
+        )
+
+        self._second_block_btn = QToolButton()
+        self._second_block_btn.setText("2nd block")
+        self._second_block_btn.setCheckable(True)
+        self._second_block_btn.setToolTip("Show a second block alongside the first")
+
+        topbar = QHBoxLayout()
+        topbar.addWidget(self._search, 1)
+        topbar.addWidget(self._show_all)
+        topbar.addWidget(self._second_block_btn)
+
+        self._panes: List[BlockPane] = []
+        self._pane_lay = QVBoxLayout()
+        self._pane_lay.setSpacing(10)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.addLayout(topbar)
+        lay.addLayout(self._pane_lay)
+
+        self._active_pane: Optional[BlockPane] = None
+        self._add_pane(primary=True)
+
+        self._search.textChanged.connect(self._refresh_all)
+        self._show_all.toggled.connect(self._refresh_all)
+        self._second_block_btn.toggled.connect(self._toggle_second)
+
+    def _add_pane(self, primary: bool) -> BlockPane:
+        pane = BlockPane(self.strokefont, self.reflib, self._search, self._show_all, self)
+        pane.glyphChosen.connect(self._on_pane_chosen)
+        self._pane_lay.addWidget(pane, 1)
+        self._panes.append(pane)
+        if self._active_pane is None:
+            self._active_pane = pane
+        if not primary and len(self._panes) >= 2:
+            # default the second pane to the block right after the first, so the two panes don't
+            # start on the same block.
+            names = block_names()
+            i = names.index(self._panes[0].block_name()) if self._panes[0].block_name() in names else 0
+            self._panes[1].select_block(names[(i + 1) % len(names)])
+        return pane
+
+    def _on_pane_chosen(self, cp: int) -> None:
+        sender = self.sender()
+        if isinstance(sender, BlockPane):
+            self._active_pane = sender
+        self.glyphChosen.emit(cp)
+
+    def _toggle_second(self, on: bool) -> None:
+        if on and len(self._panes) < 2:
+            self._add_pane(primary=False)
+            self._refresh_all()
+        elif not on and len(self._panes) == 2:
+            second = self._panes.pop()
+            self._pane_lay.removeWidget(second)
+            second.deleteLater()
+            if self._active_pane is second:
+                self._active_pane = self._panes[0] if self._panes else None
+            self._refresh_all()
+
+    def _refresh_all(self) -> None:
+        for pane in self._panes:
+            pane.refresh()
+
+    # --- public API routed to the active pane (used by the main window) --------
+    def refresh(self) -> None:
+        self._refresh_all()
+
+    def invalidate_previews(self) -> None:
+        for pane in self._panes:
+            pane.invalidate_previews()
+
+    def invalidate_preview(self, cp: int) -> None:
+        for pane in self._panes:
+            pane.invalidate_preview(cp)
+
+    def codepoints(self) -> List[int]:
+        return self._active_pane.codepoints() if self._active_pane else []
+
+    def column_count(self) -> int:
+        return self._active_pane.column_count() if self._active_pane else 1
+
+    def select_codepoint(self, cp: int, scroll: bool = True) -> None:
+        if self._active_pane is not None:
+            self._active_pane.select_codepoint(cp, scroll)
+
+    def select_block(self, name: str) -> None:
+        # Open-block navigation targets the primary pane.
+        if self._panes:
+            self._panes[0].select_block(name)
+
+    def current_panes(self) -> List[BlockPane]:
+        return list(self._panes)
 
 
 # --- block table bridge -------------------------------------------------------
