@@ -88,8 +88,15 @@ These are the things that repeatedly cost time when forgotten.
 
 ## Project conventions that matter
 
-- Commit after finishing each feature/bug/experiment (the user can amend later). Clean up
-  test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are gitignored.
+- **ALWAYS commit your work.** After every feature/bug-fix/experiment, stage the specific changed
+  files and commit (the user can amend later). Do not leave finished work uncommitted. Never
+  `git add -A`; stage exact paths only.
+- **`COVERAGE.md` must be committed whenever you update it.** Any time you re-run
+  `tools/glyph_coverage.py` (or otherwise touch COVERAGE.md), regenerate it and commit the
+  result in the same commit as the work that caused the change. It is a real deliverable, not a
+  scratch artifact.
+- Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
+  gitignored.
 
 - Grid geometry: points are cell-centre aligned `(g+0.5)*SCALE`; `SCALE=64`, `UPEM=1024`,
   `PEN_RADIUS=32`, `PEN_CAP="square"`. Grid lines are at `k*SCALE`; cell diagonals are
