@@ -3,6 +3,15 @@
 These are the *reasons* behind the major design choices. Everything here is an implementation
 or model rationale — the *what* (what a stroke is, what the app does) lives in `README.md`.
 
+## Vendored Unicode data needs periodic updating
+
+`src/strokespec/data/Blocks.txt` is a snapshot of the official UCD `Blocks.txt` (parsed at
+runtime by `unicode_blocks.py`; nothing is hardcoded and it is never re-downloaded). It must be
+**re-fetched from time to time** whenever Unicode adds, renames, or splits blocks, so the editor's
+block list and the coverage report stay accurate. Re-download from
+`https://www.unicode.org/Public/UCD/latest/ucd/Blocks.txt` and replace the vendored copy. Private-
+use blocks are deliberately excluded from the editor's block list.
+
 ## Strokes are the source of truth
 
 A glyph is authored as **strokes**, never as outlines or bitmaps. One stroke is exactly two grid
