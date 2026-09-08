@@ -789,7 +789,7 @@ class MainWindow(QMainWindow):
         m = self.menuBar()
         fm = m.addMenu("&File")
         for text, slot, shortcut in [
-            ("&New", self._new, "Ctrl+N"),
+            ("&New", self._new, ""),  # no Ctrl+N: reserved for the editor width toggle area
             ("&Open…", self._open, "Ctrl+O"),
             ("&Save", self._save, "Ctrl+S"),
             ("Save &As…", self._save_as, "Ctrl+Shift+S"),
@@ -797,7 +797,8 @@ class MainWindow(QMainWindow):
             ("&Quit", self.close, "Ctrl+Q"),
         ]:
             act = QAction(text, self)
-            act.setShortcut(QKeySequence(shortcut))
+            if shortcut:
+                act.setShortcut(QKeySequence(shortcut))
             act.triggered.connect(slot)
             fm.addAction(act)
         rm = m.addMenu("&Reference")
