@@ -1,5 +1,31 @@
 # Uffy
 
+## Goals
+
+- Easy-to-use stroke-based font editor that produces very little information per glyph
+- - 8x16 or 16x16 per character, single strokes, straight or semicircle
+- **Scroll down to see the hotkeys. There are a lot and they're all important.**
+- Pan-unicode fallback font made in that editor, or as close as possible
+- Small filesize, making any concessions needed for that
+- Text rendered with that fallback font is >readable<, not like the "Last Resort" font
+- Support for common or general unicode blocks first, then niche ones later
+- - If you run into a block that looks really easy to implement and you get an itch to do it,
+    just do it, even if it's a niche script
+
+## Non-goals
+
+- Complex macro tools in the editor
+- Finer-than-grid or non-semicircle or accurate semicircle or non-unit-width strokes
+- Glyphs that look good
+- Glyphs that are readable at 16px pixelated renderings (use Unifont for that)
+- Strict semantic accuracy (e.g. rendering an "enclosed rectangular box inverted A" as a
+    normal enclosed A with a double-thick box outline, to save strokes and time, is fine)
+- Complex shaping (e.g. arabic is going to render non-ligatured/non-cursive)
+- Kerning
+- Correct spacing or sizing for scripts that normally require complex shaping
+- Support for any private-use glyphs
+- Any variation selectors or regional selectors at all (e.g. hz vs jp forms? pick one)
+
 ## Important
 
 DO NOT trace the reference fonts. They are only present for metric alignment and glyph form
@@ -26,19 +52,12 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 **dual-width monospace** font in the style of old Japanese fonts — every glyph is `8x16` or
 `16x16` (width x height in grid units), and that is its advance width.
 
-> ⚠️ **TTF/OTF policy.** The Python `fontTools` library is used **only** for the UFO authoring
-> format. Its TTF/OTF read/write code paths are **never** used here. The actual binary is
-> produced by Google's CLI compilers — **`gftools`** (preferred) or **`fontmake`** (fallback) —
-> and reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
-> (uharfbuzz)**, again without fontTools' TTF/OTF code.
-
 <img width="1920" height="1027" alt="image" src="https://github.com/user-attachments/assets/99d5c838-1df9-4d75-a5c5-26719e4f45ed" />
 
 ## The model
 
-* A glyph is defined on a **16×16 grid** of cells; points are **cell-centre aligned**.
-* A glyph holds **up to 32 strokes**. The only data a stroke carries is **two grid points plus
-  a line-vs-single-quadratic flag**:
+* A glyph is defined on a **16x16 grid** of cells; points are **cell-centre aligned**.
+* The only data a stroke carries is **two grid points plus a line-vs-single-quadratic flag**:
   * `line` — a straight segment between the two points.
   * `arc` — a single quadratic per quarter, confined to the axis-aligned bounding box of the
     two points. Its **bend direction is a pure function of the ordering of the two points** —
@@ -84,7 +103,7 @@ src/strokespec/
   cli.py           `uffy` command-line entry point
   editor/          PySide6 graphical editor
     grid.py        interactive, FontForge-style glyph grid (clickable cells)
-    glyph_canvas.py 16×16 stroke-authoring canvas (line/arc, drag endpoints, reverse to flip)
+    glyph_canvas.py 16x16 stroke-authoring canvas (line/arc, drag endpoints, reverse to flip)
     main_window.py  main window (grid left, editor right, reference-font dock)
     fontfallback.py  per-codepoint native-text font fallback for the editor previews
     uiutil.py       stroke -> QPainterPath painting + PIL -> QImage
@@ -102,7 +121,7 @@ src/strokespec/
   codepoints with no stroke glyph yet, or an empty slot. Clicking a cell opens that glyph in
   the editor. Each visible cell also carries a small **native-text character badge** (the
   codepoint's character rendered with the fallback chain).
-* a **glyph editor** on the right (the 16×16 canvas + stroke list + tool row).
+* a **glyph editor** on the right (the 16x16 canvas + stroke list + tool row).
 * a **Reference Fonts** dock with a big **native reference** panel and a **related-glyphs**
   list.
 * **File → Compile TTF…** to build the font with Google's tools.
@@ -124,7 +143,7 @@ The full set of keyboard and mouse controls is below.
 * **W/A/S/D** — nudge the whole glyph up/left/down/right by one cell.
 * **PageUp / PageDown** — nudge the whole glyph up / down.
 * **F** — flip horizontally · **Flip vertically** (toolbar) · **Rotate 90°** (toolbar) —
-  rotate 90° clockwise (in 16×16 space).
+  rotate 90° clockwise (in 16x16 space).
 * **B** — toggle the selected stroke between line and arc.
 * **R** — reverse the selected stroke's points (flips an arc's bend).
 * **Delete** — delete the selected stroke.

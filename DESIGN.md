@@ -26,6 +26,12 @@ code path, so preview and output can never disagree about a shape.
 paths), so authored strokes would not survive it. We expand the strokes to outlines ourselves
 instead, and hand the outlines to the compiler.
 
+> ⚠️ **TTF/OTF policy.** The Python `fontTools` library is used **only** for the UFO authoring
+> format. Its TTF/OTF read/write code paths are **never** used here. The actual binary is
+> produced by Google's CLI compilers — **`gftools`** (preferred) or **`fontmake`** (fallback) —
+> and reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
+> (uharfbuzz)**, again without fontTools' TTF/OTF code.
+
 ## The stroke model
 
 * Points are **cell-centre aligned**: grid index `g` is the centre of cell `g`, so a coordinate
