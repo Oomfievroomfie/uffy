@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-07 23:11  
+Generated: 2026-09-08 00:39  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 7099 |
-| - with strokes | 7072 |
+| codepoints authored | 7128 |
+| - with strokes | 7101 |
 | - intentionally empty | 27 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 7099 (4.6%) |
+| coverage of allocated | 7128 (4.6%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -49,9 +49,11 @@ Generated: 2026-09-07 23:11
 | Dingbats | U+2700-U+27BF | 192 | 192 | 100.0% |
 | Braille Patterns | U+2800-U+28FF | 256 | 256 | 100.0% |
 | Supplemental Punctuation | U+2E00-U+2E7F | 94 | 94 | 100.0% |
+| Ideographic Description Characters | U+2FF0-U+2FFF | 16 | 16 | 100.0% |
 | CJK Symbols and Punctuation | U+3000-U+303F | 64 | 64 | 100.0% |
 | Hiragana | U+3040-U+309F | 93 | 93 | 100.0% |
 | Katakana | U+30A0-U+30FF | 96 | 96 | 100.0% |
+| Bopomofo | U+3100-U+312F | 43 | 43 | 100.0% |
 | Hangul Compatibility Jamo | U+3130-U+318F | 94 | 94 | 100.0% |
 | Kanbun | U+3190-U+319F | 16 | 16 | 100.0% |
 | Katakana Phonetic Extensions | U+31F0-U+31FF | 16 | 16 | 100.0% |
@@ -63,7 +65,6 @@ Generated: 2026-09-07 23:11
 | Halfwidth and Fullwidth Forms | U+FF00-U+FFEF | 225 | 225 | 100.0% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
-| Bopomofo | U+3100-U+312F | 43 | 31 | 72.1% |
 | Specials | U+FFF0-U+FFFF | 5 | 1 | 20.0% |
 | Emoticons | U+1F600-U+1F64F | 80 | 16 | 20.0% |
 | Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 7 | 12.1% |
@@ -71,6 +72,7 @@ Generated: 2026-09-07 23:11
 | CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1029 | 4.9% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 5 | 4.3% |
 | Tibetan | U+0F00-U+0FFF | 211 | 4 | 1.9% |
+| Phonetic Extensions | U+1D00-U+1D7F | 128 | 1 | 0.8% |
 | CJK Unified Ideographs Extension D | U+2B740-U+2B81F | 222 | 1 | 0.5% |
 | Arabic | U+0600-U+06FF | 256 | 1 | 0.4% |
 | CJK Unified Ideographs Extension A | U+3400-U+4DBF | 6592 | 11 | 0.2% |
@@ -132,7 +134,6 @@ Generated: 2026-09-07 23:11
 | Georgian Extended | U+1C90-U+1CBF | 46 | 0 | 0.0% |
 | Sundanese Supplement | U+1CC0-U+1CCF | 8 | 0 | 0.0% |
 | Vedic Extensions | U+1CD0-U+1CFF | 43 | 0 | 0.0% |
-| Phonetic Extensions | U+1D00-U+1D7F | 128 | 0 | 0.0% |
 | Phonetic Extensions Supplement | U+1D80-U+1DBF | 64 | 0 | 0.0% |
 | Combining Diacritical Marks Supplement | U+1DC0-U+1DFF | 64 | 0 | 0.0% |
 | Miscellaneous Mathematical Symbols-A | U+27C0-U+27EF | 48 | 0 | 0.0% |
@@ -149,7 +150,6 @@ Generated: 2026-09-07 23:11
 | Ethiopic Extended | U+2D80-U+2DDF | 79 | 0 | 0.0% |
 | Cyrillic Extended-A | U+2DE0-U+2DFF | 32 | 0 | 0.0% |
 | Kangxi Radicals | U+2F00-U+2FDF | 214 | 0 | 0.0% |
-| Ideographic Description Characters | U+2FF0-U+2FFF | 16 | 0 | 0.0% |
 | Bopomofo Extended | U+31A0-U+31BF | 32 | 0 | 0.0% |
 | Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 0 | 0.0% |
 | Yijing Hexagram Symbols | U+4DC0-U+4DFF | 64 | 0 | 0.0% |
