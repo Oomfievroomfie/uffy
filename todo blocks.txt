@@ -1,0 +1,60 @@
+general purpose blocks that i haven't covered yet:
+
+- runic
+- combining diacritiacl marks extended
+- cyrillic extended-c
+- phonetic extensions
+- phonetic extensions supplement
+- combining diacritical marks supplement
+- miscellaneous mathematical symbols-a
+- supplemental arrows-b
+- miscellaneous mathematical symbols-b
+- supplemental mathematical operators
+- miscellaneous symbols and arrows
+- latin extended-c
+- coptic
+- cyrillic extended-a
+- bopomofo extended
+- enclosed cjk letters and months
+- cyrillic extended-b
+- latin extended-d
+- common indic number forms
+- hangul jamo extended-a
+- latin extended-e
+- hangul jamo extended-b
+
+--- BMP cutoff
+
+- ancient symbols
+- latin extended-f (!!!)
+- kana extended-b
+- kana supplement (man'yougana)
+- kana extended-a (hentaigana)
+- small kana extension
+- symbols for legacy computing supplement (!!!)
+- miscellaneous symbols supplement (!!!)
+- musical symbols
+- counting rod numerals
+- mathematical alphanumeric symbols (1024, 78% done, the remaining ones are obnoxious ones like fraktur)
+- latin extended-g
+- cyrillic extended-d
+
+- mahjong tiles (fun)
+- enclosed ideographic supplement
+- miscellaneous symbols and pictographs (emoji, the big one (768))
+- ornamental dingbats
+- transport and map symbols (!!!)
+- geometric shapes extended (!!!)
+- supplemental arrows-c (!!!)
+- supplemental symbols and pictographs (emoji)
+- symbols and pictographs extended-a (emoji)
+- symbols for legacy computing (!!!)
+
+
+
+- emoticons (emoji) (main done, full-body items skipped)
+- chess symbols (chess done, hanzi skipped)
+
+
+
+
