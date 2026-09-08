@@ -228,7 +228,9 @@ class GlyphGrid(QWidget):
 
     def __init__(self, strokefont: StrokeFont, reflib: ReferenceLibrary, parent=None) -> None:
         super().__init__(parent)
-        from PySide6.QtWidgets import QVBoxLayout, QComboBox, QLineEdit, QCheckBox, QHBoxLayout, QLabel
+        from PySide6.QtWidgets import (
+            QVBoxLayout, QComboBox, QLineEdit, QCheckBox, QHBoxLayout, QLabel, QToolButton,
+        )
 
         self.strokefont = strokefont
         self.reflib = reflib
@@ -263,6 +265,19 @@ class GlyphGrid(QWidget):
         self._block_combo = QComboBox()
         self._block_combo.addItems(block_names())
 
+        # Optional second block: a checkable toggle reveals a second combo. When a second block
+        # is selected the grid shows both blocks concatenated (still one flat list, one panel).
+        self._block2_combo = QComboBox()
+        self._block2_combo.addItem("— none —")
+        self._block2_combo.addItems(block_names())
+        self._block2_combo.setCurrentIndex(0)
+        self._block2_combo.hide()
+        self._second_block_btn = QToolButton()
+        self._second_block_btn.setText("2nd")
+        self._second_block_btn.setCheckable(True)
+        self._second_block_btn.setToolTip("Show a second block alongside the first")
+        self._second_block_btn.toggled.connect(self._toggle_second_block)
+
         self._search = QLineEdit()
         self._search.setPlaceholderText("Find codepoint (hex or char)…")
         self._search.setClearButtonEnabled(True)
@@ -276,6 +291,8 @@ class GlyphGrid(QWidget):
         bar = QHBoxLayout()
         bar.addWidget(QLabel("Block:"))
         bar.addWidget(self._block_combo, 1)
+        bar.addWidget(self._second_block_btn)
+        bar.addWidget(self._block2_combo, 1)
         bar.addWidget(self._search, 2)
         bar.addWidget(self._show_all)
 
@@ -288,6 +305,7 @@ class GlyphGrid(QWidget):
         lay.addWidget(self._count_label)
 
         self._block_combo.currentIndexChanged.connect(self._refresh)
+        self._block2_combo.currentIndexChanged.connect(self._refresh)
         self._search.textChanged.connect(self._refresh)
         self._show_all.toggled.connect(self._refresh)
         self._list.clicked.connect(self._on_clicked)
@@ -344,6 +362,25 @@ class GlyphGrid(QWidget):
         if i >= 0:
             self._block_combo.setCurrentIndex(i)
 
+    def _toggle_second_block(self, on: bool) -> None:
+        # Reveal/hide the second-block combo; selecting "— none —" keeps it a no-op.
+        self._block2_combo.setVisible(on)
+        self._refresh()
+
+    def _selected_blocks(self) -> List[tuple]:
+        """The active ``(name, start, end)`` blocks, in grid order.
+
+        The primary block is always present. The secondary block is included only when the
+        toggle is on and a real block (not "— none —") is chosen.
+        """
+        blocks: List[tuple] = []
+        primary = self._block_combo.currentText()
+        blocks.append((primary, *block_range(primary)))
+        if self._second_block_btn.isChecked() and self._block2_combo.currentIndex() > 0:
+            name2 = self._block2_combo.currentText()
+            blocks.append((name2, *block_range(name2)))
+        return blocks
+
     def _refresh(self) -> None:
         self._compute_and_refresh()
 
@@ -359,16 +396,20 @@ class GlyphGrid(QWidget):
         # toggling 'Show unassigned', or a grid.refresh() from committing a glyph) does not
         # make the list forget which card is selected.
         selected = self._current_codepoint()
-        start, end = block_range(self._block_combo.currentText())
+        blocks = self._selected_blocks()
         # Save the block the list is *still showing* (self._prev_block) before the model reset
         # below discards its scroll offset, so a later switch back can restore it.
         if self._prev_block is not None:
             self._scroll_memory[self._prev_block] = self._list.verticalScrollBar().value()
-        cps = self._compute_candidate_list(start, end)
+        cps = self._compute_candidate_list([b[1:] for b in blocks])
         self._model.set_codepoints(cps)
-        covered, allocated = self._block_coverage(start, end)
+        covered, allocated = self._block_coverage(blocks)
         pct = (100.0 * covered / allocated) if allocated else 0.0
-        self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of allocated covered")
+        names = ", ".join(b[0] for b in blocks)
+        self._count_label.setText(
+            f"{len(cps)} glyphs · {pct:.0f}% of allocated covered"
+            + (f" · {names}" if len(blocks) > 1 else "")
+        )
         self._clear_badges()
         self._update_visible_badges()
         # Badge creation needs the view to be laid out (indexAt must find real cells). It runs
@@ -467,24 +508,25 @@ class GlyphGrid(QWidget):
             self._list.setIndexWidget(self._model.index(row, 0), container)
             self._badge_rows.add(row)
 
-    def _block_coverage(self, start: int, end: int) -> tuple:
-        """(covered, allocated) for the block's allocated codepoints.
+    def _block_coverage(self, blocks: List[tuple]) -> tuple:
+        """(covered, allocated) for the active blocks' allocated codepoints, summed.
 
-        ``allocated`` = Unicode-assigned codepoints in [start, end]; ``covered`` = the allocated
+        ``allocated`` = Unicode-assigned codepoints across the blocks; ``covered`` = the allocated
         codepoints that actually have authored strokes in the stroke set.
         """
         allocated = covered = 0
-        for cp in range(start, end + 1):
-            if 0xD800 <= cp <= 0xDFFF:
-                continue
-            if not unicodedata.name(chr(cp), ""):
-                continue
-            allocated += 1
-            if self.strokefont.has(cp):
-                covered += 1
+        for _name, start, end in blocks:
+            for cp in range(start, end + 1):
+                if 0xD800 <= cp <= 0xDFFF:
+                    continue
+                if not unicodedata.name(chr(cp), ""):
+                    continue
+                allocated += 1
+                if self.strokefont.has(cp):
+                    covered += 1
         return covered, allocated
 
-    def _compute_candidate_list(self, start: int, end: int) -> List[int]:
+    def _compute_candidate_list(self, ranges: List[tuple]) -> List[int]:
         from PySide6.QtWidgets import QApplication
         from PySide6.QtGui import QCursor
         unassigned_only = self._show_all.isChecked()
@@ -494,21 +536,22 @@ class GlyphGrid(QWidget):
         if app is not None:
             app.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
         try:
-            for cp in range(start, end + 1):
-                if 0xD800 <= cp <= 0xDFFF:
-                    continue
-                if q:
-                    # search filter
-                    if not self._matches(cp, q):
+            for start, end in ranges:
+                for cp in range(start, end + 1):
+                    if 0xD800 <= cp <= 0xDFFF:
                         continue
-                if unassigned_only:
-                    # checked: show ONLY codepoints not authored in the stroke set (a reference
-                    # render does not count as assigned)
-                    if not self.strokefont.has(cp):
+                    if q:
+                        # search filter
+                        if not self._matches(cp, q):
+                            continue
+                    if unassigned_only:
+                        # checked: show ONLY codepoints not authored in the stroke set (a
+                        # reference render does not count as assigned)
+                        if not self.strokefont.has(cp):
+                            cps.append(cp)
+                    else:
+                        # unchecked: no filtering — show every codepoint in the block
                         cps.append(cp)
-                else:
-                    # unchecked: no filtering — show every codepoint in the block
-                    cps.append(cp)
         finally:
             if app is not None:
                 app.restoreOverrideCursor()
