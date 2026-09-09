@@ -68,8 +68,13 @@ class GlyphCanvas(QWidget):
         self.cap_height: float = DEFAULT_CAP_HEIGHT
         self.reference_provider = None
         self.show_reference = True
+        self.wireframe: bool = False
 
     # --- public API ----------------------------------------------------------
+    def set_wireframe(self, on: bool) -> None:
+        self.wireframe = bool(on)
+        self.update()
+
     def set_glyph(self, glyph: Glyph) -> None:
         self._glyph = glyph
         self._pending = None
@@ -561,6 +566,41 @@ class GlyphCanvas(QWidget):
             Qt.AlignmentFlag.AlignLeft,
             text,
         )
+
+        # Wireframe: draw a coloured outline around each stroke (distinct colour per stroke),
+        # on top of everything (rendered last). Optionally shows the stroke's axis line.
+        if self.wireframe and self._glyph.strokes:
+            self._paint_wireframe(p, rect)
+
+    # --- wireframe -----------------------------------------------------------
+    _WF_COLORS = [
+        "#E6194B", "#3CB44B", "#4363D8", "#F58231", "#911EB4", "#42D4F4",
+        "#F032E6", "#9A6324", "#469990", "#DCBEFF", "#FFD8B1", "#A9A9A9",
+    ]
+
+    def _paint_wireframe(self, p: QPainter, rect: QRectF) -> None:
+        # Outlines (font units) under the grid transform.
+        p.save()
+        self._apply_grid_transform(p, rect)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for i, st in enumerate(self._glyph.strokes):
+            color = QColor(self._WF_COLORS[i % len(self._WF_COLORS)])
+            p.setPen(QPen(color, 1.5))
+            p.drawPath(self._path_from(
+                [stroke_outline(st, cap=PEN_CAP, baseline=self.baseline)]))
+        p.restore()
+        # Axis line + endpoints in scene coords (no grid transform).
+        for i, st in enumerate(self._glyph.strokes):
+            color = QColor(self._WF_COLORS[i % len(self._WF_COLORS)])
+            a = self._grid_to_scene(st.p1.x, st.p1.y)
+            b = self._grid_to_scene(st.p2.x, st.p2.y)
+            p.setPen(QPen(color, 1.0, Qt.PenStyle.DashLine))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawLine(QPointF(a.x(), a.y()), QPointF(b.x(), b.y()))
+            p.setPen(QPen(color, 1.2))
+            p.setBrush(color)
+            p.drawEllipse(a, 2.0, 2.0)
+            p.drawEllipse(b, 2.0, 2.0)
 
     # --- interaction ---------------------------------------------------------
     # _drag is None, ("endpoint", idx, ep) to move an endpoint, or ("new",) to draw a stroke.

@@ -464,6 +464,11 @@ class GlyphEditorPanel(QWidget):
         self._cp_label = QLabel("U+0000")
         self._cp_label.setStyleSheet("font-weight:bold;")
         top.addWidget(self._cp_label)
+        self._wireframe = QCheckBox("Wireframe")
+        self._wireframe.setToolTip(
+            "Draw a coloured outline around each stroke (each stroke a distinct colour), on top"
+        )
+        top.addWidget(self._wireframe)
         top.addStretch(1)
         top.addWidget(QLabel("Width:"))
         self._width_combo = QComboBox()
@@ -482,6 +487,7 @@ class GlyphEditorPanel(QWidget):
         top.addWidget(self._clear_btn)
 
         self.canvas = GlyphCanvas()
+        self._wireframe.toggled.connect(self.canvas.set_wireframe)
 
         self._stroke_list = QListWidget()
         self._stroke_list.setMinimumWidth(190)
