@@ -6,6 +6,9 @@ Rapid font editor (vibecoded) + readable universal fallback font (human-made CC0
 
 - **8322** codepoints authored — **8296** with strokes, **26** intentionally empty.
 - **5.4%** of the **153626** allocated Unicode codepoints across the full block table.
+- Block status (allocated codepoints per block): **57 filled** (100%), **5 mostly-filled**
+  (50–99%), **16 slightly-filled** (1–49%), **260 untouched** (0%). (4 blocks have no
+  allocated codepoints.)
 - Per-block breakdown: [`COVERAGE.md`](COVERAGE.md).
 
 ## Goals
