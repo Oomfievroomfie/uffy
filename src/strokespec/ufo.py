@@ -15,6 +15,7 @@ from ufoLib2.objects import Glyph as UFOGlyph
 
 from .model import GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS, PEN_CAP
 from .geometry import glyph_contours
+from .geometry_merge import merge_stroke_edges
 
 # Op is a tuple ("M"/"L"/"Q"/"C"/"Z", ...) — reused from geometry.
 Op = tuple
@@ -106,6 +107,7 @@ def build_ufo(
     pen_radius: int = PEN_RADIUS,
     notdef_width_units: Optional[int] = None,
     progress: Optional[Callable[[int, int], None]] = None,
+    merge_edges: bool = True,
 ) -> str:
     """Build a UFO at ``output_dir`` and return its path.
 
@@ -151,6 +153,10 @@ def build_ufo(
     # glyphs stay addressable via the cmap, which is all a fallback font needs.
     font.lib["com.github.googlei18n.ufo2ft.keepGlyphNames"] = False
 
+    def expand(glyph: Glyph) -> List[List[Op]]:
+        conts = glyph_outline_from_strokes(glyph, pen_radius, baseline)
+        return merge_stroke_edges(conts) if merge_edges else conts
+
     # .notdef always first.
     nd_cmds = _notdef_ops(UPEM, cap, pen_radius, descent, ascent)
     notdef = font.newGlyph(".notdef")
@@ -173,7 +179,7 @@ def build_ufo(
         glyph = strokefont.get(cp)
         if glyph is None:
             continue
-        key = (_outline_key(glyph_outline_from_strokes(glyph, pen_radius, baseline)),
+        key = (_outline_key(expand(glyph)),
                glyph.advance_units)
         groups.setdefault(key, []).append(cp)
 
@@ -185,7 +191,7 @@ def build_ufo(
         ufo_glyph.unicodes = group          # map every codepoint in the group to this glyph
         ufo_glyph.width = rep_glyph.advance_units
         pen = ufo_glyph.getPen()
-        contours = glyph_outline_from_strokes(rep_glyph, pen_radius, baseline)
+        contours = expand(rep_glyph)
         for contour in contours:
             op_to_pen(contour, pen)
         order.append(name)
