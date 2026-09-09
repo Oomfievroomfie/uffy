@@ -1,8 +1,5 @@
 general purpose blocks that i haven't covered yet:
 
-- combining diacritical marks supplement
-- miscellaneous mathematical symbols-a
-- supplemental arrows-b
 - miscellaneous mathematical symbols-b
 - supplemental mathematical operators
 - miscellaneous symbols and arrows
