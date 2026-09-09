@@ -1,10 +1,11 @@
-"""Merge stroke outlines that share an exactly-matching straight edge.
+"""Merge stroke outlines that share an exactly-matching edge (straight or curved).
 
 Given a glyph's per-stroke contours (one closed contour per stroke, M/L/Q/C/Z), when two
-contours share a straight edge whose endpoints match exactly (in opposite direction, as on a
-seam between two CCW shapes), remove the two coincident edges and splice the two loops into
-one along that seam. Then drop vertices that are 180-degree no-ops (consecutive collinear
-straight edges in the same direction), merging them into a single edge.
+contours share an edge whose path is identical — same two endpoints in opposite direction, and
+the same curve (same quadratic off-curve control point, or the same cubic control points
+swapped for the reversed traversal) — remove the two coincident edges and splice the two loops
+into one along that seam. Straight edges that meet collinearly at a 180-degree no-op vertex are
+then collapsed into a single edge.
 
 This is used by the TTF export path (default in ``build_ufo``): the editor previews keep one
 contour per stroke, so preview and export can't disagree on the authored shape — export just
@@ -66,20 +67,37 @@ def _dot(u, v):
     return u[0] * v[0] + u[1] * v[1]
 
 
+def _edges_match(ea, va, ia, eb, vb, ib) -> bool:
+    """True iff edge ia of A (va[ia]->va[ia+1]) and edge ib of B are the SAME edge reversed.
+
+    Both edges must go between the same two points in opposite directions and carry the same
+    curve: for a quadratic the off-curve control point is unchanged by reversal; for a cubic the
+    two control points swap.
+    """
+    n, m = len(va), len(vb)
+    pa, qa = va[ia], va[(ia + 1) % n]
+    pb, qb = vb[ib], vb[(ib + 1) % m]
+    if pa != qb or qa != pb:
+        return False
+    ka, kb = ea[ia][0], eb[ib][0]
+    if ka != kb:
+        return False
+    if ka == "L":
+        return True
+    if ka == "Q":
+        return ea[ia][1] == eb[ib][1]
+    if ka == "C":
+        return ea[ia][1] == eb[ib][2] and ea[ia][2] == eb[ib][1]
+    return False
+
+
 def _merge_two(A, B):
-    """Merge two loops that share an exactly-matching straight edge; else None."""
+    """Merge two loops that share an exactly-matching (straight or curved) edge; else None."""
     va, ea = A
     vb, eb = B
-    n, m = len(va), len(vb)
-    for ia in range(n):
-        if ea[ia][0] != "L":
-            continue
-        pa, qa = va[ia], va[(ia + 1) % n]
-        for ib in range(m):
-            if eb[ib][0] != "L":
-                continue
-            pb, qb = vb[ib], vb[(ib + 1) % m]
-            if pa == qb and qa == pb:
+    for ia in range(len(va)):
+        for ib in range(len(vb)):
+            if _edges_match(ea, va, ia, eb, vb, ib):
                 return _build(va, ea, vb, eb, ia, ib)
     return None
 
