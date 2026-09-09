@@ -88,3 +88,12 @@ The bundled fallback fonts live in `src/strokespec/data/fonts/` (Noto scripts fo
 Windows doesn't cover + GNU Unifont BMP and Unifont Upper), with their licenses alongside. They
 are registered at startup and attached per-block, so a block that the system already renders
 gets no override at all.
+
+## Notes / known limitations
+
+* If `uv` can't initialise its cache in `%LOCALAPPDATA%` (e.g. under a restricted sandbox),
+  point it somewhere writable:
+  `$env:UV_CACHE_DIR="$PWD\.uv-cache"; uv sync`.
+* The grid candidate computation queries reference fonts; for very large folders / the
+  CJK block the first pass can take a moment (it is cached afterwards).
+* On a headless box, run GUI code with `QT_QPA_PLATFORM=offscreen`.

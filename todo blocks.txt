@@ -1,10 +1,5 @@
 general purpose blocks that i haven't covered yet:
 
-- runic
-- combining diacritiacl marks extended
-- cyrillic extended-c
-- phonetic extensions
-- phonetic extensions supplement
 - combining diacritical marks supplement
 - miscellaneous mathematical symbols-a
 - supplemental arrows-b

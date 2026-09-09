@@ -1,5 +1,7 @@
 # Uffy
 
+Rapid font editor (vibecoded) + readable universal fallback font (human-made CC0)
+
 ## Goals
 
 - Easy-to-use stroke-based font editor that produces very little information per glyph
@@ -25,6 +27,43 @@
 - Correct spacing or sizing for scripts that normally require complex shaping
 - Support for any private-use glyphs
 - Any variation selectors or regional selectors at all (e.g. hz vs jp forms? pick one)
+
+## Authoring guidelines
+
+DO NOT TRACE. Accidental similarity is OK. See the "Important" section below for reasoning.
+
+Any two straight strokes cost basically the same.
+
+A straight stroke that's secretly made of two straight strokes but looks like one, is
+two straight strokes, and costs as much as two disconnected straight strokes.
+
+Straight strokes snap their ends to a cell edge. This is determined by their angle, or,
+for 45 degree strokes, whether they're up-down or down-up from start point to end point.
+
+A curved stroke probably costs about 1.5 straight strokes. Their direction is determined by
+their start-point-to-end-point direction.
+
+A curved stroke that is actually straight and renders as a straight stroke costs as much as
+a straight stroke, not as much as a curved stroke.
+
+Minimize the cost needed to make a glyph readable, especially for big or complex scripts.
+
+Only prioritize symmetry over stroke count for very common characters or characters where
+it's critically important to get the symmetry right for semantic reasons.
+
+For plain text confusables, try to make them look different. For non-plain-text confusables,
+if they're conceptually identical characters (e.g. "encircled capital A"), do an exact copy-
+paste; do not just manually rebuild the same glyph.
+
+Two glyphs with EXACTLY the same contents cost as much as a single copy of that glyph, not
+as much as two copies. Glyphs with EXACTLY the same contents are deduplicated on export.
+
+For conceptual glyphs, try to think of the fewest-stroked way to express the concept.
+
+For highly repetitive operations, figure out how to express them via keyboard and make a
+macro with https://github.com/LOUDO56/PyMacroRecord/ or some other macro tool. (Note: many
+macro tools are trojan horse malware. This one isn't, though. *Do not* get it from anywhere
+other than github.)
 
 ## Important
 
@@ -192,15 +231,6 @@ uv sync --extra validate
 
 If gftools is not available the compiler automatically falls back to **fontmake** (both are
 Google CLI tools), and if gftools is present it is also used for `fix`/`validate`.
-
-## Notes / known limitations
-
-* If `uv` can't initialise its cache in `%LOCALAPPDATA%` (e.g. under a restricted sandbox),
-  point it somewhere writable:
-  `$env:UV_CACHE_DIR="$PWD\.uv-cache"; uv sync`.
-* The grid candidate computation queries reference fonts; for very large folders / the
-  CJK block the first pass can take a moment (it is cached afterwards).
-* On a headless box, run GUI code with `QT_QPA_PLATFORM=offscreen`.
 
 ## Packaging (standalone executable)
 
