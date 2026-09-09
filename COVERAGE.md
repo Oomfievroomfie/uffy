@@ -1,24 +1,23 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-08 00:39  
+Generated: 2026-09-08 22:11  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 7128 |
-| - with strokes | 7101 |
-| - intentionally empty | 27 |
+| codepoints authored | 8322 |
+| - with strokes | 8296 |
+| - intentionally empty | 26 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 7128 (4.6%) |
+| coverage of allocated | 8322 (5.4%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
 
 | block | range | allocated | covered | % |
 |---|---:|---:|---:|---:|
-| Basic Latin | U+0000-U+007F | 95 | 95 | 100.0% |
 | Latin-1 Supplement | U+0080-U+00FF | 96 | 96 | 100.0% |
 | Latin Extended-A | U+0100-U+017F | 128 | 128 | 100.0% |
 | Latin Extended-B | U+0180-U+024F | 208 | 208 | 100.0% |
@@ -29,6 +28,13 @@ Generated: 2026-09-08 00:39
 | Cyrillic | U+0400-U+04FF | 256 | 256 | 100.0% |
 | Cyrillic Supplement | U+0500-U+052F | 48 | 48 | 100.0% |
 | Hangul Jamo | U+1100-U+11FF | 256 | 256 | 100.0% |
+| Ogham | U+1680-U+169F | 29 | 29 | 100.0% |
+| Runic | U+16A0-U+16FF | 89 | 89 | 100.0% |
+| Combining Diacritical Marks Extended | U+1AB0-U+1AFF | 58 | 58 | 100.0% |
+| Cyrillic Extended-C | U+1C80-U+1C8F | 11 | 11 | 100.0% |
+| Phonetic Extensions | U+1D00-U+1D7F | 128 | 128 | 100.0% |
+| Phonetic Extensions Supplement | U+1D80-U+1DBF | 64 | 64 | 100.0% |
+| Combining Diacritical Marks Supplement | U+1DC0-U+1DFF | 64 | 64 | 100.0% |
 | Latin Extended Additional | U+1E00-U+1EFF | 256 | 256 | 100.0% |
 | Greek Extended | U+1F00-U+1FFF | 233 | 233 | 100.0% |
 | Superscripts and Subscripts | U+2070-U+209F | 42 | 42 | 100.0% |
@@ -47,7 +53,10 @@ Generated: 2026-09-08 00:39
 | Geometric Shapes | U+25A0-U+25FF | 96 | 96 | 100.0% |
 | Miscellaneous Symbols | U+2600-U+26FF | 256 | 256 | 100.0% |
 | Dingbats | U+2700-U+27BF | 192 | 192 | 100.0% |
+| Miscellaneous Mathematical Symbols-A | U+27C0-U+27EF | 48 | 48 | 100.0% |
+| Supplemental Arrows-A | U+27F0-U+27FF | 16 | 16 | 100.0% |
 | Braille Patterns | U+2800-U+28FF | 256 | 256 | 100.0% |
+| Supplemental Arrows-B | U+2900-U+297F | 128 | 128 | 100.0% |
 | Supplemental Punctuation | U+2E00-U+2E7F | 94 | 94 | 100.0% |
 | Ideographic Description Characters | U+2FF0-U+2FFF | 16 | 16 | 100.0% |
 | CJK Symbols and Punctuation | U+3000-U+303F | 64 | 64 | 100.0% |
@@ -63,16 +72,23 @@ Generated: 2026-09-08 00:39
 | CJK Compatibility Forms | U+FE30-U+FE4F | 32 | 32 | 100.0% |
 | Small Form Variants | U+FE50-U+FE6F | 26 | 26 | 100.0% |
 | Halfwidth and Fullwidth Forms | U+FF00-U+FFEF | 225 | 225 | 100.0% |
+| Domino Tiles | U+1F030-U+1F09F | 100 | 100 | 100.0% |
+| Playing Cards | U+1F0A0-U+1F0FF | 82 | 82 | 100.0% |
+| Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 200 | 100.0% |
+| Basic Latin | U+0000-U+007F | 95 | 94 | 98.9% |
+| Emoticons | U+1F600-U+1F64F | 80 | 71 | 88.8% |
+| Chess Symbols | U+1FA00-U+1FA6F | 102 | 88 | 86.3% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
 | Specials | U+FFF0-U+FFFF | 5 | 1 | 20.0% |
-| Emoticons | U+1F600-U+1F64F | 80 | 16 | 20.0% |
 | Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 7 | 12.1% |
 | CJK Strokes | U+31C0-U+31EF | 39 | 3 | 7.7% |
 | CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1029 | 4.9% |
+| Symbols for Legacy Computing | U+1FB00-U+1FBFF | 250 | 11 | 4.4% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 5 | 4.3% |
+| Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 24 | 3.1% |
 | Tibetan | U+0F00-U+0FFF | 211 | 4 | 1.9% |
-| Phonetic Extensions | U+1D00-U+1D7F | 128 | 1 | 0.8% |
+| Symbols and Pictographs Extended-A | U+1FA70-U+1FAFF | 120 | 1 | 0.8% |
 | CJK Unified Ideographs Extension D | U+2B740-U+2B81F | 222 | 1 | 0.5% |
 | Arabic | U+0600-U+06FF | 256 | 1 | 0.4% |
 | CJK Unified Ideographs Extension A | U+3400-U+4DBF | 6592 | 11 | 0.2% |
@@ -109,8 +125,6 @@ Generated: 2026-09-08 00:39
 | Ethiopic | U+1200-U+137F | 358 | 0 | 0.0% |
 | Ethiopic Supplement | U+1380-U+139F | 26 | 0 | 0.0% |
 | Cherokee | U+13A0-U+13FF | 92 | 0 | 0.0% |
-| Ogham | U+1680-U+169F | 29 | 0 | 0.0% |
-| Runic | U+16A0-U+16FF | 89 | 0 | 0.0% |
 | Tagalog | U+1700-U+171F | 23 | 0 | 0.0% |
 | Hanunoo | U+1720-U+173F | 23 | 0 | 0.0% |
 | Buhid | U+1740-U+175F | 20 | 0 | 0.0% |
@@ -124,21 +138,14 @@ Generated: 2026-09-08 00:39
 | Khmer Symbols | U+19E0-U+19FF | 32 | 0 | 0.0% |
 | Buginese | U+1A00-U+1A1F | 30 | 0 | 0.0% |
 | Tai Tham | U+1A20-U+1AAF | 127 | 0 | 0.0% |
-| Combining Diacritical Marks Extended | U+1AB0-U+1AFF | 58 | 0 | 0.0% |
 | Balinese | U+1B00-U+1B7F | 127 | 0 | 0.0% |
 | Sundanese | U+1B80-U+1BBF | 64 | 0 | 0.0% |
 | Batak | U+1BC0-U+1BFF | 56 | 0 | 0.0% |
 | Lepcha | U+1C00-U+1C4F | 74 | 0 | 0.0% |
 | Ol Chiki | U+1C50-U+1C7F | 48 | 0 | 0.0% |
-| Cyrillic Extended-C | U+1C80-U+1C8F | 11 | 0 | 0.0% |
 | Georgian Extended | U+1C90-U+1CBF | 46 | 0 | 0.0% |
 | Sundanese Supplement | U+1CC0-U+1CCF | 8 | 0 | 0.0% |
 | Vedic Extensions | U+1CD0-U+1CFF | 43 | 0 | 0.0% |
-| Phonetic Extensions Supplement | U+1D80-U+1DBF | 64 | 0 | 0.0% |
-| Combining Diacritical Marks Supplement | U+1DC0-U+1DFF | 64 | 0 | 0.0% |
-| Miscellaneous Mathematical Symbols-A | U+27C0-U+27EF | 48 | 0 | 0.0% |
-| Supplemental Arrows-A | U+27F0-U+27FF | 16 | 0 | 0.0% |
-| Supplemental Arrows-B | U+2900-U+297F | 128 | 0 | 0.0% |
 | Miscellaneous Mathematical Symbols-B | U+2980-U+29FF | 128 | 0 | 0.0% |
 | Supplemental Mathematical Operators | U+2A00-U+2AFF | 256 | 0 | 0.0% |
 | Miscellaneous Symbols and Arrows | U+2B00-U+2BFF | 254 | 0 | 0.0% |
@@ -339,20 +346,13 @@ Generated: 2026-09-08 00:39
 | Ottoman Siyaq Numbers | U+1ED00-U+1ED4F | 61 | 0 | 0.0% |
 | Arabic Mathematical Alphabetic Symbols | U+1EE00-U+1EEFF | 143 | 0 | 0.0% |
 | Mahjong Tiles | U+1F000-U+1F02F | 44 | 0 | 0.0% |
-| Domino Tiles | U+1F030-U+1F09F | 100 | 0 | 0.0% |
-| Playing Cards | U+1F0A0-U+1F0FF | 82 | 0 | 0.0% |
-| Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 0 | 0.0% |
 | Enclosed Ideographic Supplement | U+1F200-U+1F2FF | 64 | 0 | 0.0% |
-| Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 0 | 0.0% |
 | Ornamental Dingbats | U+1F650-U+1F67F | 48 | 0 | 0.0% |
 | Transport and Map Symbols | U+1F680-U+1F6FF | 119 | 0 | 0.0% |
 | Alchemical Symbols | U+1F700-U+1F77F | 128 | 0 | 0.0% |
 | Geometric Shapes Extended | U+1F780-U+1F7FF | 103 | 0 | 0.0% |
 | Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 0 | 0.0% |
 | Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 0 | 0.0% |
-| Chess Symbols | U+1FA00-U+1FA6F | 102 | 0 | 0.0% |
-| Symbols and Pictographs Extended-A | U+1FA70-U+1FAFF | 120 | 0 | 0.0% |
-| Symbols for Legacy Computing | U+1FB00-U+1FBFF | 250 | 0 | 0.0% |
 | CJK Unified Ideographs Extension I | U+2EBF0-U+2EE5F | 622 | 0 | 0.0% |
 | CJK Compatibility Ideographs Supplement | U+2F800-U+2FA1F | 542 | 0 | 0.0% |
 | CJK Unified Ideographs Extension G | U+30000-U+3134F | 4939 | 0 | 0.0% |

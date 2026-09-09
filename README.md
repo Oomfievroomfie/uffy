@@ -2,6 +2,12 @@
 
 Rapid font editor (vibecoded) + readable universal fallback font (human-made CC0)
 
+## Coverage
+
+- **8322** codepoints authored — **8296** with strokes, **26** intentionally empty.
+- **5.4%** of the **153626** allocated Unicode codepoints across the full block table.
+- Per-block breakdown: [`COVERAGE.md`](COVERAGE.md).
+
 ## Goals
 
 - Easy-to-use stroke-based font editor that produces very little information per glyph
