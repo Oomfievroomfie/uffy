@@ -3,11 +3,6 @@ general purpose blocks that i haven't covered yet:
 - coptic (to do later)
 - enclosed cjk letters and months (to do later)
 
-- common indic number forms
-- hangul jamo extended-a
-- latin extended-e
-- hangul jamo extended-b
-
 --- BMP cutoff
 
 - ancient symbols
