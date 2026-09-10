@@ -226,9 +226,11 @@ The full set of keyboard and mouse controls is below.
 
 * **Add folder** to load reference fonts; **Clear** to drop them.
 * **Native reference** panel — the current codepoint as a big character.
-* **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open** /
-  **squish arrows**. Clicking a squish arrow copies the related glyph into a fraction of the
-  current glyph's grid toward that edge; **Shift** gives 2/3 size instead of 1/2.
+* **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open**,
+  four **axial squish arrows** (↑↓←→), and four **diagonal squish buttons** (↖↗↙↘) below them.
+  Clicking a squish button copies the related glyph into a fraction of the current glyph's grid
+  toward that edge/corner (same as pasting while holding the arrow key(s)); **Shift** gives 2/3
+  size instead of 1/2.
 
 ### Menus
 

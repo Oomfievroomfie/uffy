@@ -59,7 +59,7 @@ REL_PIX_W, REL_PIX_H = 60, 60
 REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
 # related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
-REL_CELL_W, REL_CELL_H = 96, 150
+REL_CELL_W, REL_CELL_H = 96, 172
 # big static "native reference" image: width enough for wide glyphs (e.g. Arabic), and a TALLER
 # height so tall descenders fit
 REF_IMG_SIZE = 240
@@ -139,26 +139,29 @@ REL_PIX = Qt.ItemDataRole.UserRole + 2
 def _rel_button_rects(rect: QRectF) -> tuple:
     """Button rects inside a related cell (shared by paint + hit-test).
 
-    Returns ``(copy, open, arrows)`` where ``arrows`` maps 'up'/'down'/'left'/'right' to its
-    rect. Copy/Open are on a row; the four arrow (copy-and-squish) buttons are a compact,
-    centered group on a row under them (so they stay inside the card and do not overflow into
-    the neighbouring cell).
+    Returns ``(copy, open, arrows, diags)`` where ``arrows`` maps 'up'/'down'/'left'/'right' to
+    its rect and ``diags`` maps 'upleft'/'upright'/'downleft'/'downright' to its rect. Copy/Open
+    are on a row; the four axial (copy-and-squish) arrows are a compact, centered group under
+    them, and the four diagonal (copy-and-squish) buttons sit below those.
     """
     m = 6.0
-    row2_y = rect.bottom() - m - 18.0           # arrows (bottom row)
-    row1_y = row2_y - 22.0                      # copy/open row (above the arrows)
+    row_h = 18.0
+    row3_y = rect.bottom() - m - row_h              # diagonals (bottom row)
+    row2_y = row3_y - (row_h + 2.0)                 # axial arrows
+    row1_y = row2_y - 22.0                          # copy/open row (above the arrows)
     bw = (rect.width() - 2 * m - 4.0) / 2.0
-    copy = QRectF(rect.left() + m, row1_y, bw, 18.0)
-    opn = QRectF(copy.right() + 4.0, row1_y, bw, 18.0)
-    # compact, centered arrow group
-    dirs = ["up", "down", "left", "right"]
-    aw, gap = 18.0, 2.0
-    total = len(dirs) * aw + (len(dirs) - 1) * gap
-    startx = rect.center().x() - total / 2.0
-    arrows = {}
-    for i, d in enumerate(dirs):
-        arrows[d] = QRectF(startx + i * (aw + gap), row2_y, aw, 18.0)
-    return copy, opn, arrows
+    copy = QRectF(rect.left() + m, row1_y, bw, row_h)
+    opn = QRectF(copy.right() + 4.0, row1_y, bw, row_h)
+
+    def _group(dirs, y):
+        aw, gap = 18.0, 2.0
+        total = len(dirs) * aw + (len(dirs) - 1) * gap
+        startx = rect.center().x() - total / 2.0
+        return {d: QRectF(startx + i * (aw + gap), y, aw, row_h) for i, d in enumerate(dirs)}
+
+    arrows = _group(["up", "down", "left", "right"], row2_y)
+    diags = _group(["upleft", "upright", "downleft", "downright"], row3_y)
+    return copy, opn, arrows, diags
 
 
 class _RelatedDelegate(QStyledItemDelegate):
@@ -180,8 +183,8 @@ class _RelatedDelegate(QStyledItemDelegate):
         painter.setBrush(bg)
         painter.drawRoundedRect(rect, 6, 6)
 
-        copy_r, opn_r, arrows = _rel_button_rects(QRectF(rect))
-        # preview fills the space above the two button rows
+        copy_r, opn_r, arrows, diags = _rel_button_rects(QRectF(rect))
+        # preview fills the space above the button rows
         btn_h = rect.bottom() - copy_r.top()   # top edge of the copy/open row
         label_h = 14.0
         avail_w = rect.width() - 8.0
@@ -216,11 +219,17 @@ class _RelatedDelegate(QStyledItemDelegate):
             f"U+{cp:04X}",
         )
 
-        # buttons: Copy + Open, then the four copy-and-squish arrows below
+        # buttons: Copy + Open, the four axial copy-and-squish arrows, then the diagonals
         self._draw_button(painter, copy_r, "Copy", enabled=has)
         self._draw_button(painter, opn_r, "Open", enabled=True)
         for d in ["up", "down", "left", "right"]:
             self._draw_button(painter, arrows[d], {"up": "↑", "down": "↓", "left": "←", "right": "→"}[d], enabled=has)
+        for d in ["upleft", "upright", "downleft", "downright"]:
+            self._draw_button(
+                painter, diags[d],
+                {"upleft": "↖", "upright": "↗", "downleft": "↙", "downright": "↘"}[d],
+                enabled=has,
+            )
         painter.restore()
 
     @staticmethod
@@ -268,7 +277,7 @@ class _RelatedListView(QListView):
             if idx.isValid():
                 cp = idx.data(REL_CP)
                 has = bool(idx.data(REL_HAS))
-                copy_r, opn_r, arrows = _rel_button_rects(
+                copy_r, opn_r, arrows, diags = _rel_button_rects(
                     QRectF(self.visualRect(idx)).adjusted(3, 3, -3, -3)
                 )
                 pos = event.position()
@@ -279,7 +288,7 @@ class _RelatedListView(QListView):
                     self.openRequested.emit(cp)
                     return
                 if has:
-                    for d, r in arrows.items():
+                    for d, r in list(arrows.items()) + list(diags.items()):
                         if r.contains(pos):
                             shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
                             frac = 2.0 / 3.0 if shift else 0.5
