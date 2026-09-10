@@ -98,16 +98,44 @@ class Point:
 
 
 @dataclass(frozen=True)
+class StrokeOrigin:
+    """Optional provenance for a stroke: where it was copied from.
+
+    Records that the stroke came from the glyph associated with ``codepoint``, squished (if at
+    all) toward ``direction`` by ``fraction``. ``direction``/``fraction`` are ``None`` for a plain
+    (unsquished) copy; ``direction`` uses the same names as :func:`squish_strokes`
+    (``"up"``/``"down"``/``"left"``/``"right"`` or a corner like ``"upleft"``).
+    """
+    codepoint: int
+    direction: Optional[str] = None
+    fraction: Optional[float] = None
+
+    def to_dict(self) -> dict:
+        d: dict = {"codepoint": self.codepoint}
+        if self.direction is not None:
+            d["direction"] = self.direction
+        if self.fraction is not None:
+            d["fraction"] = self.fraction
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "StrokeOrigin":
+        return cls(int(d["codepoint"]), d.get("direction"), d.get("fraction"))
+
+
+@dataclass(frozen=True)
 class Stroke:
     """A single stroke: exactly two grid points plus a line-vs-single-quadratic flag.
 
-    That is the *only* data a stroke carries. An arc's bend direction is a pure function of
+    That is the *only* shape data a stroke carries. An arc's bend direction is a pure function of
     the ordering of ``p1`` and ``p2`` (no separate bend flag), and the pen/cap shape is a
-    tool-level choice, not per-glyph data.
+    tool-level choice, not per-glyph data. ``origin`` is optional, non-shape provenance (see
+    :class:`StrokeOrigin`) and never affects geometry or compilation.
     """
     p1: Point
     p2: Point
     shape: str = SHAPE_LINE
+    origin: Optional[StrokeOrigin] = None
 
     def __post_init__(self) -> None:
         if self.shape not in _SUPPORTED_SHAPES:
@@ -119,20 +147,29 @@ class Stroke:
 
     def reversed(self) -> "Stroke":
         """The same stroke with the two points swapped (the arc bends the other way)."""
-        return Stroke(self.p2, self.p1, self.shape)
+        return Stroke(self.p2, self.p1, self.shape, self.origin)
+
+    def with_origin(self, origin: Optional[StrokeOrigin]) -> "Stroke":
+        """A copy of this stroke carrying ``origin`` (geometry unchanged)."""
+        return Stroke(self.p1, self.p2, self.shape, origin)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "p1": [self.p1.x, self.p1.y],
             "p2": [self.p2.x, self.p2.y],
             "shape": self.shape,
         }
+        if self.origin is not None:
+            d["origin"] = self.origin.to_dict()
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Stroke":
         p1 = Point(*d["p1"])
         p2 = Point(*d["p2"])
-        return cls(p1, p2, d.get("shape", SHAPE_LINE))
+        o = d.get("origin")
+        return cls(p1, p2, d.get("shape", SHAPE_LINE),
+                   StrokeOrigin.from_dict(o) if o else None)
 
 
 @dataclass
@@ -215,7 +252,8 @@ class Glyph:
 
 
 def squish_strokes(
-    strokes: Iterable[Stroke], direction: str, width: int, fraction: float = 0.5
+    strokes: Iterable[Stroke], direction: str, width: int, fraction: float = 0.5,
+    origin: Optional["StrokeOrigin"] = None,
 ) -> List[Stroke]:
     """Copy + squish ``strokes`` into a fraction of the grid, as new strokes.
 
@@ -254,7 +292,7 @@ def squish_strokes(
         gy = _clamp_grid(map_v(p.y, ymax, y0, y1)) if y0 is not None else p.y
         return Point(gx, gy)
 
-    return [Stroke(map_pt(s.p1), map_pt(s.p2), s.shape) for s in strokes]
+    return [Stroke(map_pt(s.p1), map_pt(s.p2), s.shape, origin) for s in strokes]
 
 
 class StrokeFont:

@@ -28,6 +28,7 @@ from ..model import (
     Glyph,
     Point,
     Stroke,
+    StrokeOrigin,
     squish_strokes,
 )
 from .uiutil import ops_to_painterpath
@@ -59,6 +60,7 @@ class GlyphCanvas(QWidget):
         # currently-held arrow keys (for paste-into-side/corner squish via Ctrl+arrow+V)
         self._held_arrows: set = set()
         self._clip: list = []
+        self._clip_src: int = 0  # codepoint the clipboard was copied from (provenance)
         self._undo: list = []   # list of prior stroke-list snapshots (list[Stroke])
         self._redo: list = []   # list of undone stroke-list snapshots
         self.tool: str = SHAPE_LINE
@@ -87,13 +89,13 @@ class GlyphCanvas(QWidget):
     # --- undo / redo (current glyph only) ------------------------------------
     def _snapshot(self) -> None:
         """Record the current strokes before a mutation, so it can be undone."""
-        self._undo.append([Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes])
+        self._undo.append([Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes])
         self._redo.clear()
 
     def undo(self) -> None:
         if not self._undo:
             return
-        self._redo.append([Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes])
+        self._redo.append([Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes])
         self._glyph.strokes[:] = self._undo.pop()
         self.update()
         self.glyphChanged.emit()
@@ -101,7 +103,7 @@ class GlyphCanvas(QWidget):
     def redo(self) -> None:
         if not self._redo:
             return
-        self._undo.append([Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes])
+        self._undo.append([Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes])
         self._glyph.strokes[:] = self._redo.pop()
         self.update()
         self.glyphChanged.emit()
@@ -240,7 +242,7 @@ class GlyphCanvas(QWidget):
             self._snapshot()
             s = self._glyph.strokes[self._selected_index]
             new_shape = SHAPE_LINE if s.shape == SHAPE_ARC else SHAPE_ARC
-            self._glyph.strokes[self._selected_index] = Stroke(s.p1, s.p2, new_shape)
+            self._glyph.strokes[self._selected_index] = Stroke(s.p1, s.p2, new_shape, s.origin)
             self.update()
             self.glyphChanged.emit()
 
@@ -252,13 +254,15 @@ class GlyphCanvas(QWidget):
         self._snapshot()
         for i, s in enumerate(strokes):
             strokes[i] = Stroke(Point(s.p1.x + dx, s.p1.y + dy),
-                                Point(s.p2.x + dx, s.p2.y + dy), s.shape)
+                                Point(s.p2.x + dx, s.p2.y + dy), s.shape, s.origin)
         self.update()
         self.glyphChanged.emit()
 
     def copy_strokes(self) -> None:
         """Copy the current glyph's strokes to an internal clipboard."""
-        self._clip = [Stroke(s.p1, s.p2, s.shape) for s in self._glyph.strokes]
+        self._clip = [Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes]
+        # remember the source glyph so a squish-paste can record where the strokes came from
+        self._clip_src = self._glyph.codepoint
 
     def paste_strokes(self) -> None:
         """Append the clipboard strokes to the current glyph (up to the 32-stroke cap).
@@ -270,7 +274,7 @@ class GlyphCanvas(QWidget):
             if room > 0:
                 self._snapshot()
                 self._glyph.strokes.extend(
-                    [Stroke(s.p1, s.p2, s.shape) for s in self._clip[:room]])
+                    [Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._clip[:room]])
                 self.update()
                 self.glyphChanged.emit()
 
@@ -288,8 +292,10 @@ class GlyphCanvas(QWidget):
             return
         fraction = 2.0 / 3.0 if shift else 0.5
         self._snapshot()
+        # provenance: these strokes came from the clipboard's source glyph, squished here
+        origin = StrokeOrigin(self._clip_src, direction, fraction)
         self._glyph.strokes.extend(
-            squish_strokes(self._clip[:room], direction, self._cols(), fraction))
+            squish_strokes(self._clip[:room], direction, self._cols(), fraction, origin=origin))
         self.update()
         self.glyphChanged.emit()
 
@@ -320,7 +326,7 @@ class GlyphCanvas(QWidget):
             return
         self._snapshot()
         self._glyph.strokes.extend(
-            [Stroke(s.p1, s.p2, s.shape) for s in strokes[:room]])
+            [Stroke(s.p1, s.p2, s.shape, s.origin) for s in strokes[:room]])
         self.update()
         self.glyphChanged.emit()
 
@@ -340,7 +346,7 @@ class GlyphCanvas(QWidget):
         for i, s in enumerate(strokes):
             p1 = Point(m - s.p1.x, s.p1.y)
             p2 = Point(m - s.p2.x, s.p2.y)
-            strokes[i] = Stroke(p2, p1, s.shape) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape)
+            strokes[i] = Stroke(p2, p1, s.shape, s.origin) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape, s.origin)
         self.update()
         self.glyphChanged.emit()
 
@@ -358,7 +364,7 @@ class GlyphCanvas(QWidget):
         for i, s in enumerate(strokes):
             p1 = Point(s.p1.x, m - s.p1.y)
             p2 = Point(s.p2.x, m - s.p2.y)
-            strokes[i] = Stroke(p2, p1, s.shape) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape)
+            strokes[i] = Stroke(p2, p1, s.shape, s.origin) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape, s.origin)
         self.update()
         self.glyphChanged.emit()
 
@@ -377,7 +383,7 @@ class GlyphCanvas(QWidget):
         for i, s in enumerate(strokes):
             p1 = Point(s.p1.y, n - 1 - s.p1.x)
             p2 = Point(s.p2.y, n - 1 - s.p2.x)
-            strokes[i] = Stroke(p1, p2, s.shape)
+            strokes[i] = Stroke(p1, p2, s.shape, s.origin)
         self.update()
         self.glyphChanged.emit()
 
@@ -614,7 +620,8 @@ class GlyphCanvas(QWidget):
                 strokes = self._glyph.strokes
                 if 0 <= idx < len(strokes):
                     s = strokes[idx]
-                    strokes[idx] = Stroke(gp, s.p2, s.shape) if ep == 0 else Stroke(s.p1, gp, s.shape)
+                    strokes[idx] = (Stroke(gp, s.p2, s.shape, s.origin) if ep == 0
+                                    else Stroke(s.p1, gp, s.shape, s.origin))
                     self.update()  # repaint the canvas only; the grid refresh is
                     # deferred to mouseRelease so it doesn't run on every drag step.
             else:  # "new": preview the stroke while dragging

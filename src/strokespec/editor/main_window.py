@@ -893,7 +893,10 @@ class MainWindow(QMainWindow):
         """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas."""
         g = self.strokefont.get(cp)
         if g is not None and g.strokes:
-            self._editor.canvas.append_strokes(g.strokes)
+            # record provenance: these strokes came from the glyph at ``cp`` (no squish)
+            from ..model import StrokeOrigin
+            origin = StrokeOrigin(cp)
+            self._editor.canvas.append_strokes([s.with_origin(origin) for s in g.strokes])
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
     def _squish_related_strokes(self, cp: int, direction: str, fraction: float = 0.5) -> None:
@@ -908,8 +911,10 @@ class MainWindow(QMainWindow):
             return
         cur = self._editor.glyph()
         width = cur.cell_width_grid if cur is not None else 16
-        from ..model import squish_strokes
-        squished = squish_strokes(g.strokes, direction, width, fraction=fraction)
+        from ..model import squish_strokes, StrokeOrigin
+        # provenance: came from the glyph at ``cp``, squished toward ``direction`` by ``fraction``
+        origin = StrokeOrigin(cp, direction, fraction)
+        squished = squish_strokes(g.strokes, direction, width, fraction=fraction, origin=origin)
         if squished:
             self._editor.canvas.append_strokes(squished)
         self._editor.canvas.setFocus()  # hand focus back to the canvas
