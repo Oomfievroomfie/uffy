@@ -446,8 +446,11 @@ class BlockPane(QWidget):
 
     @staticmethod
     def _matches(cp: int, q: str) -> bool:
-        q = q.lower()
-        if not q:
+        # Split the query on whitespace and require EVERY subterm to appear somewhere (as a
+        # case-insensitive substring), in any order and not necessarily consecutively — i.e. an
+        # AND across the whitespace-separated terms, e.g. "latin small a".
+        terms = q.lower().split()
+        if not terms:
             return True
         ch = chr(cp)
         name = unicodedata.name(ch, "")
@@ -455,7 +458,7 @@ class BlockPane(QWidget):
             name.lower(), ch.lower(),
             f"u+{cp:04x}", f"{cp:x}", f"{cp:04x}",
         ]))
-        return q in hay
+        return all(t in hay for t in terms)
 
 
 class GlyphGrid(QWidget):
