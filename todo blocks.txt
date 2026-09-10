@@ -1,14 +1,8 @@
 general purpose blocks that i haven't covered yet:
 
-- miscellaneous mathematical symbols-b
-- supplemental mathematical operators
-- miscellaneous symbols and arrows
-- latin extended-c
-- coptic
-- cyrillic extended-a
-- bopomofo extended
-- enclosed cjk letters and months
-- cyrillic extended-b
+- coptic (to do later)
+- enclosed cjk letters and months (to do later)
+
 - latin extended-d
 - common indic number forms
 - hangul jamo extended-a

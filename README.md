@@ -43,8 +43,8 @@ DO NOT TRACE. Accidental similarity is OK. See the "Important" section below for
 
 Any two straight strokes cost basically the same.
 
-A straight stroke that's secretly made of two straight strokes but looks like one, is
-two straight strokes, and costs as much as two disconnected straight strokes.
+A straight stroke that's secretly made of two straight strokes but looks like one, is two
+straight strokes, and costs as much as two disconnected straight strokes.
 
 Straight strokes snap their ends to a cell edge. This is determined by their angle, or,
 for 45 degree strokes, whether they're up-down or down-up from start point to end point.
@@ -67,7 +67,20 @@ paste; do not just manually rebuild the same glyph.
 Two glyphs with EXACTLY the same contents cost as much as a single copy of that glyph, not
 as much as two copies. Glyphs with EXACTLY the same contents are deduplicated on export.
 
-For conceptual glyphs, try to think of the fewest-stroked way to express the concept.
+Two lines that exactly meet end-to-end, as in, edge-to-edge, not endpoint-to-startpoint,
+cost silghtly less than the two lines would cost if they didn't meet at all. Such edges are
+merged on export. This only applies to the ttf export; it does not apply to other formats.
+(The way strokes are so limited here is meant to make it possible to quickly autogenerate
+glyphs on demand from a very small amount of binary data, for programs that can do that.
+But such programs don't benefit from outline-level operations like edge merging.)
+
+For conceptual glyphs, try to think of the fewest-stroked way to express the concept. For
+example, if there's a series of glyphs where the concept is "growing old in life", and the
+canonical form is something like "baby, child, teen, adult", but those forms aren't the only
+valid interpretation of the way the glyphs are defined, it's OK to rethink it as "seed,
+sprout, flower, field". This came up on tarot cards, for example, but it applies to emoji
+too. A glyph for "thunder clouds with rain" doesn't require you to draw big fat fluffy
+clouds -- you can draw faint line clouds that imply the presence of bigger thicker clouds.
 
 For highly repetitive operations, figure out how to express them via keyboard and make a
 macro with https://github.com/LOUDO56/PyMacroRecord/ or some other macro tool. (Note: many
