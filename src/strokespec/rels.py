@@ -1,12 +1,17 @@
 """Discover "related glyphs" for a codepoint.
 
-Two relations are provided:
+Three relations are provided:
 
 * **Decomposition base** — for a precombined glyph+diacritic (e.g. ``á``) the related glyph is
   its base letter (the first element of the Unicode canonical/compatibility decomposition).
 * **Hanzi components** — for a CJK Unified Ideograph the related glyphs are the direct
   Ideographic Description Sequence (IDS) components from the **cjkvi-ids** database
   (bundled as ``data/ids.txt``), e.g. ``明`` -> ``日``, ``月``.
+* **Hangul jamo** — for a Hangul syllable (U+AC00..U+D7A3) the related glyphs are its
+  conjoining jamo (leading consonant, vowel, optional trailing consonant). This decomposition
+  is *algorithmic* (Unicode Standard §3.12 "Conjoining Jamo Behavior"), so it is computed from
+  constants rather than read from a table — UnicodeData.txt does not list it (the block is
+  collapsed to ``<Hangul Syllable, First/Last>`` with an empty decomposition field).
 """
 
 from __future__ import annotations
@@ -134,11 +139,44 @@ def ids_components(cp: int) -> List[int]:
     return _load_ids().get(cp, [])
 
 
+# --- Hangul syllables (algorithmic decomposition, Unicode Standard §3.12) ------
+# Conjoining Jamo constants. TBase is chosen so that trailing-consonant index 0 means "none".
+HANGUL_SBASE = 0xAC00
+HANGUL_LBASE = 0x1100
+HANGUL_VBASE = 0x1161
+HANGUL_TBASE = 0x11A7
+HANGUL_LCOUNT = 19
+HANGUL_VCOUNT = 21
+HANGUL_TCOUNT = 28
+HANGUL_NCOUNT = HANGUL_VCOUNT * HANGUL_TCOUNT   # 588
+HANGUL_SCOUNT = HANGUL_LCOUNT * HANGUL_NCOUNT  # 11172
+
+
+def hangul_components(cp: int) -> List[int]:
+    """The conjoining jamo of a Hangul syllable, else ``[]``.
+
+    Computed arithmetically (no table): an LV syllable yields ``[L, V]``, an LVT syllable
+    ``[L, V, T]``. E.g. U+AC01 (각) -> ``[0x1100 ᄀ, 0x1161 ᅡ, 0x11A8 ᆨ]``.
+    """
+    if not (HANGUL_SBASE <= cp < HANGUL_SBASE + HANGUL_SCOUNT):
+        return []
+    i = cp - HANGUL_SBASE
+    lead = HANGUL_LBASE + i // HANGUL_NCOUNT
+    vowel = HANGUL_VBASE + (i % HANGUL_NCOUNT) // HANGUL_TCOUNT
+    trail = i % HANGUL_TCOUNT
+    comps = [lead, vowel]
+    if trail:
+        comps.append(HANGUL_TBASE + trail)
+    return comps
+
+
 def related_codepoints(cp: int) -> List[int]:
-    """Related codepoints: the base + combining marks of a precombined character, plus the
-    direct hanzi IDS components of a Han ideograph. De-duplicated and never the char itself."""
+    """Related codepoints: the base + combining marks of a precombined character, the direct
+    hanzi IDS components of a Han ideograph, and the conjoining jamo of a Hangul syllable.
+    De-duplicated and never the char itself."""
     out: List[int] = []
     out.extend(decomposition_components(cp))
+    out.extend(hangul_components(cp))
     for c in ids_components(cp):
         if c != cp:
             out.append(c)
