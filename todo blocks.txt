@@ -3,7 +3,6 @@ general purpose blocks that i haven't covered yet:
 - coptic (to do later)
 - enclosed cjk letters and months (to do later)
 
-- latin extended-d
 - common indic number forms
 - hangul jamo extended-a
 - latin extended-e
