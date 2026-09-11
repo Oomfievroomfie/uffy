@@ -893,9 +893,11 @@ class MainWindow(QMainWindow):
         """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas."""
         g = self.strokefont.get(cp)
         if g is not None and g.strokes:
-            # record provenance: these strokes came from the glyph at ``cp`` (no squish)
-            from ..model import StrokeOrigin
-            origin = StrokeOrigin(cp)
+            # Provenance is the glyph actually copied from (the direct source, never traced back
+            # to its own sources). An unallocated source is a scratch/dummy glyph, so it carries
+            # no provenance at all.
+            from ..model import StrokeOrigin, unicode_allocated
+            origin = StrokeOrigin(cp) if unicode_allocated(cp) else None
             self._editor.canvas.append_strokes([s.with_origin(origin) for s in g.strokes])
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
@@ -911,9 +913,10 @@ class MainWindow(QMainWindow):
             return
         cur = self._editor.glyph()
         width = cur.cell_width_grid if cur is not None else 16
-        from ..model import squish_strokes, StrokeOrigin
-        # provenance: came from the glyph at ``cp``, squished toward ``direction`` by ``fraction``
-        origin = StrokeOrigin(cp, direction, fraction)
+        from ..model import squish_strokes, StrokeOrigin, unicode_allocated
+        # Provenance: from the glyph actually copied from, squished toward ``direction`` by
+        # ``fraction``. Unallocated (scratch/dummy) sources carry no provenance.
+        origin = StrokeOrigin(cp, direction, fraction) if unicode_allocated(cp) else None
         squished = squish_strokes(g.strokes, direction, width, fraction=fraction, origin=origin)
         if squished:
             self._editor.canvas.append_strokes(squished)

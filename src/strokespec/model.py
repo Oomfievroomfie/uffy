@@ -57,6 +57,21 @@ def unicode_combining(codepoint: int) -> bool:
         return False
 
 
+def unicode_allocated(codepoint: int) -> bool:
+    """True if the codepoint is an assigned (named) Unicode character.
+
+    Unallocated codepoints are usually scratch/dummy slots the user parks temporary glyph data
+    in, so provenance pointing at one is not meaningful.
+    """
+    import unicodedata2 as unicodedata
+    if codepoint < 0 or codepoint > 0x10FFFF or 0xD800 <= codepoint <= 0xDFFF:
+        return False
+    try:
+        return bool(unicodedata.name(chr(codepoint), ""))
+    except Exception:
+        return False
+
+
 def _clamp_grid(v: int) -> int:
     # cell indices are 0..GRID_N-1 (16 cells -> indices 0..15)
     return max(0, min(GRID_N - 1, int(v)))

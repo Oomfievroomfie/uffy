@@ -30,6 +30,7 @@ from ..model import (
     Stroke,
     StrokeOrigin,
     squish_strokes,
+    unicode_allocated,
 )
 from .uiutil import ops_to_painterpath
 
@@ -273,8 +274,13 @@ class GlyphCanvas(QWidget):
             room = 32 - len(self._glyph.strokes)
             if room > 0:
                 self._snapshot()
+                # Provenance is the glyph actually copied from (the clipboard's source), never
+                # traced back through that glyph's own origins. An unallocated source means a
+                # scratch/dummy glyph, so provenance is dropped entirely.
+                origin = (StrokeOrigin(self._clip_src) if unicode_allocated(self._clip_src)
+                          else None)
                 self._glyph.strokes.extend(
-                    [Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._clip[:room]])
+                    [Stroke(s.p1, s.p2, s.shape, origin) for s in self._clip[:room]])
                 self.update()
                 self.glyphChanged.emit()
 
@@ -292,8 +298,10 @@ class GlyphCanvas(QWidget):
             return
         fraction = 2.0 / 3.0 if shift else 0.5
         self._snapshot()
-        # provenance: these strokes came from the clipboard's source glyph, squished here
-        origin = StrokeOrigin(self._clip_src, direction, fraction)
+        # Provenance: the clipboard's source glyph (the direct source), squished here. Dropped if
+        # that source is unallocated (a scratch/dummy glyph).
+        origin = (StrokeOrigin(self._clip_src, direction, fraction)
+                  if unicode_allocated(self._clip_src) else None)
         self._glyph.strokes.extend(
             squish_strokes(self._clip[:room], direction, self._cols(), fraction, origin=origin))
         self.update()
