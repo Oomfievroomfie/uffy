@@ -72,6 +72,26 @@ def unicode_allocated(codepoint: int) -> bool:
         return False
 
 
+def copied_origin(
+    source_cp: int,
+    target_cp: int,
+    source_origin: Optional["StrokeOrigin"],
+    direction: Optional[str] = None,
+    fraction: Optional[float] = None,
+) -> Optional["StrokeOrigin"]:
+    """Provenance for a stroke copied from ``source_cp`` into ``target_cp``.
+
+    The direct source is stamped (with the squish direction/amount, if any) **only** when it is
+    an *allocated* codepoint and differs from the target. Otherwise the stroke's existing
+    provenance is carried through unchanged — this covers both pasting into the codepoint the
+    strokes came from, and copying out of an *unallocated* scratch/dummy glyph (whose strokes keep
+    whatever provenance they already had, rather than being overwritten or deleted).
+    """
+    if unicode_allocated(source_cp) and source_cp != target_cp:
+        return StrokeOrigin(source_cp, direction, fraction)
+    return source_origin
+
+
 def _clamp_grid(v: int) -> int:
     # cell indices are 0..GRID_N-1 (16 cells -> indices 0..15)
     return max(0, min(GRID_N - 1, int(v)))

@@ -126,12 +126,14 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
     there is no bend flag; swapping the two points bends the arc the other way.
 * A stroke may also carry optional, non-shape **provenance** (`origin`): the **codepoint** of the
   glyph it was copied from, plus the **squish direction and amount** if it was squished (absent
-  for an unsquished copy). It always records the glyph **actually copied from** — the direct
-  source, never traced back through that glyph's own origins — so the metadata forms a graph of
-  relations. If the source glyph is **unallocated** (a scratch/dummy codepoint), provenance is
-  dropped entirely. Pasting into the **same** codepoint it was copied from leaves origins
-  untouched. It is recorded when copying/squishing from a related glyph and when copy-pasting,
-  survives flips/rotations/nudges and undo/redo, and never affects geometry or compilation.
+  for an unsquished copy). The direct source is stamped **only** when it is an *allocated*
+  codepoint **different from the glyph being pasted into** — so it always names the glyph actually
+  copied from (never traced back through that glyph's own origins), forming a graph of relations.
+  Otherwise the copied strokes' existing provenance is carried through unchanged: pasting into the
+  same codepoint, or copying out of an **unallocated** scratch/dummy glyph, copies the provenance
+  data rather than overwriting or deleting it. It is recorded when copying/squishing from a
+  related glyph and when copy-pasting, survives flips/rotations/nudges and undo/redo, and never
+  affects geometry or compilation.
 * Each stroke is painted with a **one-grid-cell-diameter pen**, expanded into a closed outline,
   filled with the **non-zero winding rule** so overlapping strokes **union**.
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above

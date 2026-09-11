@@ -893,12 +893,14 @@ class MainWindow(QMainWindow):
         """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas."""
         g = self.strokefont.get(cp)
         if g is not None and g.strokes:
-            # Provenance is the glyph actually copied from (the direct source, never traced back
-            # to its own sources). An unallocated source is a scratch/dummy glyph, so it carries
-            # no provenance at all.
-            from ..model import StrokeOrigin, unicode_allocated
-            origin = StrokeOrigin(cp) if unicode_allocated(cp) else None
-            self._editor.canvas.append_strokes([s.with_origin(origin) for s in g.strokes])
+            # Provenance: the glyph actually copied from (never traced back to its own sources).
+            # Copied from an unallocated scratch glyph (or into the same codepoint), the existing
+            # provenance data is carried through rather than overwritten.
+            cur = self._editor.glyph()
+            target_cp = cur.codepoint if cur is not None else -1
+            from ..model import copied_origin
+            self._editor.canvas.append_strokes(
+                [s.with_origin(copied_origin(cp, target_cp, s.origin)) for s in g.strokes])
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
     def _squish_related_strokes(self, cp: int, direction: str, fraction: float = 0.5) -> None:
@@ -913,13 +915,14 @@ class MainWindow(QMainWindow):
             return
         cur = self._editor.glyph()
         width = cur.cell_width_grid if cur is not None else 16
-        from ..model import squish_strokes, StrokeOrigin, unicode_allocated
-        # Provenance: from the glyph actually copied from, squished toward ``direction`` by
-        # ``fraction``. Unallocated (scratch/dummy) sources carry no provenance.
-        origin = StrokeOrigin(cp, direction, fraction) if unicode_allocated(cp) else None
-        squished = squish_strokes(g.strokes, direction, width, fraction=fraction, origin=origin)
-        if squished:
-            self._editor.canvas.append_strokes(squished)
+        target_cp = cur.codepoint if cur is not None else -1
+        from ..model import squish_strokes, copied_origin
+        src = list(g.strokes)
+        out = squish_strokes(src, direction, width, fraction=fraction)
+        out = [o.with_origin(copied_origin(cp, target_cp, s.origin, direction, fraction))
+               for o, s in zip(out, src)]
+        if out:
+            self._editor.canvas.append_strokes(out)
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
     def _store_glyph(self, glyph: Glyph) -> Glyph:

@@ -28,9 +28,7 @@ from ..model import (
     Glyph,
     Point,
     Stroke,
-    StrokeOrigin,
     squish_strokes,
-    unicode_allocated,
 )
 from .uiutil import ops_to_painterpath
 
@@ -274,22 +272,24 @@ class GlyphCanvas(QWidget):
             room = 32 - len(self._glyph.strokes)
             if room > 0:
                 self._snapshot()
-                if self._same_source():
-                    # pasting into the glyph the strokes were copied from: leave origins as-is
-                    news = [Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._clip[:room]]
-                else:
-                    # provenance is the glyph actually copied from (never traced back through that
-                    # glyph's own origins); an unallocated source is scratch data, so it is dropped
-                    origin = (StrokeOrigin(self._clip_src) if unicode_allocated(self._clip_src)
-                              else None)
-                    news = [Stroke(s.p1, s.p2, s.shape, origin) for s in self._clip[:room]]
-                self._glyph.strokes.extend(news)
+                src = self._clip[:room]
+                self._glyph.strokes.extend(self._stamp_paste(src, src))
                 self.update()
                 self.glyphChanged.emit()
 
-    def _same_source(self) -> bool:
-        """True when the clipboard was copied from the glyph we would paste into."""
-        return self._clip_src == self._glyph.codepoint
+    def _stamp_paste(self, src: list, transformed: list,
+                     direction: str = None, fraction: float = None) -> list:
+        """Give pasted strokes their provenance, per stroke (see ``model.copied_origin``).
+
+        Stamps the clipboard's source codepoint only when it is allocated and differs from the
+        glyph being pasted into; otherwise each stroke carries its own existing provenance data
+        through unchanged (pasting into the same codepoint, or pasting out of an unallocated
+        scratch glyph, keeps the copied data rather than overwriting or deleting it).
+        """
+        from ..model import copied_origin
+        target_cp = self._glyph.codepoint
+        return [t.with_origin(copied_origin(self._clip_src, target_cp, s.origin, direction, fraction))
+                for t, s in zip(transformed, src)]
 
     def _paste_with_squish(self, shift: bool) -> None:
         """Ctrl+V. If arrow keys are held, squish the paste toward that side/corner
@@ -306,16 +306,8 @@ class GlyphCanvas(QWidget):
         fraction = 2.0 / 3.0 if shift else 0.5
         self._snapshot()
         src = self._clip[:room]
-        if self._same_source():
-            # pasting into the glyph it came from: keep each stroke's own origin untouched
-            out = squish_strokes(src, direction, self._cols(), fraction)
-            out = [o.with_origin(s.origin) for o, s in zip(out, src)]
-        else:
-            # provenance: the clipboard's source glyph, squished here; dropped if unallocated
-            origin = (StrokeOrigin(self._clip_src, direction, fraction)
-                      if unicode_allocated(self._clip_src) else None)
-            out = squish_strokes(src, direction, self._cols(), fraction, origin=origin)
-        self._glyph.strokes.extend(out)
+        squished = squish_strokes(src, direction, self._cols(), fraction)
+        self._glyph.strokes.extend(self._stamp_paste(src, squished, direction, fraction))
         self.update()
         self.glyphChanged.emit()
 
