@@ -193,7 +193,8 @@ src/strokespec/
   codepoints with no stroke glyph yet, or an empty slot. Clicking a cell opens that glyph in
   the editor. Each visible cell also carries a small **native-text character badge** (the
   codepoint's character rendered with the fallback chain).
-* a **glyph editor** on the right (the 16x16 canvas + stroke list + tool row).
+* a **glyph editor** on the right (the 16x16 canvas + stroke list + tool row). Hovering a row in
+  the stroke list shows that stroke's provenance (if any) as a tooltip.
 * a **Reference Fonts** dock with a big **native reference** panel and a **related-glyphs**
   list.
 * **File → Compile TTF…** to build the font with Google's tools.

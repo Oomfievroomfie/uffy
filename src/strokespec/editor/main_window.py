@@ -136,6 +136,34 @@ REL_HAS = Qt.ItemDataRole.UserRole + 1
 REL_PIX = Qt.ItemDataRole.UserRole + 2
 
 
+def _stroke_origin_tooltip(s) -> str:
+    """Tooltip text for a stroke's provenance (``''`` when it carries none).
+
+    Shows the codepoint (and character name) the stroke was copied from, plus the squish
+    direction and amount when it was squished.
+    """
+    o = getattr(s, "origin", None)
+    if o is None:
+        return ""
+    ch = chr(o.codepoint) if 0 <= o.codepoint <= 0x10FFFF else ""
+    try:
+        import unicodedata2 as unicodedata
+        name = unicodedata.name(ch, "")
+    except Exception:
+        name = ""
+    head = f"Copied from U+{o.codepoint:04X}"
+    if ch and not ch.isspace():
+        head += f"  {ch}"
+    if name:
+        head += f"\n{name}"
+    if o.direction:
+        amt = ""
+        if o.fraction is not None:
+            amt = {0.5: "1/2", 0.6667: "2/3"}.get(round(o.fraction, 4), f"{o.fraction:g}")
+        head += f"\nSquished {o.direction}" + (f" to {amt} size" if amt else "")
+    return head
+
+
 def _rel_button_rects(rect: QRectF) -> tuple:
     """Button rects inside a related cell (shared by paint + hit-test).
 
@@ -704,9 +732,13 @@ class GlyphEditorPanel(QWidget):
         if self._glyph is not None:
             for i, s in enumerate(self._glyph.strokes):
                 kind = "Arc" if s.shape == SHAPE_ARC else "Ln "
-                self._stroke_list.addItem(
+                item = QListWidgetItem(
                     f"{i}: {kind} ({s.p1.x},{s.p1.y})→({s.p2.x},{s.p2.y})"
                 )
+                tip = _stroke_origin_tooltip(s)
+                if tip:
+                    item.setToolTip(tip)
+                self._stroke_list.addItem(item)
             if 0 <= self.canvas._selected_index < len(self._glyph.strokes):
                 self._stroke_list.setCurrentRow(self.canvas._selected_index)
         self._stroke_list.blockSignals(False)
