@@ -84,6 +84,13 @@ family list itself, per codepoint:
 * Otherwise → attach only the rare-script fonts that actually cover it, then Unifont as the
   absolute last resort.
 
+The consultation pool is the OS-default Windows fonts (the complete `DEFAULT_WINDOWS_FONTS`
+set) plus, for the **hanzi/kanji blocks only**, the Hanazono Mincho faces **HanaMinA** and
+**HanaMinB** (`HANZI_FALLBACK_FONTS`). HanaMin is not an OS default, but it covers the CJK
+ideograph blocks far more completely than any OS font; it is attached *after* the OS defaults
+(so an OS font that covers the character still wins) and *before* Unifont, and only when the
+face is actually present and its cmap covers the codepoint.
+
 The bundled fallback fonts live in `src/strokespec/data/fonts/` (Noto scripts for every block
 Windows doesn't cover + GNU Unifont BMP and Unifont Upper), with their licenses alongside. They
 are registered at startup and attached per-block, so a block that the system already renders

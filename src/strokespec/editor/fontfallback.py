@@ -87,6 +87,26 @@ DEFAULT_WINDOWS_FONTS = [
 _family_cps: dict[str, set] | None = None
 _primary_cps: set = set()
 
+# Extra intentional fallback fonts for the hanzi/kanji (CJK ideograph) blocks. These are NOT
+# OS-default fonts, but the Hanazono Mincho ("HanaMin") faces cover the ideograph blocks far more
+# completely than any OS font, so they are attached for those blocks after the OS defaults and
+# before Unifont. Attached only when the font is actually present and its cmap covers the
+# codepoint (so nothing is assumed about what is installed).
+HANZI_FALLBACK_FONTS = ["HanaMinA", "HanaMinB"]
+_HAN_BLOCK_PREFIXES = ("CJK Unified Ideographs", "CJK Compatibility Ideographs")
+
+# Families whose cmaps the disk scan reads: OS defaults plus the hanzi/kanji extras.
+_ACCEPTED_FAMILIES = set(DEFAULT_WINDOWS_FONTS) | set(HANZI_FALLBACK_FONTS)
+
+
+def _is_han_block(cp: int) -> bool:
+    """True for the hanzi/kanji (CJK ideograph) blocks."""
+    from ..unicode_blocks import block_name
+    try:
+        return block_name(cp).startswith(_HAN_BLOCK_PREFIXES)
+    except Exception:
+        return False
+
 
 def _family_name(tt: TTFont) -> str | None:
     name = tt["name"]
@@ -122,7 +142,7 @@ def _load_family_cps() -> dict[str, set]:
             try:
                 tt = TTFont(path, fontNumber=0, lazy=True) if path.lower().endswith(".ttc") else TTFont(path, lazy=True)
                 fam = _family_name(tt)
-                if fam in DEFAULT_WINDOWS_FONTS:
+                if fam in _ACCEPTED_FAMILIES:
                     cps.setdefault(fam, set()).update(_cps(tt))
                 if fam == primary:
                     _primary_cps |= _cps(tt)
@@ -156,6 +176,11 @@ def native_text_families(cp: int) -> list[str]:
             continue
         if cp in cps.get(fam, ()):
             relevant.append(fam)
-    if not relevant:
+    # hanzi/kanji blocks: also attach the HanaMin faces (when present and covering the
+    # codepoint), after the OS defaults so an OS font that covers the character still wins, and
+    # before Unifont.
+    han = ([f for f in HANZI_FALLBACK_FONTS if cp in cps.get(f, ())]
+           if _is_han_block(cp) else [])
+    if not relevant and not han:
         return [primary]
-    return [primary] + relevant + ["Unifont", "Unifont Upper"]
+    return [primary] + relevant + han + ["Unifont", "Unifont Upper"]
