@@ -274,15 +274,22 @@ class GlyphCanvas(QWidget):
             room = 32 - len(self._glyph.strokes)
             if room > 0:
                 self._snapshot()
-                # Provenance is the glyph actually copied from (the clipboard's source), never
-                # traced back through that glyph's own origins. An unallocated source means a
-                # scratch/dummy glyph, so provenance is dropped entirely.
-                origin = (StrokeOrigin(self._clip_src) if unicode_allocated(self._clip_src)
-                          else None)
-                self._glyph.strokes.extend(
-                    [Stroke(s.p1, s.p2, s.shape, origin) for s in self._clip[:room]])
+                if self._same_source():
+                    # pasting into the glyph the strokes were copied from: leave origins as-is
+                    news = [Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._clip[:room]]
+                else:
+                    # provenance is the glyph actually copied from (never traced back through that
+                    # glyph's own origins); an unallocated source is scratch data, so it is dropped
+                    origin = (StrokeOrigin(self._clip_src) if unicode_allocated(self._clip_src)
+                              else None)
+                    news = [Stroke(s.p1, s.p2, s.shape, origin) for s in self._clip[:room]]
+                self._glyph.strokes.extend(news)
                 self.update()
                 self.glyphChanged.emit()
+
+    def _same_source(self) -> bool:
+        """True when the clipboard was copied from the glyph we would paste into."""
+        return self._clip_src == self._glyph.codepoint
 
     def _paste_with_squish(self, shift: bool) -> None:
         """Ctrl+V. If arrow keys are held, squish the paste toward that side/corner
@@ -298,12 +305,17 @@ class GlyphCanvas(QWidget):
             return
         fraction = 2.0 / 3.0 if shift else 0.5
         self._snapshot()
-        # Provenance: the clipboard's source glyph (the direct source), squished here. Dropped if
-        # that source is unallocated (a scratch/dummy glyph).
-        origin = (StrokeOrigin(self._clip_src, direction, fraction)
-                  if unicode_allocated(self._clip_src) else None)
-        self._glyph.strokes.extend(
-            squish_strokes(self._clip[:room], direction, self._cols(), fraction, origin=origin))
+        src = self._clip[:room]
+        if self._same_source():
+            # pasting into the glyph it came from: keep each stroke's own origin untouched
+            out = squish_strokes(src, direction, self._cols(), fraction)
+            out = [o.with_origin(s.origin) for o, s in zip(out, src)]
+        else:
+            # provenance: the clipboard's source glyph, squished here; dropped if unallocated
+            origin = (StrokeOrigin(self._clip_src, direction, fraction)
+                      if unicode_allocated(self._clip_src) else None)
+            out = squish_strokes(src, direction, self._cols(), fraction, origin=origin)
+        self._glyph.strokes.extend(out)
         self.update()
         self.glyphChanged.emit()
 
