@@ -5,7 +5,6 @@ general purpose blocks that i haven't covered yet:
 
 --- BMP cutoff
 
-- ancient symbols
 - latin extended-f (!!!)
 - kana extended-b
 - kana supplement (man'yougana)
@@ -35,6 +34,11 @@ general purpose blocks that i haven't covered yet:
 - emoticons (emoji) (main done, full-body items skipped)
 - chess symbols (chess done, hanzi skipped)
 
+
+
+-----
+
+hangul syllables: can be produced entirely algorithmically without human intervention
 
 
 

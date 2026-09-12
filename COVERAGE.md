@@ -1,23 +1,24 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-08 22:11  
+Generated: 2026-09-11 21:33  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 8322 |
-| - with strokes | 8296 |
-| - intentionally empty | 26 |
+| codepoints authored | 10261 |
+| - with strokes | 10234 |
+| - intentionally empty | 27 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 8322 (5.4%) |
+| coverage of allocated | 10261 (6.7%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
 
 | block | range | allocated | covered | % |
 |---|---:|---:|---:|---:|
+| Basic Latin | U+0000-U+007F | 95 | 95 | 100.0% |
 | Latin-1 Supplement | U+0080-U+00FF | 96 | 96 | 100.0% |
 | Latin Extended-A | U+0100-U+017F | 128 | 128 | 100.0% |
 | Latin Extended-B | U+0180-U+024F | 208 | 208 | 100.0% |
@@ -57,6 +58,11 @@ Generated: 2026-09-08 22:11
 | Supplemental Arrows-A | U+27F0-U+27FF | 16 | 16 | 100.0% |
 | Braille Patterns | U+2800-U+28FF | 256 | 256 | 100.0% |
 | Supplemental Arrows-B | U+2900-U+297F | 128 | 128 | 100.0% |
+| Miscellaneous Mathematical Symbols-B | U+2980-U+29FF | 128 | 128 | 100.0% |
+| Supplemental Mathematical Operators | U+2A00-U+2AFF | 256 | 256 | 100.0% |
+| Miscellaneous Symbols and Arrows | U+2B00-U+2BFF | 254 | 254 | 100.0% |
+| Latin Extended-C | U+2C60-U+2C7F | 32 | 32 | 100.0% |
+| Cyrillic Extended-A | U+2DE0-U+2DFF | 32 | 32 | 100.0% |
 | Supplemental Punctuation | U+2E00-U+2E7F | 94 | 94 | 100.0% |
 | Ideographic Description Characters | U+2FF0-U+2FFF | 16 | 16 | 100.0% |
 | CJK Symbols and Punctuation | U+3000-U+303F | 64 | 64 | 100.0% |
@@ -65,38 +71,49 @@ Generated: 2026-09-08 22:11
 | Bopomofo | U+3100-U+312F | 43 | 43 | 100.0% |
 | Hangul Compatibility Jamo | U+3130-U+318F | 94 | 94 | 100.0% |
 | Kanbun | U+3190-U+319F | 16 | 16 | 100.0% |
+| Bopomofo Extended | U+31A0-U+31BF | 32 | 32 | 100.0% |
+| CJK Strokes | U+31C0-U+31EF | 39 | 39 | 100.0% |
 | Katakana Phonetic Extensions | U+31F0-U+31FF | 16 | 16 | 100.0% |
 | CJK Compatibility | U+3300-U+33FF | 256 | 256 | 100.0% |
+| Cyrillic Extended-B | U+A640-U+A69F | 96 | 96 | 100.0% |
+| Latin Extended-D | U+A720-U+A7FF | 204 | 204 | 100.0% |
+| Common Indic Number Forms | U+A830-U+A83F | 10 | 10 | 100.0% |
+| Hangul Jamo Extended-A | U+A960-U+A97F | 29 | 29 | 100.0% |
+| Latin Extended-E | U+AB30-U+AB6F | 60 | 60 | 100.0% |
+| Hangul Jamo Extended-B | U+D7B0-U+D7FF | 72 | 72 | 100.0% |
 | Vertical Forms | U+FE10-U+FE1F | 10 | 10 | 100.0% |
 | Combining Half Marks | U+FE20-U+FE2F | 16 | 16 | 100.0% |
 | CJK Compatibility Forms | U+FE30-U+FE4F | 32 | 32 | 100.0% |
 | Small Form Variants | U+FE50-U+FE6F | 26 | 26 | 100.0% |
 | Halfwidth and Fullwidth Forms | U+FF00-U+FFEF | 225 | 225 | 100.0% |
+| Specials | U+FFF0-U+FFFF | 5 | 5 | 100.0% |
+| Ancient Symbols | U+10190-U+101CF | 14 | 14 | 100.0% |
 | Domino Tiles | U+1F030-U+1F09F | 100 | 100 | 100.0% |
 | Playing Cards | U+1F0A0-U+1F0FF | 82 | 82 | 100.0% |
 | Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 200 | 100.0% |
-| Basic Latin | U+0000-U+007F | 95 | 94 | 98.9% |
+| Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 248 | 97.3% |
 | Emoticons | U+1F600-U+1F64F | 80 | 71 | 88.8% |
 | Chess Symbols | U+1FA00-U+1FA6F | 102 | 88 | 86.3% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
-| Specials | U+FFF0-U+FFFF | 5 | 1 | 20.0% |
+| Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 84 | 49.1% |
+| Latin Extended-F | U+10780-U+107BF | 57 | 24 | 42.1% |
+| CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 7 | 12.1% |
-| CJK Strokes | U+31C0-U+31EF | 39 | 3 | 7.7% |
-| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1029 | 4.9% |
+| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1272 | 6.1% |
 | Symbols for Legacy Computing | U+1FB00-U+1FBFF | 250 | 11 | 4.4% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 5 | 4.3% |
 | Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 24 | 3.1% |
 | Tibetan | U+0F00-U+0FFF | 211 | 4 | 1.9% |
 | Symbols and Pictographs Extended-A | U+1FA70-U+1FAFF | 120 | 1 | 0.8% |
+| Arabic | U+0600-U+06FF | 256 | 2 | 0.8% |
 | CJK Unified Ideographs Extension D | U+2B740-U+2B81F | 222 | 1 | 0.5% |
-| Arabic | U+0600-U+06FF | 256 | 1 | 0.4% |
-| CJK Unified Ideographs Extension A | U+3400-U+4DBF | 6592 | 11 | 0.2% |
+| CJK Unified Ideographs Extension A | U+3400-U+4DBF | 6592 | 14 | 0.2% |
 | Unified Canadian Aboriginal Syllabics | U+1400-U+167F | 640 | 1 | 0.2% |
+| CJK Unified Ideographs Extension B | U+20000-U+2A6DF | 42720 | 46 | 0.1% |
 | CJK Unified Ideographs Extension C | U+2A700-U+2B73F | 4160 | 4 | 0.1% |
-| CJK Unified Ideographs Extension B | U+20000-U+2A6DF | 42720 | 34 | 0.1% |
-| CJK Unified Ideographs Extension E | U+2B820-U+2CEAF | 5774 | 3 | 0.1% |
-| CJK Unified Ideographs Extension F | U+2CEB0-U+2EBEF | 7473 | 2 | 0.0% |
+| CJK Unified Ideographs Extension E | U+2B820-U+2CEAF | 5774 | 5 | 0.1% |
+| CJK Unified Ideographs Extension F | U+2CEB0-U+2EBEF | 7473 | 3 | 0.0% |
 | Armenian | U+0530-U+058F | 91 | 0 | 0.0% |
 | Hebrew | U+0590-U+05FF | 88 | 0 | 0.0% |
 | Syriac | U+0700-U+074F | 77 | 0 | 0.0% |
@@ -146,36 +163,25 @@ Generated: 2026-09-08 22:11
 | Georgian Extended | U+1C90-U+1CBF | 46 | 0 | 0.0% |
 | Sundanese Supplement | U+1CC0-U+1CCF | 8 | 0 | 0.0% |
 | Vedic Extensions | U+1CD0-U+1CFF | 43 | 0 | 0.0% |
-| Miscellaneous Mathematical Symbols-B | U+2980-U+29FF | 128 | 0 | 0.0% |
-| Supplemental Mathematical Operators | U+2A00-U+2AFF | 256 | 0 | 0.0% |
-| Miscellaneous Symbols and Arrows | U+2B00-U+2BFF | 254 | 0 | 0.0% |
 | Glagolitic | U+2C00-U+2C5F | 96 | 0 | 0.0% |
-| Latin Extended-C | U+2C60-U+2C7F | 32 | 0 | 0.0% |
 | Coptic | U+2C80-U+2CFF | 123 | 0 | 0.0% |
 | Georgian Supplement | U+2D00-U+2D2F | 40 | 0 | 0.0% |
 | Tifinagh | U+2D30-U+2D7F | 59 | 0 | 0.0% |
 | Ethiopic Extended | U+2D80-U+2DDF | 79 | 0 | 0.0% |
-| Cyrillic Extended-A | U+2DE0-U+2DFF | 32 | 0 | 0.0% |
 | Kangxi Radicals | U+2F00-U+2FDF | 214 | 0 | 0.0% |
-| Bopomofo Extended | U+31A0-U+31BF | 32 | 0 | 0.0% |
-| Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 0 | 0.0% |
 | Yijing Hexagram Symbols | U+4DC0-U+4DFF | 64 | 0 | 0.0% |
 | Yi Syllables | U+A000-U+A48F | 1165 | 0 | 0.0% |
 | Yi Radicals | U+A490-U+A4CF | 55 | 0 | 0.0% |
 | Lisu | U+A4D0-U+A4FF | 48 | 0 | 0.0% |
 | Vai | U+A500-U+A63F | 300 | 0 | 0.0% |
-| Cyrillic Extended-B | U+A640-U+A69F | 96 | 0 | 0.0% |
 | Bamum | U+A6A0-U+A6FF | 88 | 0 | 0.0% |
 | Modifier Tone Letters | U+A700-U+A71F | 32 | 0 | 0.0% |
-| Latin Extended-D | U+A720-U+A7FF | 204 | 0 | 0.0% |
 | Syloti Nagri | U+A800-U+A82F | 45 | 0 | 0.0% |
-| Common Indic Number Forms | U+A830-U+A83F | 10 | 0 | 0.0% |
 | Phags-pa | U+A840-U+A87F | 56 | 0 | 0.0% |
 | Saurashtra | U+A880-U+A8DF | 82 | 0 | 0.0% |
 | Devanagari Extended | U+A8E0-U+A8FF | 32 | 0 | 0.0% |
 | Kayah Li | U+A900-U+A92F | 48 | 0 | 0.0% |
 | Rejang | U+A930-U+A95F | 37 | 0 | 0.0% |
-| Hangul Jamo Extended-A | U+A960-U+A97F | 29 | 0 | 0.0% |
 | Javanese | U+A980-U+A9DF | 91 | 0 | 0.0% |
 | Myanmar Extended-B | U+A9E0-U+A9FF | 31 | 0 | 0.0% |
 | Cham | U+AA00-U+AA5F | 83 | 0 | 0.0% |
@@ -183,14 +189,11 @@ Generated: 2026-09-08 22:11
 | Tai Viet | U+AA80-U+AADF | 72 | 0 | 0.0% |
 | Meetei Mayek Extensions | U+AAE0-U+AAFF | 23 | 0 | 0.0% |
 | Ethiopic Extended-A | U+AB00-U+AB2F | 32 | 0 | 0.0% |
-| Latin Extended-E | U+AB30-U+AB6F | 60 | 0 | 0.0% |
 | Cherokee Supplement | U+AB70-U+ABBF | 80 | 0 | 0.0% |
 | Meetei Mayek | U+ABC0-U+ABFF | 56 | 0 | 0.0% |
 | Hangul Syllables | U+AC00-U+D7AF | 11172 | 0 | 0.0% |
-| Hangul Jamo Extended-B | U+D7B0-U+D7FF | 72 | 0 | 0.0% |
 | High Surrogates | U+D800-U+DB7F | 0 | 0 | 0.0% |
 | Low Surrogates | U+DC00-U+DFFF | 0 | 0 | 0.0% |
-| CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 0 | 0.0% |
 | Arabic Presentation Forms-A | U+FB50-U+FDFF | 656 | 0 | 0.0% |
 | Variation Selectors | U+FE00-U+FE0F | 16 | 0 | 0.0% |
 | Arabic Presentation Forms-B | U+FE70-U+FEFF | 141 | 0 | 0.0% |
@@ -198,7 +201,6 @@ Generated: 2026-09-08 22:11
 | Linear B Ideograms | U+10080-U+100FF | 123 | 0 | 0.0% |
 | Aegean Numbers | U+10100-U+1013F | 57 | 0 | 0.0% |
 | Ancient Greek Numbers | U+10140-U+1018F | 79 | 0 | 0.0% |
-| Ancient Symbols | U+10190-U+101CF | 14 | 0 | 0.0% |
 | Phaistos Disc | U+101D0-U+101FF | 46 | 0 | 0.0% |
 | Lycian | U+10280-U+1029F | 29 | 0 | 0.0% |
 | Carian | U+102A0-U+102DF | 49 | 0 | 0.0% |
@@ -217,7 +219,6 @@ Generated: 2026-09-08 22:11
 | Vithkuqi | U+10570-U+105BF | 70 | 0 | 0.0% |
 | Todhri | U+105C0-U+105FF | 52 | 0 | 0.0% |
 | Linear A | U+10600-U+1077F | 341 | 0 | 0.0% |
-| Latin Extended-F | U+10780-U+107BF | 57 | 0 | 0.0% |
 | Cypriot Syllabary | U+10800-U+1083F | 55 | 0 | 0.0% |
 | Imperial Aramaic | U+10840-U+1085F | 31 | 0 | 0.0% |
 | Palmyrene | U+10860-U+1087F | 32 | 0 | 0.0% |
@@ -351,7 +352,6 @@ Generated: 2026-09-08 22:11
 | Transport and Map Symbols | U+1F680-U+1F6FF | 119 | 0 | 0.0% |
 | Alchemical Symbols | U+1F700-U+1F77F | 128 | 0 | 0.0% |
 | Geometric Shapes Extended | U+1F780-U+1F7FF | 103 | 0 | 0.0% |
-| Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 0 | 0.0% |
 | Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 0 | 0.0% |
 | CJK Unified Ideographs Extension I | U+2EBF0-U+2EE5F | 622 | 0 | 0.0% |
 | CJK Compatibility Ideographs Supplement | U+2F800-U+2FA1F | 542 | 0 | 0.0% |
