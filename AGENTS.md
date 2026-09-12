@@ -91,10 +91,30 @@ These are the things that repeatedly cost time when forgotten.
 - **ALWAYS commit your work.** After every feature/bug-fix/experiment, stage the specific changed
   files and commit (the user can amend later). Do not leave finished work uncommitted. Never
   `git add -A`; stage exact paths only.
+
 - **`COVERAGE.md` must be committed whenever you update it.** Any time you re-run
   `tools/glyph_coverage.py` (or otherwise touch COVERAGE.md), regenerate it and commit the
   result in the same commit as the work that caused the change. It is a real deliverable, not a
   scratch artifact.
+
+- **"progress update and commit" — a named routine, and NOT the "always commit your work" rule.**
+  These are two different things and must not be merged: *always commit your work* is the standing
+  rule above about **when to commit**; *progress update and commit* is a specific procedure the
+  user asks for **by that phrase**, and it is about **refreshing the coverage stats**. The routine
+  itself is only the "progress update" part — the "and commit" is simply the standing rule above
+  being applied afterwards, not a step of its own.
+
+  When the user asks for a **progress update and commit**:
+  1. Validate the authored data loads:
+     `uv run --no-sync python -c "from strokespec.model import StrokeFont; print(len(StrokeFont.load('glyphs.strokes.json').codepoints()))"`.
+  2. Regenerate the coverage report: `uv run --no-sync python tools/glyph_coverage.py`
+     (rewrites `COVERAGE.md`).
+  3. Recompute the README **Coverage** summary from the regenerated `COVERAGE.md` — codepoints
+     authored / with strokes / intentionally empty, % of allocated, and the four block buckets
+     (filled = 100%, mostly-filled = 50–99%, slightly-filled = 1–49%, untouched = 0%; blocks with
+     0 allocated codepoints are excluded) — then edit `README.md` to match.
+
+  Then commit that refreshed result per the standing "always commit your work" rule above.
 - Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
   gitignored.
 
