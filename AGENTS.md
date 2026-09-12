@@ -88,9 +88,16 @@ These are the things that repeatedly cost time when forgotten.
 
 ## Project conventions that matter
 
-- **ALWAYS commit your work.** After every feature/bug-fix/experiment, stage the specific changed
+- **ALWAYS commit your work.** After every finished feature or bug-fix, stage the specific changed
   files and commit (the user can amend later). Do not leave finished work uncommitted. Never
   `git add -A`; stage exact paths only.
+
+- **Experiments are NOT committed until the user explicitly says to commit them.** If the user
+  calls something an experiment — or you are just trying something out / comparing options to
+  show them a result — leave it **uncommitted** in the working tree, report what you found, and
+  wait for an explicit "commit" instruction before staging any of it. An experiment becoming the
+  default (e.g. "make it the default") is an explicit instruction to commit it; simply having
+  finished or validated it is not.
 
 - **`COVERAGE.md` must be committed whenever you update it.** Any time you re-run
   `tools/glyph_coverage.py` (or otherwise touch COVERAGE.md), regenerate it and commit the
