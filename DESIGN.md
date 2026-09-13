@@ -37,7 +37,8 @@ instead, and hand the outlines to the compiler.
 * Points are **cell-centre aligned**: grid index `g` is the centre of cell `g`, so a coordinate
   `x` maps to `(x + 0.5) * SCALE` font units. The outermost vertices sit half a cell inside the
   em box, leaving visible padding in the editor.
-* A glyph holds **up to 32 strokes**.
+* A glyph holds any number of strokes. (A **design guideline** of ~32 was formerly enforced as a
+  hard limit; it is not a technical limitation and is no longer enforced.)
 * An `arc` is a **single quadratic per quarter**. Its control point is the corner of the
   axis-aligned bounding box of the two endpoints that the arc bows toward, so at each endpoint
   the tangent is **axial** (horizontal/vertical) **and full-strength**. It never bulges past the

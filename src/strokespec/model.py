@@ -232,8 +232,6 @@ class Glyph:
             self.combining = unicode_combining(self.codepoint)
         if self.width not in (GRID_W, GRID_W // 2):
             raise ValueError(f"glyph width must be 8 or 16, got {self.width}")
-        if len(self.strokes) > 32:
-            raise ValueError("a glyph may have at most 32 strokes")
 
     # --- helpers ---------------------------------------------------------------
     @property
@@ -253,8 +251,6 @@ class Glyph:
         return self.width * SCALE
 
     def add_stroke(self, stroke: Stroke) -> None:
-        if len(self.strokes) >= 32:
-            raise ValueError("a glyph may have at most 32 strokes")
         self.strokes.append(stroke)
 
     def to_dict(self) -> dict:

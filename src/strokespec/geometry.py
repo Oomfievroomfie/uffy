@@ -16,7 +16,7 @@ contour. All contours are normalised to counter-clockwise (positive area) so tha
 overlapping strokes *union* under the TrueType non-zero winding rule instead of punching
 holes.
 
-A glyph is a set of up to 32 such strokes; each is expanded independently (no boolean merge)
+A glyph is a set of such strokes; each is expanded independently (no boolean merge)
 and the glyph outline is the per-stroke contours, which union visually when rendered.
 
 Coordinate conventions

@@ -264,18 +264,15 @@ class GlyphCanvas(QWidget):
         self._clip_src = self._glyph.codepoint
 
     def paste_strokes(self) -> None:
-        """Append the clipboard strokes to the current glyph (up to the 32-stroke cap).
+        """Append the clipboard strokes to the current glyph.
 
         Pasting *adds* rather than replaces; to replace, the user clears the glyph first.
         """
         if self._clip:
-            room = 32 - len(self._glyph.strokes)
-            if room > 0:
-                self._snapshot()
-                src = self._clip[:room]
-                self._glyph.strokes.extend(self._stamp_paste(src, src))
-                self.update()
-                self.glyphChanged.emit()
+            self._snapshot()
+            self._glyph.strokes.extend(self._stamp_paste(self._clip, self._clip))
+            self.update()
+            self.glyphChanged.emit()
 
     def _stamp_paste(self, src: list, transformed: list,
                      direction: str = None, fraction: float = None) -> list:
@@ -300,12 +297,9 @@ class GlyphCanvas(QWidget):
         if not direction:
             self.paste_strokes()
             return
-        room = 32 - len(self._glyph.strokes)
-        if room <= 0:
-            return
         fraction = 2.0 / 3.0 if shift else 0.5
         self._snapshot()
-        src = self._clip[:room]
+        src = self._clip
         squished = squish_strokes(src, direction, self._cols(), fraction)
         self._glyph.strokes.extend(self._stamp_paste(src, squished, direction, fraction))
         self.update()
@@ -330,15 +324,12 @@ class GlyphCanvas(QWidget):
         super().focusOutEvent(event)
 
     def append_strokes(self, strokes) -> None:
-        """Append a list of strokes to the current glyph (up to the 32-stroke cap)."""
+        """Append a list of strokes to the current glyph."""
         if not strokes:
-            return
-        room = 32 - len(self._glyph.strokes)
-        if room <= 0:
             return
         self._snapshot()
         self._glyph.strokes.extend(
-            [Stroke(s.p1, s.p2, s.shape, s.origin) for s in strokes[:room]])
+            [Stroke(s.p1, s.p2, s.shape, s.origin) for s in strokes])
         self.update()
         self.glyphChanged.emit()
 
