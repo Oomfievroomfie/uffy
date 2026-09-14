@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-13 13:41  
+Generated: 2026-09-14 00:30  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 10678 |
-| - with strokes | 10651 |
-| - intentionally empty | 27 |
+| codepoints authored | 10910 |
+| - with strokes | 10882 |
+| - intentionally empty | 28 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 10678 (7.0%) |
+| coverage of allocated | 10910 (7.1%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -93,10 +93,12 @@ Generated: 2026-09-13 13:41
 | Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 200 | 100.0% |
 | Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 248 | 97.3% |
 | Emoticons | U+1F600-U+1F64F | 80 | 71 | 88.8% |
+| Arabic Presentation Forms-B | U+FE70-U+FEFF | 141 | 125 | 88.7% |
 | Chess Symbols | U+1FA00-U+1FA6F | 102 | 88 | 86.3% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
 | Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 84 | 49.1% |
+| Arabic | U+0600-U+06FF | 256 | 109 | 42.6% |
 | Latin Extended-F | U+10780-U+107BF | 57 | 24 | 42.1% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 7 | 12.1% |
@@ -106,7 +108,6 @@ Generated: 2026-09-13 13:41
 | Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 24 | 3.1% |
 | Tibetan | U+0F00-U+0FFF | 211 | 4 | 1.9% |
 | Symbols and Pictographs Extended-A | U+1FA70-U+1FAFF | 120 | 1 | 0.8% |
-| Arabic | U+0600-U+06FF | 256 | 2 | 0.8% |
 | CJK Unified Ideographs Extension D | U+2B740-U+2B81F | 222 | 1 | 0.5% |
 | CJK Unified Ideographs Extension A | U+3400-U+4DBF | 6592 | 23 | 0.3% |
 | CJK Compatibility Ideographs Supplement | U+2F800-U+2FA1F | 542 | 1 | 0.2% |
@@ -198,7 +199,6 @@ Generated: 2026-09-13 13:41
 | Low Surrogates | U+DC00-U+DFFF | 0 | 0 | 0.0% |
 | Arabic Presentation Forms-A | U+FB50-U+FDFF | 656 | 0 | 0.0% |
 | Variation Selectors | U+FE00-U+FE0F | 16 | 0 | 0.0% |
-| Arabic Presentation Forms-B | U+FE70-U+FEFF | 141 | 0 | 0.0% |
 | Linear B Syllabary | U+10000-U+1007F | 88 | 0 | 0.0% |
 | Linear B Ideograms | U+10080-U+100FF | 123 | 0 | 0.0% |
 | Aegean Numbers | U+10100-U+1013F | 57 | 0 | 0.0% |
