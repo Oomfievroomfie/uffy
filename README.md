@@ -139,12 +139,9 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
   the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
   set's metadata.
-* A glyph may be flagged **combining** (zero advance). Combining glyphs get a zero advance and
-  the font emits GPOS **mark-to-base** / **mkmk** attachment: every glyph is anchored at its own
-  cell centre (256 units for 8x16, 512 for 16x16) and combining glyphs carry the mark anchor, so
-  a mark lands exactly on its base's cell. Exception: the Devanagari pre-base matras (U+093F,
-  U+094E), which the shaper reorders before their consonant, are left unattached so they keep the
-  shaper's position (which is already their consonant's cell).
+* A glyph may be flagged **combining** (zero advance). Combining glyphs get a zero advance, and
+  the font ships **no GPOS** — no `mark`/`abvm`/`mkmk` (or other) lookups, no anchors — so marks
+  are positioned by the shaper, as in Unifont.
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
