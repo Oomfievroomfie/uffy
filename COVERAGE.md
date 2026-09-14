@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-14 00:30  
+Generated: 2026-09-14 19:02  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 10910 |
-| - with strokes | 10882 |
-| - intentionally empty | 28 |
+| codepoints authored | 11250 |
+| - with strokes | 11221 |
+| - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 10910 (7.1%) |
+| coverage of allocated | 11250 (7.3%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -28,6 +28,8 @@ Generated: 2026-09-14 00:30
 | Greek and Coptic | U+0370-U+03FF | 135 | 135 | 100.0% |
 | Cyrillic | U+0400-U+04FF | 256 | 256 | 100.0% |
 | Cyrillic Supplement | U+0500-U+052F | 48 | 48 | 100.0% |
+| Hebrew | U+0590-U+05FF | 88 | 88 | 100.0% |
+| Devanagari | U+0900-U+097F | 128 | 128 | 100.0% |
 | Hangul Jamo | U+1100-U+11FF | 256 | 256 | 100.0% |
 | Ogham | U+1680-U+169F | 29 | 29 | 100.0% |
 | Runic | U+16A0-U+16FF | 89 | 89 | 100.0% |
@@ -78,6 +80,7 @@ Generated: 2026-09-14 00:30
 | Cyrillic Extended-B | U+A640-U+A69F | 96 | 96 | 100.0% |
 | Latin Extended-D | U+A720-U+A7FF | 204 | 204 | 100.0% |
 | Common Indic Number Forms | U+A830-U+A83F | 10 | 10 | 100.0% |
+| Devanagari Extended | U+A8E0-U+A8FF | 32 | 32 | 100.0% |
 | Hangul Jamo Extended-A | U+A960-U+A97F | 29 | 29 | 100.0% |
 | Latin Extended-E | U+AB30-U+AB6F | 60 | 60 | 100.0% |
 | Hangul Jamo Extended-B | U+D7B0-U+D7FF | 72 | 72 | 100.0% |
@@ -85,6 +88,7 @@ Generated: 2026-09-14 00:30
 | Combining Half Marks | U+FE20-U+FE2F | 16 | 16 | 100.0% |
 | CJK Compatibility Forms | U+FE30-U+FE4F | 32 | 32 | 100.0% |
 | Small Form Variants | U+FE50-U+FE6F | 26 | 26 | 100.0% |
+| Arabic Presentation Forms-B | U+FE70-U+FEFF | 141 | 141 | 100.0% |
 | Halfwidth and Fullwidth Forms | U+FF00-U+FFEF | 225 | 225 | 100.0% |
 | Specials | U+FFF0-U+FFFF | 5 | 5 | 100.0% |
 | Ancient Symbols | U+10190-U+101CF | 14 | 14 | 100.0% |
@@ -93,12 +97,11 @@ Generated: 2026-09-14 00:30
 | Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 200 | 100.0% |
 | Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 248 | 97.3% |
 | Emoticons | U+1F600-U+1F64F | 80 | 71 | 88.8% |
-| Arabic Presentation Forms-B | U+FE70-U+FEFF | 141 | 125 | 88.7% |
 | Chess Symbols | U+1FA00-U+1FA6F | 102 | 88 | 86.3% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
+| Arabic | U+0600-U+06FF | 256 | 185 | 72.3% |
 | Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 84 | 49.1% |
-| Arabic | U+0600-U+06FF | 256 | 109 | 42.6% |
 | Latin Extended-F | U+10780-U+107BF | 57 | 24 | 42.1% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 7 | 12.1% |
@@ -118,7 +121,6 @@ Generated: 2026-09-14 00:30
 | CJK Unified Ideographs Extension F | U+2CEB0-U+2EBEF | 7473 | 5 | 0.1% |
 | CJK Unified Ideographs Extension G | U+30000-U+3134F | 4939 | 1 | 0.0% |
 | Armenian | U+0530-U+058F | 91 | 0 | 0.0% |
-| Hebrew | U+0590-U+05FF | 88 | 0 | 0.0% |
 | Syriac | U+0700-U+074F | 77 | 0 | 0.0% |
 | Arabic Supplement | U+0750-U+077F | 48 | 0 | 0.0% |
 | Thaana | U+0780-U+07BF | 50 | 0 | 0.0% |
@@ -128,7 +130,6 @@ Generated: 2026-09-14 00:30
 | Syriac Supplement | U+0860-U+086F | 11 | 0 | 0.0% |
 | Arabic Extended-B | U+0870-U+089F | 43 | 0 | 0.0% |
 | Arabic Extended-A | U+08A0-U+08FF | 96 | 0 | 0.0% |
-| Devanagari | U+0900-U+097F | 128 | 0 | 0.0% |
 | Bengali | U+0980-U+09FF | 96 | 0 | 0.0% |
 | Gurmukhi | U+0A00-U+0A7F | 80 | 0 | 0.0% |
 | Gujarati | U+0A80-U+0AFF | 91 | 0 | 0.0% |
@@ -182,7 +183,6 @@ Generated: 2026-09-14 00:30
 | Syloti Nagri | U+A800-U+A82F | 45 | 0 | 0.0% |
 | Phags-pa | U+A840-U+A87F | 56 | 0 | 0.0% |
 | Saurashtra | U+A880-U+A8DF | 82 | 0 | 0.0% |
-| Devanagari Extended | U+A8E0-U+A8FF | 32 | 0 | 0.0% |
 | Kayah Li | U+A900-U+A92F | 48 | 0 | 0.0% |
 | Rejang | U+A930-U+A95F | 37 | 0 | 0.0% |
 | Javanese | U+A980-U+A9DF | 91 | 0 | 0.0% |
