@@ -20,6 +20,11 @@ from .geometry_merge import merge_stroke_edges
 # Op is a tuple ("M"/"L"/"Q"/"C"/"Z", ...) — reused from geometry.
 Op = tuple
 
+# Devanagari vowel signs that the shaper reorders to sit BEFORE their consonant (verified against
+# HarfBuzz: U+093F VOWEL SIGN I and U+094E VOWEL SIGN PRISHTHAMATRA E are the only two). These are
+# left without a mark anchor so they keep the shaper's position instead of being attached backward.
+DEVANAGARI_PREBASE_MATRAS = {0x093F, 0x094E}
+
 
 def glyph_name(codepoint: int) -> str:
     """AGLFN-compatible Unicode glyph name."""
@@ -197,8 +202,14 @@ def build_ufo(
         # attachment, the mark is positioned relative to the base it actually belongs to, after
         # any shaper reordering — unlike a fixed x-placement. Marks keep their `center` anchor too,
         # so marks can stack on marks (the `mkmk` feature).
+        #
+        # Devanagari pre-base matras are the exception: the shaper reorders them to sit BEFORE
+        # their consonant, and mark attachment can only look BACKWARD, so they would bind to
+        # whichever consonant precedes them (e.g. the ra in rka) instead of their own. Left
+        # unattached, the shaper's own position is already exactly their consonant's cell,
+        # because the reordered mark immediately precedes the base and has zero advance.
         cx = rep_glyph.width * SCALE / 2.0
-        if rep_glyph.combining:
+        if rep_glyph.combining and not any(c in DEVANAGARI_PREBASE_MATRAS for c in group):
             ufo_glyph.appendAnchor({"name": "_center", "x": cx, "y": 0})
         ufo_glyph.appendAnchor({"name": "center", "x": cx, "y": 0})
         pen = ufo_glyph.getPen()
