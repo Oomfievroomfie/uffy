@@ -52,8 +52,11 @@ instead, and hand the outlines to the compiler.
   and union visually under the **non-zero winding rule** (like TrueType/OpenType; not even-odd),
   so overlaps fill instead of punching holes. Consequently the pen radius is 32 (a one-cell
   diameter) so a minimum-size arc/semicircle stays well inside the box.
-* A glyph may be flagged **combining** (zero advance). The fallback ships no GPOS mark
-  positioning, so fully correct mark attachment is out of scope (consistent with "no shaping").
+* A glyph may be flagged **combining** (zero advance). Every glyph is anchored at its own cell
+  centre (256 units for an 8x16 glyph, 512 for a 16x16 one) and combining glyphs additionally
+  carry the mark anchor, so the compiler emits GPOS **mark-to-base** (and **mkmk**) attachment:
+  a mark is positioned relative to the base it attaches to, after any shaper reordering. Complex
+  shaping is still out of scope (consistent with "no shaping").
 
 ## Fallback philosophy
 

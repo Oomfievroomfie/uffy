@@ -139,8 +139,10 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
   the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
   set's metadata.
-* A glyph may be flagged **combining** (zero advance). Combining glyphs get a zero advance;
-  the fallback ships no GPOS mark positioning, so full mark attachment is out of scope.
+* A glyph may be flagged **combining** (zero advance). Combining glyphs get a zero advance and
+  the font emits GPOS **mark-to-base** / **mkmk** attachment: every glyph is anchored at its own
+  cell centre (256 units for 8x16, 512 for 16x16) and combining glyphs carry the mark anchor, so
+  a mark is positioned relative to the base it attaches to.
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
