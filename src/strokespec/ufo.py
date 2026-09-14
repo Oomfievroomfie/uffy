@@ -190,6 +190,17 @@ def build_ufo(
         ufo_glyph = font.newGlyph(name)
         ufo_glyph.unicodes = group          # map every codepoint in the group to this glyph
         ufo_glyph.width = rep_glyph.advance_units
+        # GPOS mark positioning, anchored at each glyph's own cell centre (256 font units for an
+        # 8x16 glyph, 512 for a 16x16 one), so the position follows the glyph's size. Every glyph
+        # gets a `center` base anchor; combining glyphs additionally get the `_center` MARK anchor
+        # (ufo2ft pairs `center`/`_center` into the `mark` feature). Because this is real mark
+        # attachment, the mark is positioned relative to the base it actually belongs to, after
+        # any shaper reordering — unlike a fixed x-placement. Marks keep their `center` anchor too,
+        # so marks can stack on marks (the `mkmk` feature).
+        cx = rep_glyph.width * SCALE / 2.0
+        if rep_glyph.combining:
+            ufo_glyph.appendAnchor({"name": "_center", "x": cx, "y": 0})
+        ufo_glyph.appendAnchor({"name": "center", "x": cx, "y": 0})
         pen = ufo_glyph.getPen()
         contours = expand(rep_glyph)
         for contour in contours:
