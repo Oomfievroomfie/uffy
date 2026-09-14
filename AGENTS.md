@@ -104,6 +104,12 @@ These are the things that repeatedly cost time when forgotten.
   result in the same commit as the work that caused the change. It is a real deliverable, not a
   scratch artifact.
 
+- **Docs/maintenance are always in scope.** Keeping `README.md` / `DESIGN.md` / `COVERAGE.md` and
+  the code in sync is basic maintenance: if a change invalidates something the docs claim, fix the
+  docs as part of that work. This is independent of how narrow or broad the request was — do not
+  ask whether to update them, and do not treat "the request didn't mention docs" as a reason to
+  leave them wrong.
+
 - **"progress update and commit" — a named routine, and NOT the "always commit your work" rule.**
   These are two different things and must not be merged: *always commit your work* is the standing
   rule above about **when to commit**; *progress update and commit* is a specific procedure the
