@@ -1,23 +1,24 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-14 19:02  
+Generated: 2026-09-14 21:47  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 11250 |
-| - with strokes | 11221 |
+| codepoints authored | 11310 |
+| - with strokes | 11281 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 11250 (7.3%) |
+| coverage of allocated | 11310 (7.4%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
 
 | block | range | allocated | covered | % |
 |---|---:|---:|---:|---:|
+| Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 256 | 100.4% |
 | Basic Latin | U+0000-U+007F | 95 | 95 | 100.0% |
 | Latin-1 Supplement | U+0080-U+00FF | 96 | 96 | 100.0% |
 | Latin Extended-A | U+0100-U+017F | 128 | 128 | 100.0% |
@@ -95,16 +96,15 @@ Generated: 2026-09-14 19:02
 | Domino Tiles | U+1F030-U+1F09F | 100 | 100 | 100.0% |
 | Playing Cards | U+1F0A0-U+1F0FF | 82 | 82 | 100.0% |
 | Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 200 | 100.0% |
-| Enclosed CJK Letters and Months | U+3200-U+32FF | 255 | 248 | 97.3% |
+| Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 53 | 91.4% |
 | Emoticons | U+1F600-U+1F64F | 80 | 71 | 88.8% |
 | Chess Symbols | U+1FA00-U+1FA6F | 102 | 88 | 86.3% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
-| Arabic | U+0600-U+06FF | 256 | 185 | 72.3% |
+| Arabic | U+0600-U+06FF | 256 | 191 | 74.6% |
 | Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 84 | 49.1% |
 | Latin Extended-F | U+10780-U+107BF | 57 | 24 | 42.1% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
-| Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 7 | 12.1% |
 | CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1643 | 7.8% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 6 | 5.2% |
 | Symbols for Legacy Computing | U+1FB00-U+1FBFF | 250 | 11 | 4.4% |
