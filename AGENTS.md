@@ -76,6 +76,20 @@ These are the things that repeatedly cost time when forgotten.
   re-read. Workaround: **use a fresh filename** for each throwaway test script (`_t.py`,
   `_t2.py`, …) rather than deleting and re-creating the same one.
 
+## Hard rules about the authored data (non-negotiable)
+
+- **Data bugs are DATA bugs.** When a defect lives in the authored data (`glyphs.strokes.json` — a
+  glyph's `combining`/`width` flag, its strokes, its codepoint), it gets fixed **in the data**. Do
+  NOT patch around it in code, do not add a code path that compensates for it, and do not even
+  *consider* a code workaround — unless the user explicitly tells you to. A code change that makes
+  a wrong data value behave correctly is forbidden: it hides the bad data and makes the tool lie
+  about what the user actually authored.
+- **Do NOT fix data bugs yourself.** Diagnose, report the exact glyph and field and what is wrong
+  with it, and stop there. Correcting authored data is the user's job. Do not hand-edit
+  `glyphs.strokes.json` unless the user explicitly asks for that specific edit.
+- **"It was a data bug" is a complete answer.** Report it and stop. Do not follow it with a fix,
+  a workaround, or a suggestion of one.
+
 ## Method (the most important lessons)
 
 - **Run the code, do not reason in a vacuum.** Verify the ACTUAL output against the user's
