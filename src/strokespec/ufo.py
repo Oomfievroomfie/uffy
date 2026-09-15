@@ -229,6 +229,18 @@ def build_ufo(
             op_to_pen(contour, pen)
         order.append(name)
 
+    # Give the font a de-facto-empty GPOS table. HarfBuzz only runs its extents-based fallback
+    # mark positioning when the face has NO GPOS positioning at all
+    # (`plan.apply_gpos = hb_ot_layout_has_positioning(face)`; `fallback_mark_positioning =
+    # !apply_gpos`), and when it runs it overrides the ink placement we control. A single
+    # harmless rule on an unreachable glyph gives the font a GPOS table without putting any
+    # positioning data on any reachable glyph. (Unifont ships a bare GPOS table for this reason.)
+    phantom = font.newGlyph(".gposphantom")
+    phantom.unicodes = []
+    phantom.width = 0
+    order.append(".gposphantom")
+    font.features.text = "feature kern {\n    pos .gposphantom <1 0 0 0>;\n} kern;\n"
+
     # Set the glyph layout order explicitly so the font is deterministic.
     font.glyphOrder = order
 

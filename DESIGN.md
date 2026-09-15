@@ -56,11 +56,16 @@ instead, and hand the outlines to the compiler.
   ink shifted **one cell to the left** (negative x), exactly as Unifont does — its combining marks
   are zero-advance with negative-x outlines (e.g. U+093F ink at x −1024…−320, U+0940 at −704…0).
   A zero-advance mark is drawn at the pen, which is already past its base, so the shifted ink
-  lands back on the base's cell: an authored 16x16 combining glyph overlays its base's 16x16 cell
-  with **no GPOS at all** (no `mark`/`abvm`/`mkmk`, no anchors). The one exception is the
-  **Devanagari pre-base matras** (U+093F, U+094E), which the shaper reorders to sit *before* their
-  consonant: there the pen is already at the base's cell, so they are left unshifted. Complex
-  shaping is otherwise out of scope (consistent with "no shaping").
+  lands back on the base's cell: an authored 16x16 combining glyph overlays its base's 16x16 cell.
+  The font carries a **de-facto-empty GPOS table** (one harmless rule on an unreachable phantom
+  glyph, nothing on any real glyph) purely so HarfBuzz does not run its extents-based *fallback*
+  mark positioning on top: HarfBuzz applies that fallback only when the face has no GPOS at all
+  (`plan.apply_gpos = hb_ot_layout_has_positioning(face)`), and it would otherwise override the
+  ink. That is why Unifont ships a bare GPOS table too. No `mark`/`abvm`/`mkmk`, no anchors. The
+  one exception to the shift is the **Devanagari pre-base matras** (U+093F, U+094E), which the
+  shaper reorders to sit *before* their consonant: there the pen is already at the base's cell, so
+  they are left unshifted. Complex shaping is otherwise out of scope (consistent with "no
+  shaping").
 
 ## Fallback philosophy
 

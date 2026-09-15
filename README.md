@@ -141,9 +141,11 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   set's metadata.
 * A glyph may be flagged **combining** (zero advance). Combining glyphs are exported with their
   ink shifted one cell to the **left** (negative x), as Unifont does, so a zero-advance mark drawn
-  after its base lands on the base's cell — with no GPOS (`mark`/`abvm`/`mkmk`) at all. Exception:
-  the Devanagari pre-base matras (U+093F, U+094E), which the shaper reorders before their
-  consonant, are left unshifted.
+  after its base lands on the base's cell. The font ships a **de-facto-empty GPOS table** (one
+  harmless rule on an unreachable phantom glyph; nothing on any real glyph) purely to stop
+  HarfBuzz's extents-based *fallback* mark positioning from overriding that ink — no
+  `mark`/`abvm`/`mkmk`. Exception: the Devanagari pre-base matras (U+093F, U+094E), which the
+  shaper reorders before their consonant, are left unshifted.
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
