@@ -218,6 +218,10 @@ def make_ufo(
     # Merge glyphs with identical outlines (same contour ops AND same advance width) into a
     # single glyph that all those codepoints map to, so the compiled font doesn't store a
     # duplicate outline for each duplicated codepoint. Group key = (outline ops, advance units).
+    # **Empty glyphs are never merged**: each codepoint keeps its own glyph. There is nothing to
+    # save (an empty glyph is just a loca entry and an hmtx row), and sharing one glyph across
+    # many codepoints is a needless departure from ordinary fonts — e.g. it made U+0020 share a
+    # glyph with U+061C/U+2000–U+200A/U+202F/U+205F/U+FFA0.
     groups: "dict[Any, List[int]]" = {}
     for i, cp in enumerate(cps):
         if progress is not None:
@@ -225,8 +229,8 @@ def make_ufo(
         glyph = strokefont.get(cp)
         if glyph is None:
             continue
-        key = (_outline_key(expand(glyph)),
-               glyph.advance_units)
+        contours = expand(glyph)
+        key = ("empty", cp) if not contours else (_outline_key(contours), glyph.advance_units)
         groups.setdefault(key, []).append(cp)
 
     for key, group in groups.items():

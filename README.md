@@ -66,6 +66,8 @@ paste; do not just manually rebuild the same glyph.
 
 Two glyphs with EXACTLY the same contents cost as much as a single copy of that glyph, not
 as much as two copies. Glyphs with EXACTLY the same contents are deduplicated on export.
+(Exception: **empty** glyphs are never merged — each keeps its own glyph, since an empty glyph
+costs nothing to store and sharing one across many codepoints is a needless oddity.)
 
 Two lines that exactly meet end-to-end, as in, edge-to-edge, not endpoint-to-startpoint,
 cost silghtly less than the two lines would cost if they didn't meet at all. Such edges are
