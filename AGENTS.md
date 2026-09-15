@@ -138,6 +138,13 @@ These are the things that repeatedly cost time when forgotten.
 - Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
   gitignored.
 
+- **Glyph order slots 1 and 2 are reserved.** `build_ufo` emits `.null` (glyph 1) and
+  `nonmarkingreturn` (glyph 2) — zero advance, no outline — before any real glyph. Renderers and
+  webfont converters still assume glyph 1 is `.null` (zero advance): without the reservation our
+  lowest codepoint (U+0020 SPACE) lands in slot 1 and the ASCII space stops advancing in some
+  tools even though its hmtx advance is correct (invisible trailing space, caret does not move).
+  Unifont ships the same two slots. Do not remove them to save 16 bytes.
+
 - Grid geometry: points are cell-centre aligned `(g+0.5)*SCALE`; `SCALE=16`, `UPEM=256`,
   `PEN_RADIUS=8`, `PEN_CAP="square"`. Grid lines are at `k*SCALE`; cell diagonals are
   `x±y = k*SCALE`. (The scale was lowered from 64/1024/32: TrueType stores coordinates as deltas

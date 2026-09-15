@@ -200,6 +200,19 @@ def make_ufo(
         op_to_pen(contour, pen)
 
     order: List[str] = [".notdef"]
+
+    # Reserve the classic Macintosh glyph-order slots: glyph 1 must be `.null` and glyph 2
+    # `nonmarkingreturn` — both zero-advance and outline-less. Renderers and converters still
+    # assume glyph 1 is `.null` (zero advance), so leaving a real glyph there silently zeroes its
+    # advance. Without these our lowest codepoint — U+0020 SPACE — lands in slot 1, and the ASCII
+    # space stops advancing (invisible at the end of a string, caret does not move) even though its
+    # hmtx entry is correct. Unifont ships these two slots for exactly this reason.
+    for _slot in (".null", "nonmarkingreturn"):
+        _dummy = font.newGlyph(_slot)
+        _dummy.unicodes = []
+        _dummy.width = 0
+        order.append(_slot)
+
     cps = strokefont.codepoints()
     total = len(cps)
     # Merge glyphs with identical outlines (same contour ops AND same advance width) into a
