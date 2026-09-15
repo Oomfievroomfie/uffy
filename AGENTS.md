@@ -55,6 +55,13 @@ These are the things that repeatedly cost time when forgotten.
 - Capturing a child process's stdout over a pipe is denied on Windows (EPERM). Redirect to a
   log file and read it back (the compiler already does this for fontmake/gftools logs).
 
+- **Never pipe Python through PowerShell.** No `python -c "…"`, no here-strings, no `<<`. Write a
+  throwaway script **file** (fresh name each time) and run `uv run --no-sync python <file>`.
+  PowerShell mangles quoting/escaping and it has repeatedly wasted time.
+
+- `fallback.ttf` in the repo root is the user's **live, always-in-progress export** — never treat
+  it as stale, never delete it, never commit it.
+
 ## Sandbox discipline
 
 - File writes run under a **workspace-write** sandbox. NO privilege escalation, NO sandbox
