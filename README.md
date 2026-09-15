@@ -176,7 +176,7 @@ src/strokespec/
   geometry.py      stroke -> outline (the real stroke->outline expansion used everywhere)
   svgout.py        strokes -> stroked SVG (debug/inspection; arcs are a single quadratic)
   ufo.py           write a UFO (***authoring format only***) from the stroke geometry
-  compiler.py      UFO -> TTF via Google CLI (gftools, else fontmake); gftools fix
+  compiler.py      UFO (in memory) -> TTF via ufo2ft; gftools/fontmake CLI optional
   refbrowser.py    scan a folder of reference fonts; render glyphs via FreeType+HarfBuzz
   cli.py           `uffy` command-line entry point
   editor/          PySide6 graphical editor
@@ -265,14 +265,10 @@ uv run uffy preview examples/sample.strokes.json -c 0x4E2D -o out.png
 uv run uffy refs C:\SomeFontFolder -s "ABC" -o refs.png
 ```
 
-**Install gftools** (preferred compiler) with:
-
-```sh
-uv sync --extra validate
-```
-
-If gftools is not available the compiler automatically falls back to **fontmake** (both are
-Google CLI tools), and if gftools is present it is also used for `fix`/`validate`.
+Compiling uses **`ufo2ft` in-process** by default — the same engine the `fontmake` CLI drives, on
+the in-memory UFO, so no UFO package is written or re-read (that round-trip dominated build time).
+Pass `--tool fontmake` (or `--tool gftools`, if installed) to shell out to a Google CLI compiler
+instead.
 
 ## Packaging (standalone executable)
 

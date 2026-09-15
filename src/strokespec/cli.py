@@ -23,8 +23,8 @@ def _build(args) -> int:
     if not os.path.exists(args.input):
         print(f"error: no such file: {args.input}", file=sys.stderr)
         return 2
-    tools = available_compile_tools()
-    if not tools:
+    cli_tools = ("gftools", "fontmake")
+    if args.tool in cli_tools and not available_compile_tools():
         print(
             "error: no Google font CLI compiler found (need `gftools` or `fontmake` on PATH)",
             file=sys.stderr,
@@ -131,7 +131,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     b.add_argument("-o", "--output", default="fallback.ttf", help="output TTF path")
     b.add_argument("--family", default=None, help="font family name")
     b.add_argument("--style", default="Regular", help="font style name")
-    b.add_argument("--tool", default="auto", choices=["auto", "gftools", "fontmake"], help="compile tool")
+    b.add_argument("--tool", default="auto", choices=["auto", "ufo2ft", "gftools", "fontmake"],
+                   help="auto/ufo2ft = compile in-process (default); gftools/fontmake = shell out")
     b.add_argument("--no-fix", action="store_true", help="skip gftools fix")
     b.set_defaults(func=_build)
 

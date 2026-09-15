@@ -27,10 +27,12 @@ paths), so authored strokes would not survive it. We expand the strokes to outli
 instead, and hand the outlines to the compiler.
 
 > ⚠️ **TTF/OTF policy.** The Python `fontTools` library is used **only** for the UFO authoring
-> format. Its TTF/OTF read/write code paths are **never** used here. The actual binary is
-> produced by Google's CLI compilers — **`gftools`** (preferred) or **`fontmake`** (fallback) —
-> and reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
-> (uharfbuzz)**, again without fontTools' TTF/OTF code.
+> format; its TTF/OTF read/write code paths are never used to *build* the font. The binary is
+> produced by Google's tooling — by default **`ufo2ft.compileTTF`** in-process, on the in-memory
+> font from `make_ufo()` (the same engine the `fontmake` CLI drives, minus the UFO package
+> round-trip, which is ~2.4x faster); the **`fontmake`** / **`gftools`** CLIs remain selectable
+> via `tool=`. Reference-font previews are rendered with **FreeType (Pillow)** and **HarfBuzz
+> (uharfbuzz)**.
 
 ## The stroke model
 

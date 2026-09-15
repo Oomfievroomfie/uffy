@@ -118,9 +118,8 @@ def _notdef_ops(width_units: int, cap: str, r: float, descent: float, ascent: fl
     ]]
 
 
-def build_ufo(
+def make_ufo(
     strokefont: StrokeFont,
-    output_dir: str,
     *,
     family_name: Optional[str] = None,
     style_name: Optional[str] = "Regular",
@@ -129,11 +128,12 @@ def build_ufo(
     notdef_width_units: Optional[int] = None,
     progress: Optional[Callable[[int, int], None]] = None,
     merge_edges: bool = True,
-) -> str:
-    """Build a UFO at ``output_dir`` and return its path.
+) -> Font:
+    """Build the UFO **in memory** and return the ``ufoLib2.Font``.
 
-    ``output_dir`` must not already exist (or will be overwritten if it is a UFO).
-    ``progress``, if given, is called as ``progress(done, total)`` after each glyph is written.
+    Keeping the font object lets the compiler hand it straight to ufo2ft, avoiding writing and
+    re-reading a UFO package with one ``.glif`` file per glyph (which dominates build time for a
+    font this size). Use :func:`build_ufo` when a UFO on disk is actually wanted.
     """
     if family_name is None:
         family_name = strokefont.metadata.get("name", "strokespec")
@@ -248,10 +248,12 @@ def build_ufo(
 
     # Set the glyph layout order explicitly so the font is deterministic.
     font.glyphOrder = order
+    return font
 
-    if os.path.exists(output_dir):
-        # ufoLib2 will overwrite a UFO at path only when it is already a UFO; be safe.
-        pass
+
+def build_ufo(strokefont: StrokeFont, output_dir: str, **kwargs) -> str:
+    """Build the UFO (see :func:`make_ufo`) and save it at ``output_dir``; return that path."""
+    font = make_ufo(strokefont, **kwargs)
     font.save(output_dir, overwrite=True)
     return output_dir
 

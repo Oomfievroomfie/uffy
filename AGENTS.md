@@ -157,8 +157,8 @@ StrokeFont (.strokes.json)         model.py     Stroke/Glyph/StrokeFont + JSON +
     │                    the CANONICAL expansion — used by everyone
     ├─ ufo.py        contours → UFO authoring format (op_to_pen Q → qCurveTo)
     │                    build_ufo(..., progress=...)
-    └─ compiler.py   UFO → TTF via Google CLI   compile_strokefont(..., on_progress=...)
-                         fontmake (gftools unavailable) with --keep-overlaps
+    └─ compiler.py   UFO(in-memory) → TTF via ufo2ft   compile_strokefont(..., on_progress=...)
+                         ufo2ft.compileTTF(removeOverlaps=False); gftools/fontmake CLI optional
 ```
 The editor is a *front end* for the same model, not a parallel definition:
 - `glyph_canvas.py` paints in real time from `geometry.stroke_outline`.
@@ -194,6 +194,9 @@ The editor is a *front end* for the same model, not a parallel definition:
   [project.scripts] (`uffy`, `uffy-editor`).
 - **`cli.py`** exposes `build` / `preview` / `refs` / `validate` and is the fastest way to
   exercise the compile path without the GUI (`uv run uffy build … --tool fontmake --no-fix`).
-- **UFO policy:** `ufo.py` writes the UFO authoring format only; the actual TTF/OTF binary is
-  produced by Google's CLI compiler (never fontTools TTF/OTF read/write). Keep it that way.
+- **Compile policy:** the binary is produced by Google's tooling. The default is
+  **`ufo2ft.compileTTF` called in-process** on the in-memory `make_ufo()` font — the same engine
+  the `fontmake` CLI drives, but with no UFO package written or re-read (that round-trip dominated
+  build time: ~17.7s → ~7.4s for the current font). The `fontmake` / `gftools` CLIs remain
+  selectable with `tool=`. Never hand-build TTF/OTF tables with fontTools' TTF/OTF read/write.
 

@@ -227,6 +227,23 @@ def compile_ufo_to_ttf(
     return str(out)
 
 
+def compile_in_process(font, out_ttf: str) -> str:
+    """Compile an in-memory ``ufoLib2.Font`` straight to ``out_ttf`` with ufo2ft.
+
+    This is the same engine the ``fontmake`` CLI drives, called directly: no UFO package is
+    written or re-read (that round-trip dominates build time for a font this size) and no
+    subprocess is spawned. ``removeOverlaps=False`` keeps the per-stroke overlapping contours,
+    matching the CLI's ``--keep-overlaps``.
+    """
+    from ufo2ft import compileTTF
+
+    out = Path(out_ttf).resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tt = compileTTF(font, removeOverlaps=False, inplace=False)
+    tt.save(str(out))
+    return str(out)
+
+
 def compile_strokefont(
     strokefont: StrokeFont,
     out_ttf: str,
@@ -239,14 +256,35 @@ def compile_strokefont(
     run_fix: bool = True,
     on_progress: Optional[Callable[[Optional[int], Optional[int]], None]] = None,
 ) -> str:
-    """Convenience: build a UFO in a temp dir and compile it to ``out_ttf``.
+    """Compile a stroke set to ``out_ttf``.
 
-    ``on_progress``, if given, is called as ``on_progress(done, total)`` while the UFO is built
-    (``total`` is the glyph count) and then as ``on_progress(None, None)`` while the Google CLI
-    compiler runs (indeterminate).
+    ``tool`` is ``'auto'`` (or ``'ufo2ft'``) for the in-process compile, or ``'gftools'`` /
+    ``'fontmake'`` to shell out to a Google CLI compiler instead.
+
+    ``on_progress``, if given, is called as ``on_progress(done, total)`` while the font is built
+    (``total`` is the glyph count) and then as ``on_progress(None, None)`` while it is compiled
+    (indeterminate).
     """
     from .model import PEN_RADIUS  # local import to keep API tight
+    from .ufo import make_ufo
 
+    family = family_name or strokefont.metadata.get("name", "strokespec")
+    if tool in ("auto", "ufo2ft", "in-process", "inprocess"):
+        ufo_font = make_ufo(
+            strokefont,
+            family_name=family,
+            style_name=style_name,
+            cap=cap,
+            pen_radius=PEN_RADIUS,
+            progress=on_progress,
+        )
+        if keep_ufo:
+            ufo_font.save(keep_ufo, overwrite=True)
+        if on_progress is not None:
+            on_progress(None, None)  # hand off to the compiler (indeterminate)
+        return compile_in_process(ufo_font, out_ttf)
+
+    # ---- Google CLI compiler path (gftools / fontmake) -----------------------
     # Build in a temp dir *inside the output's parent* so it is guaranteed writable.
     # (Use os.makedirs: tempfile.mkdtemp emits a dir that this sandbox refuses to open
     #  children in on Windows.)
@@ -256,7 +294,6 @@ def compile_strokefont(
     tmp = os.path.join(str(out_dir), f"strokespec_build_{os.getpid()}_{int(time.time() * 1000)}")
     os.makedirs(tmp, exist_ok=True)
     ufo_dir = os.path.join(tmp, "Fallback.ufo")
-    family = family_name or strokefont.metadata.get("name", "strokespec")
     build_ufo(
         strokefont,
         ufo_dir,
