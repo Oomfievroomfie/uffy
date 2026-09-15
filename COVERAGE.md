@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-15 01:00  
+Generated: 2026-09-15 14:47  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 11557 |
-| - with strokes | 11528 |
+| codepoints authored | 11723 |
+| - with strokes | 11694 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 11557 (7.5%) |
+| coverage of allocated | 11723 (7.6%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -96,14 +96,15 @@ Generated: 2026-09-15 01:00
 | Domino Tiles | U+1F030-U+1F09F | 100 | 100 | 100.0% |
 | Playing Cards | U+1F0A0-U+1F0FF | 82 | 82 | 100.0% |
 | Enclosed Alphanumeric Supplement | U+1F100-U+1F1FF | 200 | 200 | 100.0% |
+| Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 171 | 100.0% |
 | Symbols for Legacy Computing | U+1FB00-U+1FBFF | 250 | 250 | 100.0% |
 | Chess Symbols | U+1FA00-U+1FA6F | 102 | 96 | 94.1% |
 | Alphabetic Presentation Forms | U+FB00-U+FB4F | 58 | 53 | 91.4% |
 | Emoticons | U+1F600-U+1F64F | 80 | 71 | 88.8% |
 | General Punctuation | U+2000-U+206F | 111 | 87 | 78.4% |
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 996 | 776 | 77.9% |
+| Geometric Shapes Extended | U+1F780-U+1F7FF | 103 | 79 | 76.7% |
 | Arabic | U+0600-U+06FF | 256 | 191 | 74.6% |
-| Supplemental Arrows-C | U+1F800-U+1F8FF | 171 | 84 | 49.1% |
 | Latin Extended-F | U+10780-U+107BF | 57 | 24 | 42.1% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1643 | 7.8% |
@@ -353,7 +354,6 @@ Generated: 2026-09-15 01:00
 | Ornamental Dingbats | U+1F650-U+1F67F | 48 | 0 | 0.0% |
 | Transport and Map Symbols | U+1F680-U+1F6FF | 119 | 0 | 0.0% |
 | Alchemical Symbols | U+1F700-U+1F77F | 128 | 0 | 0.0% |
-| Geometric Shapes Extended | U+1F780-U+1F7FF | 103 | 0 | 0.0% |
 | Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 0 | 0.0% |
 | CJK Unified Ideographs Extension I | U+2EBF0-U+2EE5F | 622 | 0 | 0.0% |
 | CJK Unified Ideographs Extension H | U+31350-U+323AF | 4192 | 0 | 0.0% |
