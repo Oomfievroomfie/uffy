@@ -232,14 +232,19 @@ def build_ufo(
     # Give the font a de-facto-empty GPOS table. HarfBuzz only runs its extents-based fallback
     # mark positioning when the face has NO GPOS positioning at all
     # (`plan.apply_gpos = hb_ot_layout_has_positioning(face)`; `fallback_mark_positioning =
-    # !apply_gpos`), and when it runs it overrides the ink placement we control. A single
-    # harmless rule on an unreachable glyph gives the font a GPOS table without putting any
-    # positioning data on any reachable glyph. (Unifont ships a bare GPOS table for this reason.)
+    # !apply_gpos`), and when it runs it overrides the ink placement we control. (Unifont ships a
+    # bare GPOS table for this reason.)
+    #
+    # It is emitted as a STANDALONE lookup that no feature references: feaLib then writes a GPOS
+    # with an empty FeatureList and an empty ScriptList, so no software reports any feature as
+    # existing, while the table itself is still present and non-empty. The rule covers an
+    # unreachable phantom glyph (no cmap entry, no outline), so no reachable glyph carries any
+    # positioning data either.
     phantom = font.newGlyph(".gposphantom")
     phantom.unicodes = []
     phantom.width = 0
     order.append(".gposphantom")
-    font.features.text = "feature kern {\n    pos .gposphantom <1 0 0 0>;\n} kern;\n"
+    font.features.text = "lookup gpos_noop {\n    pos .gposphantom <1 0 0 0>;\n} gpos_noop;\n"
 
     # Set the glyph layout order explicitly so the font is deterministic.
     font.glyphOrder = order
