@@ -155,16 +155,16 @@ in `DESIGN.md`.
 
 ## Design units
 
-The grid is the em box. One grid cell = **64 font units**:
+The grid is the em box. One grid cell = **16 font units**:
 
 | thing                | value                                              |
 |----------------------|----------------------------------------------------|
-| units per em         | 1024                                               |
-| full-width glyph     | 16 grid = 1024 units                               |
-| half-width glyph     | 8 grid  = 512  units                               |
-| grid cell            | 64 units                                           |
-| pen radius           | 32 units (1 grid-cell diameter)                    |
-| baseline (default)   | 2.0 cells above the em-box bottom (Unifont, → 128 units descent) |
+| units per em         | 256                                                |
+| full-width glyph     | 16 grid = 256 units                                |
+| half-width glyph     | 8 grid  = 128 units                                |
+| grid cell            | 16 units                                           |
+| pen radius           | 8 units (1 grid-cell diameter)                     |
+| baseline (default)   | 2.0 cells above the em-box bottom (Unifont, → 32 units descent) |
 | x-height (default)   | 10.0 cells above the em-box bottom (Unifont)            |
 | cap-height (default) | 12.0 cells above the em-box bottom (Unifont)            |
 

@@ -17,14 +17,14 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
 GRID_W = 16          # number of grid cells per side (a full-width glyph fills this)
 GRID_H = 16
 GRID_N = 16          # cell indices are 0..15; each point sits at a cell CENTRE
-SCALE = 64           # font units per grid cell
-UPEM = SCALE * GRID_H  # 1024 units per em
-PEN_RADIUS = SCALE // 2  # 32 units -> 1 grid-cell-diameter pen
+SCALE = 16           # font units per grid cell
+UPEM = SCALE * GRID_H  # 256 units per em
+PEN_RADIUS = SCALE // 2  # 8 units -> 1 grid-cell-diameter pen
 # Pen butt style is a tool-level choice (not per-glyph data). "square" = a square butt: the
 # stroke extends by the pen radius (a half cell) so its flat end lands on a cell boundary.
 PEN_CAP = "square"
-FULL_WIDTH_UNITS = GRID_W * SCALE   # 1024
-HALF_WIDTH_UNITS = (GRID_W // 2) * SCALE  # 512
+FULL_WIDTH_UNITS = GRID_W * SCALE   # 256
+HALF_WIDTH_UNITS = (GRID_W // 2) * SCALE  # 128
 
 # Metrics, in grid cells, measured from the BOTTOM edge of the em box (0) upward.
 # The bottom edge is NOT the baseline: descenders live in the cells below the baseline,

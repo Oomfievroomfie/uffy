@@ -131,9 +131,12 @@ These are the things that repeatedly cost time when forgotten.
 - Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
   gitignored.
 
-- Grid geometry: points are cell-centre aligned `(g+0.5)*SCALE`; `SCALE=64`, `UPEM=1024`,
-  `PEN_RADIUS=32`, `PEN_CAP="square"`. Grid lines are at `k*SCALE`; cell diagonals are
-  `x±y = k*SCALE`.
+- Grid geometry: points are cell-centre aligned `(g+0.5)*SCALE`; `SCALE=16`, `UPEM=256`,
+  `PEN_RADIUS=8`, `PEN_CAP="square"`. Grid lines are at `k*SCALE`; cell diagonals are
+  `x±y = k*SCALE`. (The scale was lowered from 64/1024/32: TrueType stores coordinates as deltas
+  with a 1-byte unsigned form, and at 16 units/cell almost no delta exceeds 255, so the 2-byte
+  form disappears — 10.3% smaller with pixel-identical rendering and exactly proportional
+  geometry.)
 
 - `geometry.py` is now the single stroke→outline expansion used by the editor preview, the
   grid previews AND the compiled font (no picosvg). The editor canvas and `uiutil` both call
