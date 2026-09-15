@@ -336,7 +336,7 @@ class StrokeFont:
     def __init__(self) -> None:
         self.glyphs: Dict[int, Glyph] = {}
         self.metadata: dict = {
-            "name": "strokespec fallback",
+            "name": "Uffy Fallback",
             "height": GRID_H,
             "baseline": DEFAULT_BASELINE,
             "x_height": DEFAULT_X_HEIGHT,

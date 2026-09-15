@@ -1130,7 +1130,7 @@ class MainWindow(QMainWindow):
         if not path.lower().endswith(".ttf"):
             path += ".ttf"
 
-        family = self.strokefont.metadata.get("name", "strokespec")
+        family = self.strokefont.metadata.get("name", "Uffy Fallback")
         dlg = QProgressDialog(f"Compiling {path}…", None, 0, 0, self)
         dlg.setWindowTitle("Compile")
         dlg.setWindowModality(Qt.WindowModality.WindowModal)

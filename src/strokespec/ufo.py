@@ -136,7 +136,7 @@ def make_ufo(
     font this size). Use :func:`build_ufo` when a UFO on disk is actually wanted.
     """
     if family_name is None:
-        family_name = strokefont.metadata.get("name", "strokespec")
+        family_name = strokefont.metadata.get("name", "Uffy Fallback")
 
     baseline = strokefont.baseline
     x_height = strokefont.x_height

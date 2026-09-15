@@ -34,7 +34,7 @@ def _build(args) -> int:
     out = compile_strokefont(
         sf,
         args.output,
-        family_name=args.family or sf.metadata.get("name", "strokespec"),
+        family_name=args.family or sf.metadata.get("name", "Uffy Fallback"),
         style_name=args.style,
         tool=args.tool,
         run_fix=not args.no_fix,

@@ -178,7 +178,7 @@ def compile_ufo_to_ttf(
     ufo_dir: str,
     out_ttf: str,
     *,
-    family_name: str = "strokespec",
+    family_name: str = "Uffy Fallback",
     style_name: str = "Regular",
     tool: str = "auto",
     run_fix: bool = True,
@@ -268,7 +268,7 @@ def compile_strokefont(
     from .model import PEN_RADIUS  # local import to keep API tight
     from .ufo import make_ufo
 
-    family = family_name or strokefont.metadata.get("name", "strokespec")
+    family = family_name or strokefont.metadata.get("name", "Uffy Fallback")
     if tool in ("auto", "ufo2ft", "in-process", "inprocess"):
         ufo_font = make_ufo(
             strokefont,
