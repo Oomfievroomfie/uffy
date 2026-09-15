@@ -52,10 +52,15 @@ instead, and hand the outlines to the compiler.
   and union visually under the **non-zero winding rule** (like TrueType/OpenType; not even-odd),
   so overlaps fill instead of punching holes. Consequently the pen radius is 32 (a one-cell
   diameter) so a minimum-size arc/semicircle stays well inside the box.
-* A glyph may be flagged **combining** (zero advance). The font ships **no GPOS** — no `mark`,
-  `abvm` or `mkmk` (nor any other) lookups, and no anchors; combining glyphs are simply
-  zero-advance and are positioned by the shaper, exactly as Unifont does. Complex shaping is out
-  of scope (consistent with "no shaping").
+* A glyph may be flagged **combining** (zero advance). Combining glyphs are exported with their
+  ink shifted **one cell to the left** (negative x), exactly as Unifont does — its combining marks
+  are zero-advance with negative-x outlines (e.g. U+093F ink at x −1024…−320, U+0940 at −704…0).
+  A zero-advance mark is drawn at the pen, which is already past its base, so the shifted ink
+  lands back on the base's cell: an authored 16x16 combining glyph overlays its base's 16x16 cell
+  with **no GPOS at all** (no `mark`/`abvm`/`mkmk`, no anchors). The one exception is the
+  **Devanagari pre-base matras** (U+093F, U+094E), which the shaper reorders to sit *before* their
+  consonant: there the pen is already at the base's cell, so they are left unshifted. Complex
+  shaping is otherwise out of scope (consistent with "no shaping").
 
 ## Fallback philosophy
 

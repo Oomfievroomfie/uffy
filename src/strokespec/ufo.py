@@ -20,6 +20,27 @@ from .geometry_merge import merge_stroke_edges
 # Op is a tuple ("M"/"L"/"Q"/"C"/"Z", ...) — reused from geometry.
 Op = tuple
 
+# Devanagari vowel signs the shaper reorders to sit BEFORE their consonant (verified against
+# HarfBuzz: U+093F VOWEL SIGN I and U+094E VOWEL SIGN PRISHTHAMATRA E are the only two).
+DEVANAGARI_PREBASE_MATRAS = {0x093F, 0x094E}
+
+
+def _translate_x(ops: list, dx: float) -> list:
+    """Shift x by ``dx`` in every M/L/Q/C op."""
+    out = []
+    for op in ops:
+        k = op[0]
+        if k in ("M", "L"):
+            out.append((k, (op[1][0] + dx, op[1][1])))
+        elif k == "Q":
+            out.append((k, (op[1][0] + dx, op[1][1]), (op[2][0] + dx, op[2][1])))
+        elif k == "C":
+            out.append((k, (op[1][0] + dx, op[1][1]), (op[2][0] + dx, op[2][1]),
+                        (op[3][0] + dx, op[3][1])))
+        else:
+            out.append(op)
+    return out
+
 
 def glyph_name(codepoint: int) -> str:
     """AGLFN-compatible Unicode glyph name."""
@@ -155,7 +176,19 @@ def build_ufo(
 
     def expand(glyph: Glyph) -> List[List[Op]]:
         conts = glyph_outline_from_strokes(glyph, pen_radius, baseline)
-        return merge_stroke_edges(conts) if merge_edges else conts
+        if merge_edges:
+            conts = merge_stroke_edges(conts)
+        # Combining glyphs: place the ink one cell to the LEFT, as Unifont does (its combining
+        # marks have zero advance with negative-x outlines, e.g. U+093F ink at x -1024..-320).
+        # A zero-advance mark is drawn at the pen, which is already past its base, so shifting the
+        # ink left by the glyph's own cell width lands it back on the base's cell — no GPOS and no
+        # mark/abvm/mkmk needed. Exception: the Devanagari pre-base matras, which the shaper
+        # reorders to sit *before* the base: there the pen is already at the base's cell, so they
+        # are left unshifted (their ink then overlays the base's cell, as authored).
+        if glyph.combining and glyph.codepoint not in DEVANAGARI_PREBASE_MATRAS:
+            dx = -glyph.width * SCALE
+            conts = [_translate_x(c, dx) for c in conts]
+        return conts
 
     # .notdef always first.
     nd_cmds = _notdef_ops(UPEM, cap, pen_radius, descent, ascent)
