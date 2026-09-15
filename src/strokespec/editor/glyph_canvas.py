@@ -587,6 +587,13 @@ class GlyphCanvas(QWidget):
         "#F032E6", "#9A6324", "#469990", "#DCBEFF", "#FFD8B1", "#A9A9A9",
     ]
 
+    # Outline pen width, as a fraction of a grid cell. These outlines are drawn under the
+    # font-unit transform (`c / SCALE`), so a pen width given in raw font units is multiplied by
+    # `1 / SCALE` on its way to the screen: 1.5 units meant 1.5/64 of a cell when SCALE was 64,
+    # and lowering SCALE to 16 without touching the constant made every wireframe outline 4x
+    # thicker. Deriving the width from SCALE keeps the on-screen thickness fixed.
+    _WF_PEN_CELLS = 1.5 / 64
+
     def _paint_wireframe(self, p: QPainter, rect: QRectF) -> None:
         # Outlines (font units) under the grid transform.
         p.save()
@@ -594,7 +601,7 @@ class GlyphCanvas(QWidget):
         p.setBrush(Qt.BrushStyle.NoBrush)
         for i, st in enumerate(self._glyph.strokes):
             color = QColor(self._WF_COLORS[i % len(self._WF_COLORS)])
-            p.setPen(QPen(color, 1.5))
+            p.setPen(QPen(color, self._WF_PEN_CELLS * SCALE))
             p.drawPath(self._path_from(
                 [stroke_outline(st, cap=PEN_CAP, baseline=self.baseline)]))
         p.restore()
