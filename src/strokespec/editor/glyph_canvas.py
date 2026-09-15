@@ -476,9 +476,9 @@ class GlyphCanvas(QWidget):
                 ghost = None
             if ghost is not None:
                 try:
-                    qpix, baseline_px, _cap_px = ghost
+                    qpix, baseline_px, _cell_px, origin_px, advance_px = ghost
                 except (TypeError, ValueError):
-                    qpix, baseline_px, _cap_px = ghost, rect.height(), rect.height()
+                    qpix, baseline_px, origin_px, advance_px = ghost, rect.height(), None, None
                 if not qpix.isNull():
                     cell = self._cell()
                     # Scale by the reference font's *full cell* (its em = ascender+descender),
@@ -494,12 +494,18 @@ class GlyphCanvas(QWidget):
                         Qt.TransformationMode.SmoothTransformation,
                     )
                     top = scene_base_y - baseline_px * (scaled.height() / qpix.height())
-                    left = rect.center().x() - scaled.width() / 2.0
-                    # an odd-cell-width reference glyph lands on a cell boundary when centred;
-                    # nudge it by half a cell so it lines up with the cell-centre lattice
-                    w_cells = scaled.width() / cell
-                    if round(w_cells) % 2 == 1:
-                        left += 0.5 * cell
+                    # Centre the reference glyph by its ADVANCE box, not by its ink: the bitmap
+                    # carries its pen origin and advance width, so the advance box (not the ink
+                    # bbox) is centred in this glyph's cell area. Ink-centring slides any glyph
+                    # with asymmetric side bearings — a period or an apostrophe drifts to the
+                    # middle of its cell instead of sitting where its advance puts it.
+                    k = scaled.width() / qpix.width() if qpix.width() > 0 else 1.0
+                    if advance_px is None:
+                        left = rect.center().x() - scaled.width() / 2.0
+                    else:
+                        left = (rect.center().x()
+                                - origin_px * k
+                                - (advance_px / 2.0) * k)
                     p.setOpacity(0.20)
                     p.drawPixmap(left, top, scaled)
                     p.setOpacity(1.0)

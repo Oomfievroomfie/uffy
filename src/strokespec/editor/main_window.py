@@ -866,8 +866,8 @@ class MainWindow(QMainWindow):
         res = f.glyph_bitmap(cp, 160)
         if res is None:
             return None
-        img, baseline_px, cap_px = res
-        return (pil_to_qpixmap(img), baseline_px, cap_px)
+        img, baseline_px, cap_px, origin_px, advance_px = res
+        return (pil_to_qpixmap(img), baseline_px, cap_px, origin_px, advance_px)
 
     def _on_refs_changed(self) -> None:
         self._grid.refresh()

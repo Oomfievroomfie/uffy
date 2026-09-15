@@ -230,7 +230,9 @@ The full set of keyboard and mouse controls is below.
 * **Delete** — delete the selected stroke.
 * **N** — toggle the glyph width between 8 and 16.
 * **M** — toggle the combining flag.
-* **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes.
+* **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes. The ghost is
+  scaled to the full cell height and centred by its **advance box** (pen origin to advance width),
+  not by its ink, so a glyph with asymmetric side bearings lands where its metrics put it.
 
 ### Codepoint grid (left)
 

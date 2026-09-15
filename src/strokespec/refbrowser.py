@@ -164,30 +164,47 @@ class ReferenceFont:
         return canvas
 
     def glyph_bitmap(self, codepoint: int, em_px: int = 160):
-        """Render a glyph retaining its baseline for metric-based placement.
+        """Render a glyph retaining its baseline and its horizontal ADVANCE box.
 
-        Returns ``(image, baseline_px, em_px)``: ``image`` is an RGBA bitmap whose
-        *baseline* is ``baseline_px`` pixels below the top, and whose total height is the
-        font's full cell (ascender+descender). A caller places the glyph against its own
-        baseline and scales it by its *full cell* height (ascender-based, not cap-height).
+        Returns ``(image, baseline_px, cell_px, origin_px, advance_px)``: ``image`` is an RGBA
+        bitmap whose *baseline* is ``baseline_px`` pixels below the top and whose total height is
+        the font's full cell (ascender+descender). ``origin_px`` is the distance from the image's
+        left edge to the glyph's pen origin and ``advance_px`` is its advance width, in the same
+        pixels as ``image``. A caller places the glyph against its own baseline, scales it by its
+        *full cell* height (ascender-based, not cap-height), and — because the advance box travels
+        with the bitmap — can centre it by ADVANCE rather than by ink. Ink-centring drags any glyph
+        with asymmetric side bearings (period, apostrophe, narrow letters) sideways. The image is
+        cropped to cover both the ink and the advance box, so neither is clipped.
+
         Returns ``None`` if the font lacks the codepoint.
         """
         if not self.has(codepoint):
             return None
         f = self._pil_font(em_px)
         asc, desc = f.getmetrics()
-        W = max(em_px * 2, em_px + 64)
+        ch = chr(codepoint)
         H = asc + desc
+        x0 = em_px // 2  # pen origin; the room to its left absorbs a negative left side bearing
+        W = max(em_px * 2, em_px + 64)
         mask = Image.new("L", (W, H), 0)
         d = ImageDraw.Draw(mask)
-        d.text((em_px // 2, 0), chr(codepoint), font=f, fill=255)
+        d.text((x0, 0), ch, font=f, fill=255)
+        try:
+            advance_px = float(f.getlength(ch))
+        except Exception:
+            advance_px = float(em_px) / 2.0
         ibox = mask.getbbox()
         if not ibox:
             return None
-        crop = mask.crop((ibox[0], 0, ibox[2], H))
+        # span the ink and the advance box, so centring on the advance box never clips ink
+        left = min(ibox[0], x0)
+        right = max(ibox[2], int(round(x0 + advance_px)))
+        if right <= left:
+            return None
+        crop = mask.crop((left, 0, right, H))
         out = Image.new("RGBA", crop.size, (0, 0, 0, 0))
         out.putalpha(crop)
-        return out, float(asc), float(H)
+        return out, float(asc), float(H), float(x0 - left), advance_px
 
 
 class ReferenceLibrary:
