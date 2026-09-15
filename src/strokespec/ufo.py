@@ -163,6 +163,16 @@ def make_ufo(
     info.openTypeHeadCreated = "2024/01/01 00:00:00"
     info.postscriptUnderlinePosition = -(UPEM // 8)
     info.postscriptUnderlineThickness = SCALE // 2
+    # Two ufo2ft defaults differ from what an ordinary horizontal font carries, and both are
+    # wrong for us:
+    #  * openTypeHheaCaretSlopeRise defaults to UPEM (256 here). The spec wants 1 with slopeRun 0
+    #    for a font with a horizontal baseline (a vertical caret); every ordinary font, Unifont
+    #    included, has 1.
+    #  * openTypeOS2Type defaults to [2] -> fsType 4 = "Preview & Print embedding" (embedding
+    #    restricted). Unifont ships fsType 0 (installable), which is right for a libre font.
+    info.openTypeHheaCaretSlopeRise = 1
+    info.openTypeHheaCaretSlopeRun = 0
+    info.openTypeOS2Type = []
 
     font.lib["com.strokespec.type"] = "stroke-fallback"
     font.lib["com.strokespec.penRadius"] = str(PEN_RADIUS)
