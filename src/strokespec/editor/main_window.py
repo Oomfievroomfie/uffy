@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import unicodedata2 as unicodedata
 from typing import Optional
 
@@ -12,6 +13,7 @@ from PySide6.QtGui import (
     QColor,
     QCloseEvent,
     QFont,
+    QFontMetricsF,
     QIcon,
     QKeySequence,
     QPainter,
@@ -64,6 +66,56 @@ REL_CELL_W, REL_CELL_H = 96, 172
 # height so tall descenders fit
 REF_IMG_SIZE = 240
 REF_IMG_H = 180
+# pixel size the native-font ghost is rendered at; the canvas rescales it to the cell height
+NATIVE_GHOST_PX = 160
+
+
+def native_reference_bitmap(cp: int):
+    """Render ``cp`` in the OS's *native* font, as a ghost bitmap for the editor canvas.
+
+    The alternative to the reference-fonts list: instead of a font the author loaded from disk,
+    use the same family stack the "Native reference" panel uses. Returns the same
+    ``(pixmap, baseline_px, cell_px, origin_px, advance_px)`` contract as the reference-font
+    provider — the canvas centres the ghost by that advance box — or ``None`` when there is
+    nothing to draw.
+    """
+    if not isinstance(cp, int) or not (0 < cp < 0x110000):
+        return None
+    ch = chr(cp)
+    if not ch.isprintable():
+        return None
+    f = QFont()
+    f.setFamilies(native_text_families(cp))
+    f.setPixelSize(NATIVE_GHOST_PX)
+    fm = QFontMetricsF(f)
+    advance = float(fm.horizontalAdvance(ch))
+    if advance <= 0.0:
+        return None
+    asc = float(fm.ascent())
+    desc = float(fm.descent())
+    cell = asc + desc
+    if cell <= 0.0:
+        return None
+    # Qt reports the ink box with the pen origin at x=0 and the baseline at y=0, so the pen
+    # origin is at image x ``-left`` and the baseline at image y ``asc``.
+    br = fm.boundingRect(ch)
+    left = min(0.0, float(br.left()))
+    right = max(advance, float(br.right()))
+    # A Qt font engine with no usable fonts (e.g. the offscreen platform, which ships no font
+    # database) reports a degenerate ink box tens of thousands of pixels wide. Nothing that big
+    # can be a glyph: drop back to the advance box instead of allocating that pixmap every paint.
+    if right - left > NATIVE_GHOST_PX * 2 or cell > NATIVE_GHOST_PX * 2:
+        left, right = 0.0, advance
+    if right <= left:
+        return None
+    pm = QPixmap(max(1, int(math.ceil(right - left))), max(1, int(math.ceil(cell))))
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setFont(f)
+    p.setPen(QColor(0, 0, 0))
+    p.drawText(QPointF(-left, asc), ch)
+    p.end()
+    return pm, asc, cell, -left, advance
 
 
 def _make_icon(size: int, draw) -> QIcon:
@@ -336,6 +388,7 @@ class ReferenceFontsDock(QWidget):
         self._open_cp = None        # callable(cp) to jump the editor to a codepoint
         self._squish_cb = None      # callable(cp, direction) to copy + squish into a half
         self._strokefont = None     # used to know whether a related glyph has authored data
+        self._native_ghost_fn = None  # callable(on) to source the editor ghost natively
 
         lay = QVBoxLayout(self)
         self._list = QListWidget()
@@ -346,6 +399,18 @@ class ReferenceFontsDock(QWidget):
         btn_row.addWidget(add_btn)
         btn_row.addWidget(clear_btn)
         lay.addLayout(btn_row)
+
+        # where the editor's reference ghost comes from. Off by default: the ghost follows the
+        # reference fonts listed above. On: it follows the codepoint's NATIVE reference instead
+        # (the OS font stack), the same source as the "Native reference" panel below.
+        self._native_ghost_check = QCheckBox("Ghost from native reference")
+        self._native_ghost_check.setChecked(False)
+        self._native_ghost_check.setToolTip(
+            "Draw the editor's reference ghost with the codepoint's native (OS font)\n"
+            "reference instead of the reference fonts listed above."
+        )
+        self._native_ghost_check.toggled.connect(self._on_native_ghost_toggled)
+        lay.addWidget(self._native_ghost_check)
 
         # related glyphs (base char / hanzi components) in the same vertical slot. A
         # containerized IconMode list identical in styling to the main codepoint list (with a
@@ -400,6 +465,13 @@ class ReferenceFontsDock(QWidget):
 
     def set_copy_callback(self, cb) -> None:
         self._copy_strokes = cb
+
+    def set_native_ghost_callback(self, cb) -> None:
+        self._native_ghost_fn = cb
+
+    def _on_native_ghost_toggled(self, on: bool) -> None:
+        if self._native_ghost_fn is not None:
+            self._native_ghost_fn(bool(on))
 
     def set_open_callback(self, cb) -> None:
         self._open_cp = cb
@@ -792,6 +864,7 @@ class MainWindow(QMainWindow):
         self.reflib = ReferenceLibrary()
         self._path: Optional[str] = path
         self._dirty = False
+        self._native_ghost = False   # ghost source: reference fonts (False) or native font (True)
         self._pending_commit: Optional[Glyph] = None
 
         # Load the project's `ref fonts/` folder (if present) by default.
@@ -814,6 +887,7 @@ class MainWindow(QMainWindow):
         self._refdock.set_copy_callback(self._copy_related_strokes)
         self._refdock.set_open_callback(self._open_codepoint)
         self._refdock.set_squish_callback(self._squish_related_strokes)
+        self._refdock.set_native_ghost_callback(self._on_native_ghost)
         dock = QDockWidget("Reference Fonts", self)
         dock.setWidget(self._refdock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
@@ -860,6 +934,8 @@ class MainWindow(QMainWindow):
 
     # --- reference helper ----------------------------------------------------
     def _reference_for_codepoint(self, cp: int):
+        if self._native_ghost:
+            return native_reference_bitmap(cp)
         f = self.reflib.first_with(cp)
         if f is None:
             return None
@@ -868,6 +944,11 @@ class MainWindow(QMainWindow):
             return None
         img, baseline_px, cap_px, origin_px, advance_px = res
         return (pil_to_qpixmap(img), baseline_px, cap_px, origin_px, advance_px)
+
+    def _on_native_ghost(self, on: bool) -> None:
+        """Switch the editor's reference ghost between the reference fonts and the native font."""
+        self._native_ghost = bool(on)
+        self._editor.refresh_canvas()
 
     def _on_refs_changed(self) -> None:
         self._grid.refresh()

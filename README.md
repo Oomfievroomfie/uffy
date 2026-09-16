@@ -233,6 +233,8 @@ The full set of keyboard and mouse controls is below.
 * **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes. The ghost is
   scaled to the full cell height and centred by its **advance box** (pen origin to advance width),
   not by its ink, so a glyph with asymmetric side bearings lands where its metrics put it.
+  **Ghost from native reference** in the Reference Fonts panel (off by default) takes the ghost
+  from the codepoint's native OS font instead of the reference fonts loaded there.
 
 ### Codepoint grid (left)
 
