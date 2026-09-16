@@ -13,7 +13,6 @@ from PySide6.QtGui import (
     QColor,
     QCloseEvent,
     QFont,
-    QFontMetricsF,
     QIcon,
     QKeySequence,
     QPainter,
@@ -22,6 +21,7 @@ from PySide6.QtGui import (
     QPolygonF,
     QStandardItem,
     QStandardItemModel,
+    QTextLayout,
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -70,14 +70,37 @@ REF_IMG_H = 180
 NATIVE_GHOST_PX = 160
 
 
+def _native_glyph_run(ch: str, font: QFont):
+    """Lay ``ch`` out exactly as Qt will render it; return the font that draws it and its glyph.
+
+    A ``QFont`` carrying a family *chain* will not tell you whose metrics you are reading.
+    ``QFontMetricsF`` always reports the chain head's vertical metrics — Segoe UI's 173/40 box even
+    for U+4E2D, which Yu Gothic draws with a 158/48 box — and ``inFontUcs4`` answers for the
+    fallback-resolved engine, so it claims Segoe UI has an emoji. ``QTextLayout`` itemises the text
+    for real, and the glyph run carries the ``QRawFont`` that actually draws the character.
+    """
+    layout = QTextLayout(ch, font)
+    layout.beginLayout()
+    line = layout.createLine()
+    line.setLineWidth(max(1.0, float(font.pixelSize()) * 8.0))
+    layout.endLayout()
+    runs = line.glyphRuns()
+    if not runs:
+        return None
+    gids = runs[0].glyphIndexes()
+    if not gids:
+        return None
+    return runs[0].rawFont(), int(gids[0])
+
+
 def native_reference_bitmap(cp: int):
     """Render ``cp`` in the OS's *native* font, as a ghost bitmap for the editor canvas.
 
     The alternative to the reference-fonts list: instead of a font the author loaded from disk,
-    use the same family stack the "Native reference" panel uses. Returns the same
-    ``(pixmap, baseline_px, cell_px, origin_px, advance_px)`` contract as the reference-font
-    provider — the canvas centres the ghost by that advance box — or ``None`` when there is
-    nothing to draw.
+    use the same family stack the "Native reference" panel uses — but measured from the font that
+    the stack actually resolves to for this character, not from the head of the stack. Returns the
+    same ``(pixmap, baseline_px, cell_px, origin_px, advance_px)`` contract as the reference-font
+    provider, or ``None`` when there is nothing to draw.
     """
     if not isinstance(cp, int) or not (0 < cp < 0x110000):
         return None
@@ -87,18 +110,22 @@ def native_reference_bitmap(cp: int):
     f = QFont()
     f.setFamilies(native_text_families(cp))
     f.setPixelSize(NATIVE_GHOST_PX)
-    fm = QFontMetricsF(f)
-    advance = float(fm.horizontalAdvance(ch))
+    run = _native_glyph_run(ch, f)
+    if run is None:
+        return None
+    raw, gid = run
+    advances = raw.advancesForGlyphIndexes([gid])
+    advance = float(advances[0].x()) if advances else 0.0
     if advance <= 0.0:
         return None
-    asc = float(fm.ascent())
-    desc = float(fm.descent())
+    asc = float(raw.ascent())
+    desc = float(raw.descent())
     cell = asc + desc
     if cell <= 0.0:
         return None
     # Qt reports the ink box with the pen origin at x=0 and the baseline at y=0, so the pen
     # origin is at image x ``-left`` and the baseline at image y ``asc``.
-    br = fm.boundingRect(ch)
+    br = raw.boundingRect(gid)
     left = min(0.0, float(br.left()))
     right = max(advance, float(br.right()))
     # A Qt font engine with no usable fonts (e.g. the offscreen platform, which ships no font
