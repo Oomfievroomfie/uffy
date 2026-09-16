@@ -115,7 +115,10 @@ def native_reference_bitmap(cp: int):
     p.setPen(QColor(0, 0, 0))
     p.drawText(QPointF(-left, asc), ch)
     p.end()
-    return pm, asc, cell, -left, advance
+    # The cell the canvas fits to the line height is one EM, not Qt's ascender+descender box.
+    # Qt reports that box as 1.33 em for Segoe UI, so fitting it to the grid leaves the em
+    # spanning only 12 of the 16 cells — the cap height — and the ghost comes out small and low.
+    return pm, asc, float(NATIVE_GHOST_PX), -left, advance
 
 
 def _make_icon(size: int, draw) -> QIcon:

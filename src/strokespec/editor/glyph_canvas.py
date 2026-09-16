@@ -476,16 +476,21 @@ class GlyphCanvas(QWidget):
                 ghost = None
             if ghost is not None:
                 try:
-                    qpix, baseline_px, _cell_px, origin_px, advance_px = ghost
+                    qpix, baseline_px, cell_px, origin_px, advance_px = ghost
                 except (TypeError, ValueError):
                     qpix, baseline_px, origin_px, advance_px = ghost, rect.height(), None, None
+                    cell_px = None
                 if not qpix.isNull():
                     cell = self._cell()
-                    # Scale by the reference font's *full cell* (its em = ascender+descender),
-                    # not its cap-height. Full-cell fonts (e.g. 16x16 bitmap fonts) have glyphs
-                    # that fill the cell, and cap-based scaling shrinks them; ascender-based
-                    # "to full cell" scaling shows the real proportions.
-                    scale = rect.height() / qpix.height() if qpix.height() > 0 else 1.0
+                    # Scale the ghost's *cell* to the full line height (GRID_H cells), so that one
+                    # em of the reference is one em of ours. What the cell IS belongs to the
+                    # provider: a reference font reports its ascender+descender box, the native
+                    # provider reports the em. It is NOT simply the bitmap height — the bitmap can
+                    # carry ink outside the cell. This is also why the ghost was coming out small
+                    # and low: a font whose ascender+descender box is taller than its em (Segoe UI
+                    # is 1.33 em) had its em fitted to the cap height instead of to the line height.
+                    span = float(cell_px) if cell_px else float(qpix.height())
+                    scale = rect.height() / span if span > 0 else 1.0
                     scene_base_y = rect.top() + (GRID_H - self.baseline) * cell
                     scaled = qpix.scaled(
                         max(1, int(qpix.width() * scale)),

@@ -231,10 +231,12 @@ The full set of keyboard and mouse controls is below.
 * **N** — toggle the glyph width between 8 and 16.
 * **M** — toggle the combining flag.
 * **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes. The ghost is
-  scaled to the full cell height and centred by its **advance box** (pen origin to advance width),
+  scaled to the full line height and centred by its **advance box** (pen origin to advance width),
   not by its ink, so a glyph with asymmetric side bearings lands where its metrics put it.
   **Ghost from native reference** in the Reference Fonts panel (off by default) takes the ghost
-  from the codepoint's native OS font instead of the reference fonts loaded there.
+  from the codepoint's native OS font instead of the reference fonts loaded there; that one is
+  scaled by its **em**, because Qt reports fonts such as Segoe UI with an ascender+descender box of
+  1.33 em, and fitting that box to the grid would leave the em only as tall as the cap height.
 
 ### Codepoint grid (left)
 
