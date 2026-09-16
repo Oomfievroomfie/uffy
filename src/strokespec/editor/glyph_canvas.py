@@ -482,23 +482,23 @@ class GlyphCanvas(QWidget):
                     cell_px = None
                 if not qpix.isNull():
                     cell = self._cell()
-                    # Scale the ghost's *cell* to the full line height (GRID_H cells), so that one
-                    # em of the reference is one em of ours. What the cell IS belongs to the
-                    # provider: a reference font reports its ascender+descender box, the native
-                    # provider reports the em. It is NOT simply the bitmap height — the bitmap can
-                    # carry ink outside the cell. This is also why the ghost was coming out small
-                    # and low: a font whose ascender+descender box is taller than its em (Segoe UI
-                    # is 1.33 em) had its em fitted to the cap height instead of to the line height.
+                    # The ghost is scaled by HEIGHT alone: the cell the provider reports (the
+                    # reference's ascender+descender box, or the em) is fitted to the line height
+                    # and the width simply follows the aspect. Width never drives the fit, so a
+                    # ghost is free to be wider than the glyph's cell. The cell is NOT simply the
+                    # bitmap height — the bitmap may carry ink outside it.
                     span = float(cell_px) if cell_px else float(qpix.height())
-                    scale = rect.height() / span if span > 0 else 1.0
+                    target_h = (max(1, int(round(rect.height() * qpix.height() / span)))
+                                if span > 0 else qpix.height())
+                    scaled = qpix.scaledToHeight(target_h, Qt.TransformationMode.SmoothTransformation)
                     scene_base_y = rect.top() + (GRID_H - self.baseline) * cell
-                    scaled = qpix.scaled(
-                        max(1, int(qpix.width() * scale)),
-                        max(1, int(qpix.height() * scale)),
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                    top = scene_base_y - baseline_px * (scaled.height() / qpix.height())
+                    if baseline_px is None:
+                        # Provider says its bitmap IS its cell and has no baseline to pin: start
+                        # the box where the descender ends, so the box's bottom sits on the grid
+                        # bottom and its top on the grid top.
+                        top = rect.top()
+                    else:
+                        top = scene_base_y - baseline_px * (scaled.height() / qpix.height())
                     # Centre the reference glyph by its ADVANCE box, not by its ink: the bitmap
                     # carries its pen origin and advance width, so the advance box (not the ink
                     # bbox) is centred in this glyph's cell area. Ink-centring slides any glyph

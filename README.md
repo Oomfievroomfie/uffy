@@ -230,13 +230,17 @@ The full set of keyboard and mouse controls is below.
 * **Delete** — delete the selected stroke.
 * **N** — toggle the glyph width between 8 and 16.
 * **M** — toggle the combining flag.
-* **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes. The ghost is
-  scaled to the full line height and centred by its **advance box** (pen origin to advance width),
-  not by its ink, so a glyph with asymmetric side bearings lands where its metrics put it.
-  **Ghost from native reference** in the Reference Fonts panel (off by default) takes the ghost
-  from the codepoint's native OS font instead of the reference fonts loaded there; that one is
-  scaled by its **em**, because Qt reports fonts such as Segoe UI with an ascender+descender box of
-  1.33 em, and fitting that box to the grid would leave the em only as tall as the cap height.
+* **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes. Ghosts are
+  centred by their **advance box** (pen origin to advance width), not by their ink, so a glyph with
+  asymmetric side bearings lands where its metrics put it, and each is fitted to the line height by
+  **height alone** — width never drives the fit, so a ghost may be wider than the glyph's cell. A
+  reference-font ghost is placed by its baseline, its ascender+descender box fitted to the line
+  height. **Ghost from native reference** in the Reference Fonts panel (off by default) takes the
+  ghost from the codepoint's native OS font instead; that one starts where the **descender ends**
+  rather than at the baseline, so its box runs from the grid bottom to the grid top and never
+  spills out of the 16-cell column. Most of Unicode (CJK, emoji, symbols) has no baseline worth
+  aligning to — that is what the native ghost is for — while the baseline scripts are served by
+  the reference fonts, which do pin the baseline.
 
 ### Codepoint grid (left)
 

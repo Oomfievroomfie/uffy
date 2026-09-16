@@ -115,10 +115,13 @@ def native_reference_bitmap(cp: int):
     p.setPen(QColor(0, 0, 0))
     p.drawText(QPointF(-left, asc), ch)
     p.end()
-    # The cell the canvas fits to the line height is one EM, not Qt's ascender+descender box.
-    # Qt reports that box as 1.33 em for Segoe UI, so fitting it to the grid leaves the em
-    # spanning only 12 of the 16 cells — the cap height — and the ghost comes out small and low.
-    return pm, asc, float(NATIVE_GHOST_PX), -left, advance
+    # Report the cell as the ascender+descender box and the baseline as None: the canvas then
+    # fits that box to the line height by HEIGHT alone and starts it where the descender ends
+    # instead of at the baseline, so the box's bottom lands on the grid bottom and its top on the
+    # grid top. Most of Unicode (CJK, emoji, symbols) has no baseline worth aligning to — those are
+    # the glyphs the native reference is for; the baseline scripts are served by the reference
+    # fonts, which do pin the baseline.
+    return pm, None, cell, -left, advance
 
 
 def _make_icon(size: int, draw) -> QIcon:
