@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-16 02:56  
+Generated: 2026-09-16 15:31  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 11763 |
-| - with strokes | 11734 |
+| codepoints authored | 11770 |
+| - with strokes | 11741 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 153626 |
-| coverage of allocated | 11763 (7.7%) |
+| coverage of allocated | 11770 (7.7%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -110,6 +110,7 @@ Generated: 2026-09-16 02:56
 | CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1643 | 7.8% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 6 | 5.2% |
 | Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 40 | 5.2% |
+| Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 7 | 2.7% |
 | Tibetan | U+0F00-U+0FFF | 211 | 4 | 1.9% |
 | Symbols and Pictographs Extended-A | U+1FA70-U+1FAFF | 120 | 1 | 0.8% |
 | CJK Unified Ideographs Extension D | U+2B740-U+2B81F | 222 | 1 | 0.5% |
@@ -288,6 +289,7 @@ Generated: 2026-09-16 02:56
 | Masaram Gondi | U+11D00-U+11D5F | 75 | 0 | 0.0% |
 | Gunjala Gondi | U+11D60-U+11DAF | 63 | 0 | 0.0% |
 | Tolong Siki | U+11DB0-U+11DEF | 54 | 0 | 0.0% |
+| Bengali Supplement | U+11DF0-U+11DFF | 0 | 0 | 0.0% |
 | Makasar | U+11EE0-U+11EFF | 25 | 0 | 0.0% |
 | Kawi | U+11F00-U+11F5F | 87 | 0 | 0.0% |
 | Lisu Supplement | U+11FB0-U+11FBF | 1 | 0 | 0.0% |
@@ -295,6 +297,7 @@ Generated: 2026-09-16 02:56
 | Cuneiform | U+12000-U+123FF | 922 | 0 | 0.0% |
 | Cuneiform Numbers and Punctuation | U+12400-U+1247F | 116 | 0 | 0.0% |
 | Early Dynastic Cuneiform | U+12480-U+1254F | 196 | 0 | 0.0% |
+| Archaic Cuneiform Numerals | U+12550-U+1268F | 0 | 0 | 0.0% |
 | Cypro-Minoan | U+12F90-U+12FFF | 99 | 0 | 0.0% |
 | Egyptian Hieroglyphs | U+13000-U+1342F | 1072 | 0 | 0.0% |
 | Egyptian Hieroglyph Format Controls | U+13430-U+1345F | 38 | 0 | 0.0% |
@@ -316,6 +319,8 @@ Generated: 2026-09-16 02:56
 | Khitan Small Script | U+18B00-U+18CFF | 471 | 0 | 0.0% |
 | Tangut Supplement | U+18D00-U+18D7F | 0 | 0 | 0.0% |
 | Tangut Components Supplement | U+18D80-U+18DFF | 115 | 0 | 0.0% |
+| Jurchen | U+18E00-U+1919F | 0 | 0 | 0.0% |
+| Jurchen Radicals | U+191A0-U+191DF | 0 | 0 | 0.0% |
 | Kana Extended-B | U+1AFF0-U+1AFFF | 13 | 0 | 0.0% |
 | Kana Supplement | U+1B000-U+1B0FF | 256 | 0 | 0.0% |
 | Kana Extended-A | U+1B100-U+1B12F | 35 | 0 | 0.0% |
@@ -329,11 +334,13 @@ Generated: 2026-09-16 02:56
 | Byzantine Musical Symbols | U+1D000-U+1D0FF | 246 | 0 | 0.0% |
 | Musical Symbols | U+1D100-U+1D1FF | 233 | 0 | 0.0% |
 | Ancient Greek Musical Notation | U+1D200-U+1D24F | 70 | 0 | 0.0% |
+| Musical Symbols Supplement | U+1D250-U+1D28F | 0 | 0 | 0.0% |
 | Kaktovik Numerals | U+1D2C0-U+1D2DF | 20 | 0 | 0.0% |
 | Mayan Numerals | U+1D2E0-U+1D2FF | 20 | 0 | 0.0% |
 | Tai Xuan Jing Symbols | U+1D300-U+1D35F | 87 | 0 | 0.0% |
 | Counting Rod Numerals | U+1D360-U+1D37F | 25 | 0 | 0.0% |
 | Sutton SignWriting | U+1D800-U+1DAAF | 672 | 0 | 0.0% |
+| Miscellaneous Symbols and Arrows Extended | U+1DB00-U+1DBFF | 0 | 0 | 0.0% |
 | Latin Extended-G | U+1DF00-U+1DFFF | 37 | 0 | 0.0% |
 | Glagolitic Supplement | U+1E000-U+1E02F | 38 | 0 | 0.0% |
 | Cyrillic Extended-D | U+1E030-U+1E08F | 63 | 0 | 0.0% |
@@ -354,9 +361,9 @@ Generated: 2026-09-16 02:56
 | Ornamental Dingbats | U+1F650-U+1F67F | 48 | 0 | 0.0% |
 | Transport and Map Symbols | U+1F680-U+1F6FF | 119 | 0 | 0.0% |
 | Alchemical Symbols | U+1F700-U+1F77F | 128 | 0 | 0.0% |
-| Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 0 | 0.0% |
 | CJK Unified Ideographs Extension I | U+2EBF0-U+2EE5F | 622 | 0 | 0.0% |
 | CJK Unified Ideographs Extension H | U+31350-U+323AF | 4192 | 0 | 0.0% |
 | CJK Unified Ideographs Extension J | U+323B0-U+3347F | 4298 | 0 | 0.0% |
+| Seal | U+3D000-U+3FC3F | 0 | 0 | 0.0% |
 | Tags | U+E0000-U+E007F | 97 | 0 | 0.0% |
 | Variation Selectors Supplement | U+E0100-U+E01EF | 240 | 0 | 0.0% |

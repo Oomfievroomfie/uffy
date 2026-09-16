@@ -12,6 +12,12 @@ block list and the coverage report stay accurate. Re-download from
 `https://www.unicode.org/Public/UCD/latest/ucd/Blocks.txt` and replace the vendored copy. Private-
 use blocks are deliberately excluded from the editor's block list.
 
+The block table can legitimately run ahead of the character database: assigned codepoints
+(names/categories) come from `unicodedata2`, which lags a Unicode release by however long the
+package takes to ship. Blocks the new release adds therefore read as **0 allocated** in
+`COVERAGE.md` — they exist in the editor's block list, but nothing in them counts as allocated yet,
+so they are excluded from the block-status buckets. That is expected, not a coverage regression.
+
 ## Strokes are the source of truth
 
 A glyph is authored as **strokes**, never as outlines or bitmaps. One stroke is exactly two grid
