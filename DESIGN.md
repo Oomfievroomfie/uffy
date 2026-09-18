@@ -105,10 +105,16 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
   here is what makes an instance expand *exactly* like authored strokes — and it is the same
   rounding `pull contents` does to the strokes it inlines, so the strokes of a pulled instance
   land exactly where they were drawn.
-* **Instances nest** (an instance's source may itself instance something), so an instance is
-  flattened into a flat list of cell-space strokes with the transforms *composed*
-  (`geometry.flatten_cell_strokes`). That keeps the "transform, then expand" rule exact for a
-  whole chain instead of quantising the grid at every level.
+* **Instances nest, and every level is rounded before the next transform.** A glyph renders
+  itself in its own cell space: its own strokes, plus each instance resolved by rendering *its
+  source in the source's own space* (which rounds there), then transporting that already-rounded
+  stroke list into this glyph with the instance's box and rounding again
+  (`geometry.flatten_cell_strokes` + `geometry.transport_cell_strokes`). The chain is therefore
+  quantised once per level. Composing a whole chain of transforms and rounding once at the end
+  gives *different* strokes and is not what a glyph renders: an instance of B must reproduce the
+  strokes **B presents**, never a fresh derivation from B's raw subcomponent or stroke data. The
+  practical statement of the rule: a subcomponent always shows exactly what its source glyph
+  shows, transported — its appearance cannot depend on how deep the reference chain is.
 * **A mirror is handled by swapping the two points of each stroke** when the composed transform
   has a negative determinant. An arc's bend is a pure function of point order, and its control
   point is recomputed from the transformed endpoints as the box corner on the right of the chord;
@@ -130,10 +136,10 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
 * **Pulling re-quantises a nested instance's box, and that is expected to shift its rounding.**
   A box corner is an integer cell corner, so a nested box mapped by a scaled transform (it lands
   on something like `5.375`) has to be rounded back onto that lattice. The nested content is then
-  transformed by the rounded box instead of the exact composition, which can flip the cell-centre
-  snap of a nested endpoint by up to a cell. The instance's *own* strokes are unaffected — those
-  are inlined through the exact transform — and the alternative (collapsing nested instances into
-  strokes) would lose the structure the pull exists to preserve.
+  rendered through the rounded box rather than the exact transformed one, which can flip the
+  cell-centre snap of a nested endpoint by up to a cell. The instance's *own* strokes are
+  unaffected — those are inlined through the exact transform — and the alternative (collapsing
+  nested instances into strokes) would lose the structure the pull exists to preserve.
 * **Cycles are structurally impossible.** Creating an instance whose target already leads back to
   the host glyph is refused up front (`StrokeFont.would_create_cycle`). A file that contains one
   anyway is invalid: loading breaks the cycles greedily in sorted codepoint order — dropping the

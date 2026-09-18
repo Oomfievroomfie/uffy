@@ -46,7 +46,7 @@ Coordinate conventions
 from __future__ import annotations
 
 import math
-from typing import Callable, List, Sequence, Tuple
+from typing import Callable, Iterable, List, Sequence, Tuple
 
 from .model import (
     DEFAULT_BASELINE,
@@ -598,16 +598,6 @@ def xform_apply(t: XForm, p: Pt) -> Pt:
     return (p[0] * t[0] + t[2], p[1] * t[1] + t[3])
 
 
-def xform_compose(outer: XForm, inner: XForm) -> XForm:
-    """``outer ∘ inner`` — apply ``inner`` first, then ``outer``."""
-    return (
-        outer[0] * inner[0],
-        outer[1] * inner[1],
-        outer[0] * inner[2] + outer[2],
-        outer[1] * inner[3] + outer[3],
-    )
-
-
 def xform_mirrors(t: XForm) -> bool:
     """True if the transform reverses handedness (an odd number of flips)."""
     return t[0] * t[1] < 0.0
@@ -644,23 +634,32 @@ def snap_cell_point(p: Pt) -> Pt:
     return (round(p[0] - 0.5) + 0.5, round(p[1] - 0.5) + 0.5)
 
 
-def own_cell_strokes(glyph: Glyph, xform: XForm = IDENTITY_XFORM) -> List[CellStroke]:
-    """The glyph's **own** strokes (never its instances) transformed into cell space.
+def transport_cell_strokes(strokes: Iterable[CellStroke], xform: XForm) -> List[CellStroke]:
+    """Move already-cell-space strokes by ``xform``: transform, swap mirrored points, snap.
 
-    The transform is applied to the endpoints, a mirroring transform swaps each stroke's points
-    (so an arc keeps bending the right way once its control point is recomputed), and every
-    endpoint is snapped to the nearest cell centre — the only lattice the stroke geometry is
-    defined on.
+    A mirroring transform swaps each stroke's two points so that an arc — whose bend is a pure
+    function of point order — keeps bending the right way once its control point is recomputed
+    from the transformed endpoints. Every endpoint is snapped to the nearest cell centre, the only
+    lattice the stroke geometry is defined on.
     """
     mirror = xform_mirrors(xform)
     out: List[CellStroke] = []
-    for s in glyph.strokes:
-        p1 = xform_apply(xform, (s.p1.x + 0.5, s.p1.y + 0.5))
-        p2 = xform_apply(xform, (s.p2.x + 0.5, s.p2.y + 0.5))
+    for p1, p2, shape in strokes:
+        a = snap_cell_point(xform_apply(xform, p1))
+        b = snap_cell_point(xform_apply(xform, p2))
         if mirror:
-            p1, p2 = p2, p1
-        out.append((snap_cell_point(p1), snap_cell_point(p2), s.shape))
+            a, b = b, a
+        out.append((a, b, shape))
     return out
+
+
+def own_cell_strokes(glyph: Glyph, xform: XForm = IDENTITY_XFORM) -> List[CellStroke]:
+    """The glyph's **own** strokes (never its instances) transformed into cell space."""
+    return transport_cell_strokes(
+        (((s.p1.x + 0.5, s.p1.y + 0.5), (s.p2.x + 0.5, s.p2.y + 0.5), s.shape)
+         for s in glyph.strokes),
+        xform,
+    )
 
 
 def transform_subcomponent(sub: Subcomponent, xform: XForm) -> Subcomponent:
@@ -675,37 +674,32 @@ def transform_subcomponent(sub: Subcomponent, xform: XForm) -> Subcomponent:
                         (round(b[0]), round(b[1])))
 
 
-def flatten_cell_strokes(
-    glyph: Glyph,
-    resolve=None,
-    xform: XForm = IDENTITY_XFORM,
-    _seen=None,
-) -> List[CellStroke]:
-    """Every stroke of ``glyph`` (including its instances, recursively) in CELL space.
+def flatten_cell_strokes(glyph: Glyph, resolve=None, _seen=None) -> List[CellStroke]:
+    """Every stroke of ``glyph`` — its own plus, recursively, those of everything it instances —
+    in the glyph's **own** cell space.
 
-    Transforms composed from nested instances are applied to the *strokes*; outlines are built
-    from the result by :func:`cell_stroke_outline`. A mirroring transform swaps a stroke's points
-    so that an arc — whose bend is a pure function of point order — bows the mirrored way once
-    its control point is recomputed from the transformed endpoints.
-
-    Each transformed endpoint is then snapped to the nearest **cell centre**
-    (:func:`snap_cell_point`), which is the only lattice the stroke geometry is defined on, so an
-    instance's strokes are expanded exactly like authored ones.
+    An instance is resolved by first rendering its source **in the source's own space** (that
+    is: the source's own strokes, plus its own instances resolved the same way, all rounded on
+    *its* lattice) and only then transporting that already-rounded stroke list into this glyph
+    with the instance's box transform. The chain is therefore quantised at every level, so an
+    instance of B always reproduces the strokes **B presents** rather than a fresh derivation
+    from B's raw subcomponent/stroke data — composing the whole chain of transforms and rounding
+    once at the end gives different results and is not what a glyph renders.
 
     ``_seen`` guards against a cycle in malformed data (the model breaks cycles on load, so a
     well-formed font never needs it).
     """
     if _seen is None:
         _seen = {int(glyph.codepoint)}
-    out = own_cell_strokes(glyph, xform)
+    out = own_cell_strokes(glyph)
     for sub in glyph.subcomponents:
         if sub.codepoint in _seen:
             continue
         src = resolve_glyph(resolve, sub.codepoint)
         if src is None:
             continue
-        inner = xform_compose(xform, subcomponent_xform(sub, src))
-        out.extend(flatten_cell_strokes(src, resolve, inner, _seen | {sub.codepoint}))
+        inner = flatten_cell_strokes(src, resolve, _seen | {sub.codepoint})
+        out.extend(transport_cell_strokes(inner, subcomponent_xform(sub, src)))
     return out
 
 
@@ -728,19 +722,19 @@ def subcomponent_contours(
     r: float = PEN_RADIUS,
     cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
-    outer: XForm = IDENTITY_XFORM,
 ) -> List[List[Op]]:
     """The contours an instance converts to *inside its host glyph* (empty when unresolved).
 
-    ``outer`` maps the instance's host glyph cell space into whatever space the caller wants the
-    result in (the host's own space by default).
+    This is exactly what :func:`flatten_cell_strokes` does for that instance — render the source
+    in its own space (rounded on its own lattice), then transport it by the box transform — so the
+    compiled outlines and the editor's rendering can never disagree.
     """
     src = resolve_glyph(resolve, sub.codepoint)
     if src is None:
         return []
-    x = xform_compose(outer, subcomponent_xform(sub, src))
-    return [cell_stroke_outline(cs, r, cap, baseline)
-            for cs in flatten_cell_strokes(src, resolve, x, {int(src.codepoint)})]
+    inner = flatten_cell_strokes(src, resolve, {int(src.codepoint)})
+    moved = transport_cell_strokes(inner, subcomponent_xform(sub, src))
+    return [cell_stroke_outline(cs, r, cap, baseline) for cs in moved]
 
 
 def glyph_outline(

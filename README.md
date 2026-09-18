@@ -148,10 +148,12 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   lattice — a box is rarely a whole number of cells, and off-lattice endpoints would put the
   pen, the butt snap and an arc's box on the wrong cell), and only then are they expanded into
   outlines, so the pen keeps its own width and the cell-quantised butt snap is taken in the
-  *host* glyph's grid. Instances nest (transforms
-  compose), and a subcomponent's own strokes are never editable — only its box. **Cycles are
-  impossible**: a reference that would close one is refused, and a file that contains one has it
-  broken on load (with a warning).
+  *host* glyph's grid. Instances nest, and **every level is rounded before the next transform** —
+  a glyph renders itself in its own cell space, and an instance transports *that* rendering into
+  its host — so an instance always shows exactly what its source glyph shows, appropriately
+  transformed, however deep the reference chain is. A subcomponent's own strokes are never
+  editable, only its box. **Cycles are impossible**: a reference that would close one is refused,
+  and a file that contains one has it broken on load (with a warning).
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
   the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
   set's metadata.

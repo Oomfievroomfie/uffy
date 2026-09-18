@@ -204,17 +204,19 @@ The editor is a *front end* for the same model, not a parallel definition:
   of having `geometry.py` be canonical.
 - **Subcomponents transform strokes, not outlines.** A `Subcomponent` is a codepoint reference
   plus a destination box in **cell** coordinates (integer = cell corner; a `Point` index `g` is at
-  cell `g + 0.5`), whose negative size means a flip. `geometry.flatten_cell_strokes` composes
-  nested instance transforms and returns the referenced glyphs' *strokes* in the host's cell
-  space; only then does `cell_stroke_outline` expand them, so the pen keeps its width and the butt
-  snap happens in the host grid. Every transformed endpoint is then snapped to the nearest **cell
-  centre** (`geometry.snap_cell_point`) — a box is rarely a whole number of cells, and an
-  off-lattice endpoint puts the centreline, `_cell_min`'s butt snap and an arc's box on the wrong
-  cell. Do not remove that snap. A negative-determinant transform **swaps each stroke's two
+  cell `g + 0.5`), whose negative size means a flip. `geometry.flatten_cell_strokes` renders a
+  glyph in its **own** cell space: its own strokes, plus each instance resolved by rendering the
+  *source's own rendering* (already rounded on the source's lattice) and transporting that with
+  `geometry.transport_cell_strokes`, which snaps every endpoint to the nearest cell centre.
+  **One rounding per level, never a composed chain routed once** — an instance of B must show the
+  strokes B shows, and composing `T_C∘T_B` and rounding at the end gives different results. Only
+  after that does `cell_stroke_outline` expand the strokes, so the pen keeps its width and the
+  butt snap happens in the host grid. A negative-determinant transform **swaps each stroke's two
   points** (`arc` bends come from point order) — do not "fix" that by transforming the control
   point. Anything that expands a glyph must be handed a `resolve` callable (`StrokeFont.get`) or
   the instances silently vanish (`expand()` in `ufo.py` deliberately omits it: it is only the
-  glyph's OWN strokes).
+  glyph's OWN strokes), and any per-instance expansion (the compiler's) must go through
+  `subcomponent_contours` so it stays identical to that glyph's own rendering.
 - **`ufo.py` is the only place that decides simple vs composite.** A glyph with subcomponents
   becomes a ufoLib2 composite; each part (own strokes, then one per instance) is pooled in
   `.subNNNNN` helper glyphs keyed on **outline data alone** — never codepoint or transform — so
