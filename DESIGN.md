@@ -5,18 +5,29 @@ or model rationale — the *what* (what a stroke is, what the app does) lives in
 
 ## Vendored Unicode data needs periodic updating
 
-`src/strokespec/data/Blocks.txt` is a snapshot of the official UCD `Blocks.txt` (parsed at
-runtime by `unicode_blocks.py`; nothing is hardcoded and it is never re-downloaded). It must be
-**re-fetched from time to time** whenever Unicode adds, renames, or splits blocks, so the editor's
-block list and the coverage report stay accurate. Re-download from
-`https://www.unicode.org/Public/UCD/latest/ucd/Blocks.txt` and replace the vendored copy. Private-
-use blocks are deliberately excluded from the editor's block list.
+Two UCD files are snapshots, parsed at runtime, never re-downloaded:
 
-The block table can legitimately run ahead of the character database: assigned codepoints
-(names/categories) come from `unicodedata2`, which lags a Unicode release by however long the
-package takes to ship. Blocks the new release adds therefore read as **0 allocated** in
-`COVERAGE.md` — they exist in the editor's block list, but nothing in them counts as allocated yet,
-so they are excluded from the block-status buckets. That is expected, not a coverage regression.
+- `src/strokespec/data/Blocks.txt` — the official `Blocks.txt`, parsed by `unicode_blocks.py`.
+  Drives the editor's block list and the coverage report's block table.
+- `src/strokespec/data/Scripts.txt` — the official `Scripts.txt`, parsed by `unicode_scripts.py`
+  (`script_of`). Drives the per-script bundle-gap analysis in `tools/`.
+
+Both must be **re-fetched from time to time** whenever Unicode adds, renames, or splits blocks or
+scripts: `https://www.unicode.org/Public/UCD/latest/ucd/<file>`. Private-use blocks are
+deliberately excluded from the editor's block list.
+
+The script table is vendored rather than taken from `fontTools.unicodedata.script` because
+fontTools' copy is a build artifact frozen at whatever UCD release its own build ran against (4.64
+and 4.65 both still ship the 17.0 tables), so a release's newly assigned scripts would read as
+`Unknown` there until fontTools happens to rebuild.
+
+Assignments and categories (names, `category`, `east_asian_width`, decompositions) come from
+`unicodedata2`, so `pyproject.toml` pins a floor matching the vendored snapshots. Two effects ride
+on that floor: a block the vendored table knows but the database does not yet name reads as
+**0 allocated** in `COVERAGE.md` (it is still in the editor's block list, just excluded from the
+block-status buckets), and algorithmically-named ranges (Tangut, Khitan, Nushu — and in 18.0
+Jurchen and Seal) count as allocated only once a release backports their names. Unicode 18.0 does,
+which is why the coverage totals moved where those ranges previously had no name at all.
 
 ## Strokes are the source of truth
 

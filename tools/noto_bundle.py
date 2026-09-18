@@ -15,16 +15,16 @@ from collections import defaultdict
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import unicodedata2 as unicodedata
-from fontTools import unicodedata as ftunicodedata
 from fontTools.ttLib import TTFont
 
 from script_font_gaps import bundled_cps
+from strokespec.unicode_scripts import script_of
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 FONTS_DIR = os.path.join(ROOT, "src", "strokespec", "data", "fonts")
 CACHE = os.path.join(ROOT, ".noto-cache")
 BASE = "https://raw.githubusercontent.com/google/fonts/main/ofl/"
-SKIP_SCRIPTS = {"Zzzz", "Zyyy", "Zinh", "Hani", "Hang", "Hira", "Kana"}
+SKIP_SCRIPTS = {"Unknown", "Common", "Inherited", "Han", "Hangul", "Hiragana", "Katakana"}
 EXTRA_MEMBERS = [
     "NotoSans-Regular.ttf",
     "NotoSansSymbols-Regular.ttf",
@@ -65,11 +65,7 @@ def wanted() -> list[tuple[str, str, list[int]]]:
     for cp in range(0x20, 0x110000):
         if 0xD800 <= cp <= 0xDFFF or unicodedata.category(chr(cp)) in ("Cn", "Cs"):
             continue
-        try:
-            sc = ftunicodedata.script(chr(cp))
-        except Exception:
-            sc = "Zzzz"
-        by_script[sc].append(cp)
+        by_script[script_of(cp)].append(cp)
     out = []
     for sc, cps in sorted(by_script.items(), key=lambda kv: -len(kv[1])):
         if sc in SKIP_SCRIPTS:
@@ -77,10 +73,7 @@ def wanted() -> list[tuple[str, str, list[int]]]:
         missing = [cp for cp in cps if cp not in covered]
         if not missing:
             continue
-        try:
-            sname = ftunicodedata.script_name(sc).replace(" ", "")
-        except Exception:
-            sname = sc
+        sname = sc.replace("_", "")
         for member in (f"NotoSans{sname}-Regular.ttf", f"NotoSerif{sname}-Regular.ttf"):
             out.extend(urls_for(member, missing))
     for member in EXTRA_MEMBERS:

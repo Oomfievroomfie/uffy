@@ -1,9 +1,9 @@
-"""Per-script coverage of the bundled fonts, using fontTools' Unicode script data.
+"""Per-script coverage of the bundled fonts, using the vendored Unicode script data.
 
 Lists every script that has assigned codepoints and is not covered by the bundled (non-Unifont)
 fonts, with how many codepoints are missing. That is the shopping list for bundling.
 
-Workspace and libraries only: bundled cmaps + fontTools UCD. No font-directory scan.
+Workspace and libraries only: bundled cmaps + vendored UCD. No font-directory scan.
 """
 from __future__ import annotations
 
@@ -15,8 +15,9 @@ from collections import defaultdict
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
 import unicodedata2 as unicodedata
-from fontTools import unicodedata as ftunicodedata
 from fontTools.ttLib import TTFont
+
+from strokespec.unicode_scripts import script_of
 
 FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src",
                          "strokespec", "data", "fonts")
@@ -58,11 +59,7 @@ def main() -> int:
             continue
         if unicodedata.category(chr(cp)) in ("Cn", "Cs"):
             continue
-        try:
-            sc = ftunicodedata.script(chr(cp))
-        except Exception:
-            sc = "Zzzz"
-        by_script[sc].append(cp)
+        by_script[script_of(cp)].append(cp)
 
     rows = []
     for sc, cps in by_script.items():

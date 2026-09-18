@@ -19,7 +19,7 @@ dependencies = [
   "PySide6>=6.6",
   "uharfbuzz>=0.40",
   "pillow>=10",
-  "unicodedata2",
+  "unicodedata2>=18.0",
   "freetype-py>=2.5.1",
 ]
 
