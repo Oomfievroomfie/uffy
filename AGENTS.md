@@ -220,9 +220,14 @@ The editor is a *front end* for the same model, not a parallel definition:
 - **`ufo.py` is the only place that decides simple vs composite.** A glyph with subcomponents
   becomes a ufoLib2 composite; each part (own strokes, then one per instance) is pooled in
   `.subNNNNN` helper glyphs keyed on **outline data alone** — never codepoint or transform — so
-  identical converted outlines are stored once. `make_ufo(..., subcomponents=)` switches the
-  export policy between `SUBCOMPONENT_REUSE` (that) and `SUBCOMPONENT_FLATTEN` (inline each
-  instance into its host glyph, no composites — `uffy build --subcomponents flatten`); flatten
+  identical converted outlines are stored once. **Every glyph is created through the local
+  `new_glyph()` so it carries `public.truetype.overlap`**: our glyphs are overlapping per-stroke
+  contours by design, and that key is what makes ufo2ft set `OVERLAP_SIMPLE` / `OVERLAP_COMPOUND`
+  — without it a rasterizer may use its fast non-overlapping scheme and double-count coverage at
+  stroke junctions. Check with `_meta_a.py <font.ttf>` (it prints the flag counts; both were 0
+  before the fix). `make_ufo(..., subcomponents=)` switches the export policy between
+  `SUBCOMPONENT_REUSE` (that) and `SUBCOMPONENT_FLATTEN` (inline each instance into its host
+  glyph, no composites — `uffy build --subcomponents flatten`); flatten
   concatenates the SAME parts reuse would pool, never one merged blob, so both policies emit the
   same contour coordinates and render identically (verified over every instance-bearing glyph —
   check that way, not with a clipped render canvas). Glyphs without subcomponents keep the old

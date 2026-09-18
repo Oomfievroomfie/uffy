@@ -163,6 +163,17 @@ position. Components nest, so `maxp.maxComponentDepth` is computed by fontTools 
 with no subcomponents is still written as a plain simple glyph with the pre-existing whole-glyph
 merge (identical outlines *and* advance share one glyph).
 
+**Every glyph carries the TrueType overlap hints.** The design is a set of independently expanded
+per-stroke contours that **overlap**, so each glyph is written with ufo2ft's
+`public.truetype.overlap` key, which becomes **`OVERLAP_SIMPLE`** (bit 6 of the first point flag) on
+a simple glyph and **`OVERLAP_COMPOUND`** (bit 10 of the first component) on a composite. The spec
+only says a rasterizer *may* use them — they *"activate additional logic required when contours
+overlap to obtain correct rasterization"* — but without them a rasterizer is free to take its fast
+non-overlapping path, which double-counts coverage where two strokes' edges meet (darkened
+junctions / seams). Empty glyphs (`.null`, `nonmarkingreturn`, blank glyphs) are skipped by the
+compiler, as they have no contours to overlap. The bits cost nothing: both exports are the same
+size with and without them.
+
 **The export policy is switchable** (`make_ufo(..., subcomponents=)`, `uffy build
 --subcomponents`): `"reuse"` is the above, `"flatten"` inlines each instance's converted contours
 into its host glyph instead and emits no composites and no helpers at all. Both policies emit the

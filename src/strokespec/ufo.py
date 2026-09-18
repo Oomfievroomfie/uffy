@@ -30,6 +30,10 @@ SUBCOMPONENT_REUSE = "reuse"
 SUBCOMPONENT_FLATTEN = "flatten"
 SUBCOMPONENT_MODES = (SUBCOMPONENT_REUSE, SUBCOMPONENT_FLATTEN)
 
+# ufo2ft's per-glyph library key for the TrueType overlap hints: it becomes `OVERLAP_SIMPLE` on a
+# simple glyph and `OVERLAP_COMPOUND` on a composite's first component.
+TRUETYPE_OVERLAP_KEY = "public.truetype.overlap"
+
 # Devanagari vowel signs the shaper reorders to sit BEFORE their consonant (verified against
 # HarfBuzz: U+093F VOWEL SIGN I and U+094E VOWEL SIGN PRISHTHAMATRA E are the only two).
 DEVANAGARI_PREBASE_MATRAS = {0x093F, 0x094E}
@@ -207,6 +211,21 @@ def make_ufo(
     # glyphs stay addressable via the cmap, which is all a fallback font needs.
     font.lib["com.github.googlei18n.ufo2ft.keepGlyphNames"] = False
 
+    def new_glyph(name: str) -> UFOGlyph:
+        """Create a glyph, marked as built from possibly-overlapping contours.
+
+        Every glyph here is a set of independently expanded per-stroke contours that **overlap by
+        design** — that is how strokes union, under the non-zero winding rule — so no rasterizer
+        may assume otherwise. ``public.truetype.overlap`` makes ufo2ft set ``OVERLAP_SIMPLE`` on a
+        simple glyph and ``OVERLAP_COMPOUND`` on a composite, which is what tells a rasterizer to
+        use its overlap-aware scheme instead of the fast non-overlapping one; without it a
+        rasterizer is free to produce seams or double-counted coverage where two strokes' edges
+        meet. The flags are hints: rasterizers that ignore them are unaffected.
+        """
+        glyph = font.newGlyph(name)
+        glyph.lib[TRUETYPE_OVERLAP_KEY] = True
+        return glyph
+
     def expand(glyph: Glyph) -> List[List[Op]]:
         conts = glyph_outline_from_strokes(glyph, pen_radius, baseline)
         if merge_edges:
@@ -228,10 +247,7 @@ def make_ufo(
 
         The parts are exactly the ones ``reuse`` mode would emit — its own strokes, then each
         instance's converted contours — just concatenated into this glyph's own contour list
-        instead of living in helper glyphs. Keeping the parts separate matters: merging a
-        stroke-edge seam *across* two parts can splice two loops into one self-intersecting loop,
-        which changes the fill under the non-zero winding rule, so the two policies would no
-        longer draw the same ink.
+        instead of living in helper glyphs, so both policies carry the same contours.
         """
         conts = expand(glyph)
         for sub in glyph.subcomponents:
@@ -276,7 +292,7 @@ def make_ufo(
         if name is None:
             pool_seq[0] += 1
             name = ".sub%05d" % pool_seq[0]
-            helper = font.newGlyph(name)
+            helper = new_glyph(name)
             helper.unicodes = []
             helper.width = 0
             pen = helper.getPen()
@@ -288,7 +304,7 @@ def make_ufo(
 
     # .notdef always first.
     nd_cmds = _notdef_ops(UPEM, cap, pen_radius, descent, ascent)
-    notdef = font.newGlyph(".notdef")
+    notdef = new_glyph(".notdef")
     notdef.unicode = None
     notdef.width = notdef_width_units or UPEM
     pen = notdef.getPen()
@@ -304,7 +320,7 @@ def make_ufo(
     # space stops advancing (invisible at the end of a string, caret does not move) even though its
     # hmtx entry is correct. Unifont ships these two slots for exactly this reason.
     for _slot in (".null", "nonmarkingreturn"):
-        _dummy = font.newGlyph(_slot)
+        _dummy = new_glyph(_slot)
         _dummy.unicodes = []
         _dummy.width = 0
         order.append(_slot)
@@ -341,7 +357,7 @@ def make_ufo(
         rep_cp = group[0]
         rep_glyph = strokefont.get(rep_cp)
         name = glyph_name(rep_cp)
-        ufo_glyph = font.newGlyph(name)
+        ufo_glyph = new_glyph(name)
         ufo_glyph.unicodes = group          # map every codepoint in the group to this glyph
         ufo_glyph.width = rep_glyph.advance_units
         pen = ufo_glyph.getPen()
@@ -370,13 +386,13 @@ def make_ufo(
         if not parts:
             # Every part was empty (e.g. instances of blank glyphs): nothing to draw.
             name = glyph_name(cp)
-            ufo_glyph = font.newGlyph(name)
+            ufo_glyph = new_glyph(name)
             ufo_glyph.unicodes = [cp]
             ufo_glyph.width = glyph.advance_units
             order.append(name)
             continue
         name = glyph_name(cp)
-        ufo_glyph = font.newGlyph(name)
+        ufo_glyph = new_glyph(name)
         ufo_glyph.unicodes = [cp]
         ufo_glyph.width = glyph.advance_units
         for part in parts:
@@ -396,7 +412,7 @@ def make_ufo(
     # existing, while the table itself is still present and non-empty. The rule covers an
     # unreachable phantom glyph (no cmap entry, no outline), so no reachable glyph carries any
     # positioning data either.
-    phantom = font.newGlyph(".gposphantom")
+    phantom = new_glyph(".gposphantom")
     phantom.unicodes = []
     phantom.width = 0
     order.append(".gposphantom")
