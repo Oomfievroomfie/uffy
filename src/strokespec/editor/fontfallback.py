@@ -161,6 +161,13 @@ def native_text_families(cp: int) -> list[str]:
     renders the codepoint, prepends the relevant OS-default font(s) for scripts the primary can't
     render, and appends Unifont as the absolute last resort.
     """
+    from .perflog import count, span
+    count("fonts.native_families")
+    with span("fonts.native_families"):
+        return _native_text_families(cp)
+
+
+def _native_text_families(cp: int) -> list[str]:
     cps = _load_family_cps()
     app = QApplication.instance()
     primary = app.font().family() if app is not None else "Segoe UI"

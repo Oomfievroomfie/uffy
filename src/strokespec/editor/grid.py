@@ -18,6 +18,7 @@ from PIL import Image
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,
+    QPointF,
     QRect,
     QRectF,
     QSize,
@@ -44,11 +45,57 @@ from PySide6.QtWidgets import (
 from ..model import StrokeFont, Glyph, GRID_H
 from ..refbrowser import ReferenceLibrary
 from .fontfallback import native_text_families
+from .perflog import count, note, set_context, span
 from .uiutil import pil_to_qpixmap, paint_stroke_glyph
 
 CP_ROLE = Qt.ItemDataRole.UserRole
 CELL_W, CELL_H = 76, 88
 PIX_W, PIX_H = 60, 60
+BADGE_W = 18.0          # logical size of the native-text badge in the cell's top-left corner
+BADGE_BG = QColor(255, 255, 255, 210)
+BADGE_FG = QColor(60, 60, 72)
+
+
+def _badge_scale() -> float:
+    """Device pixel ratio the badge bitmaps are rasterised at (so they stay crisp when scaled)."""
+    app = QApplication.instance()
+    screen = app.primaryScreen() if app is not None else None
+    try:
+        s = float(screen.devicePixelRatio()) if screen is not None else 1.0
+    except Exception:
+        s = 1.0
+    return s if s > 0.0 else 1.0
+
+
+def render_badge_pixmap(cp: int) -> Optional[QPixmap]:
+    """The cell's native-text badge (white rounded box + the character), as a bitmap.
+
+    Rendering it per paint meant building a ``QFont`` carrying a whole family *chain*, which the
+    platform then has to resolve for every cell of every repaint — and for a codepoint no
+    installed font covers, that resolution means the platform's fallback search, repeated on
+    every frame. The badge is static, so it is rasterised once, exactly like the preview.
+    """
+    if not _is_printable(cp):
+        return None
+    s = _badge_scale()
+    px = max(1, int(round(BADGE_W * s)))
+    pm = QPixmap(px, px)
+    pm.fill(Qt.GlobalColor.transparent)
+    pm.setDevicePixelRatio(px / BADGE_W)   # drawn at exactly BADGE_W logical pixels
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    rect = QRectF(0.0, 0.0, BADGE_W, BADGE_W)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(BADGE_BG)
+    painter.drawRoundedRect(rect, 4.0, 4.0)
+    f = QFont()
+    f.setFamilies(native_text_families(cp))
+    f.setPixelSize(13)
+    painter.setFont(f)
+    painter.setPen(BADGE_FG)
+    painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, chr(cp))
+    painter.end()
+    return pm
 
 
 def _is_printable(cp: int) -> bool:
@@ -86,40 +133,58 @@ class GlyphGridModel(QAbstractListModel):
         self.reflib = reflib
         self._cps: List[int] = []
         self._pixmap_cache: Dict[int, Optional[QPixmap]] = {}
+        self._badge_cache: Dict[int, Optional[QPixmap]] = {}
 
     def set_codepoints(self, cps: List[int]) -> None:
         self.beginResetModel()
         self._cps = list(cps)
         self._pixmap_cache.clear()
+        self._badge_cache.clear()
         self.endResetModel()
 
     def codepoints(self) -> List[int]:
         return list(self._cps)
 
     def invalidate_previews(self) -> None:
-        self._pixmap_cache.clear()
-        if self._cps:
-            top = self.index(0, 0)
-            bottom = self.index(len(self._cps) - 1, 0)
-            self.dataChanged.emit(top, bottom, [])
+        """Drop every cached preview and tell the view every row changed (a full repaint)."""
+        count("model.invalidate_all")
+        count("model.dataChanged_rows", len(self._cps))
+        with span("model.invalidate_previews"):
+            self._pixmap_cache.clear()
+            if self._cps:
+                top = self.index(0, 0)
+                bottom = self.index(len(self._cps) - 1, 0)
+                self.dataChanged.emit(top, bottom, [])
 
     def invalidate_preview(self, cp: int) -> None:
         """Repaint only the one cell for ``cp`` (do NOT touch the rest of the grid)."""
-        self._pixmap_cache.pop(cp, None)
-        try:
-            row = self._cps.index(cp)
-        except ValueError:
-            return
-        idx = self.index(row, 0)
-        self.dataChanged.emit(idx, idx, [])
+        count("model.invalidate_one")
+        with span("model.invalidate_preview"):
+            self._pixmap_cache.pop(cp, None)
+            try:
+                row = self._cps.index(cp)
+            except ValueError:
+                return
+            idx = self.index(row, 0)
+            self.dataChanged.emit(idx, idx, [])
 
     def rowCount(self, parent=QModelIndex()) -> int:
+        count("model.rowCount")
         return 0 if parent.isValid() else len(self._cps)
 
     def codepoint_at(self, row: int) -> int:
         return self._cps[row]
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        count("model.data")
+        if role == Qt.ItemDataRole.DisplayRole:
+            count("model.data.display")
+        elif role == Qt.ItemDataRole.ToolTipRole:
+            count("model.data.tooltip")
+        elif role == Qt.ItemDataRole.SizeHintRole:
+            count("model.data.sizehint")
+        elif role != CP_ROLE:
+            count("model.data.other")
         if not index.isValid() or not (0 <= index.row() < len(self._cps)):
             return None
         cp = self._cps[index.row()]
@@ -135,32 +200,62 @@ class GlyphGridModel(QAbstractListModel):
     # --- preview caching ------------------------------------------------------
     def preview_pixmap(self, cp: int) -> Optional[QPixmap]:
         if cp in self._pixmap_cache:
+            count("preview.hit")
             return self._pixmap_cache[cp]
-        px = self._render_preview(cp)
-        # keep cache bounded to avoid unbounded growth on huge blocks
-        if len(self._pixmap_cache) > 4000:
-            self._pixmap_cache.clear()
-        self._pixmap_cache[cp] = px
+        count("preview.miss")
+        with span("model.preview_pixmap"):
+            px = self._render_preview(cp)
+            # keep cache bounded to avoid unbounded growth on huge blocks
+            if len(self._pixmap_cache) > 4000:
+                count("model.pixcache_flush")
+                self._pixmap_cache.clear()
+            self._pixmap_cache[cp] = px
         return px
+
+    # --- badge caching --------------------------------------------------------
+    def badge_pixmap(self, cp: int) -> Optional[QPixmap]:
+        """The cell's badge bitmap, rendered once per codepoint (see render_badge_pixmap)."""
+        if cp in self._badge_cache:
+            count("badge.hit")
+            return self._badge_cache[cp]
+        count("badge.miss")
+        with span("model.badge_pixmap"):
+            pm = render_badge_pixmap(cp)
+            # bounded like the preview cache; never cleared by invalidate_previews(), because a
+            # badge does not depend on the authored strokes at all.
+            if len(self._badge_cache) > 4000:
+                count("model.badgecache_flush")
+                self._badge_cache.clear()
+            self._badge_cache[cp] = pm
+        return pm
 
     def _render_preview(self, cp: int) -> Optional[QPixmap]:
         glyph = self.strokefont.get(cp)
         if glyph is not None and (glyph.strokes or glyph.subcomponents):
-            pm = QPixmap(PIX_W, PIX_H)
-            pm.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(pm)
-            paint_stroke_glyph(
-                painter, glyph, QRectF(2, 2, PIX_W - 4, PIX_H - 4),
-                color=QColor(25, 25, 25),
-                baseline=self.strokefont.baseline,
-                resolve=self.strokefont.get,
-            )
-            painter.end()
+            count("preview.authored")
+            with span("model.preview_strokes"):
+                pm = QPixmap(PIX_W, PIX_H)
+                pm.fill(Qt.GlobalColor.transparent)
+                painter = QPainter(pm)
+                paint_stroke_glyph(
+                    painter, glyph, QRectF(2, 2, PIX_W - 4, PIX_H - 4),
+                    color=QColor(25, 25, 25),
+                    baseline=self.strokefont.baseline,
+                    resolve=self.strokefont.get,
+                )
+                painter.end()
             return pm
-        if self.reflib.has(cp):
-            img = self.reflib.render_first(cp, box_px=PIX_W, pixel_size=MAX_REF_PX)
+        with span("model.preview_lookup"):
+            has = self.reflib.has(cp)
+        if has:
+            count("preview.reference")
+            with span("model.reference_render"):
+                img = self.reflib.render_first(cp, box_px=PIX_W, pixel_size=MAX_REF_PX)
             if img is not None:
-                return pil_to_qpixmap(_tint_grey(img))  # fallback ghost: grey, not black
+                with span("model.reference_convert"):
+                    return pil_to_qpixmap(_tint_grey(img))  # fallback ghost: grey, not black
+        else:
+            count("preview.blank")
         return None
 
 
@@ -178,6 +273,11 @@ class GlyphGridDelegate(QStyledItemDelegate):
         return QSize(CELL_W, CELL_H)
 
     def paint(self, painter: QPainter, option, index) -> None:
+        count("delegate.paint")
+        with span("delegate.paint"):
+            self._paint(painter, option, index)
+
+    def _paint(self, painter: QPainter, option, index) -> None:
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         rect = option.rect.adjusted(3, 3, -3, -3)
@@ -201,11 +301,12 @@ class GlyphGridDelegate(QStyledItemDelegate):
         avail_h = rect.height() - label_h - 4.0
         pm = self._model.preview_pixmap(cp)
         if pm is not None and not pm.isNull():
-            scaled = pm.scaled(
-                avail_w, avail_h,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
+            with span("delegate.preview_scale"):
+                scaled = pm.scaled(
+                    avail_w, avail_h,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
             px = rect.left() + (rect.width() - scaled.width()) / 2.0
             py = rect.top() + 2.0 + max(0.0, (avail_h - scaled.height()) / 2.0)
             painter.drawPixmap(px, py, scaled)
@@ -214,19 +315,15 @@ class GlyphGridDelegate(QStyledItemDelegate):
         # QLabel: setIndexWidget invalidates the icon-mode item layout, and a wrapping QListView
         # lays out ALL of its rows whenever the layout is invalidated — so on a 40k-cell block
         # every scroll step re-laid out every row (~87k model callbacks, ~110ms per step).
-        # Painting it costs one drawText on the cells that were actually exposed.
-        ch = chr(cp) if _is_printable(cp) else ""
-        if ch:
-            badge = QRectF(rect.left() + 2.0, rect.top() + 2.0, 18.0, 18.0)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(255, 255, 255, 210))
-            painter.drawRoundedRect(badge, 4.0, 4.0)
-            f = QFont()
-            f.setFamilies(native_text_families(cp))
-            f.setPixelSize(13)
-            painter.setFont(f)
-            painter.setPen(QColor(60, 60, 72))
-            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, ch)
+        # It is a cached bitmap, not a live QFont + drawText: a QFont carrying a family chain
+        # makes the platform re-resolve (and, for a codepoint no installed font covers, re-run
+        # its fallback search) on every frame, for a badge that never changes.
+        if _is_printable(cp):
+            count("delegate.badge")
+            with span("delegate.badge"):
+                bpm = self._model.badge_pixmap(cp)
+                if bpm is not None:
+                    painter.drawPixmap(QPointF(rect.left() + 2.0, rect.top() + 2.0), bpm)
 
         # Codepoint id pinned to the bottom.
         painter.setPen(QColor(130, 130, 140))
@@ -241,6 +338,37 @@ class GlyphGridDelegate(QStyledItemDelegate):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect, 6, 6)
         painter.restore()
+
+
+class _TimedListView(QListView):
+    """The pane's QListView, with its own work timed for the perf log.
+
+    The view's cost is not in any Python span: `paintEvent` drives every `delegate.paint`,
+    `doItemsLayout` is where a wrapping icon-mode view re-lays out rows (calling back into the
+    model once per row), and `scrollContentsBy` moves it. Timing those three separates "the list
+    is slow" from "the delegate is slow" from "Qt re-laid the whole list out".
+    """
+
+    def paintEvent(self, event) -> None:
+        with span("view.paint"):
+            super().paintEvent(event)
+
+    def scrollContentsBy(self, dx: int, dy: int) -> None:
+        with span("view.scroll"):
+            super().scrollContentsBy(dx, dy)
+
+    def resizeEvent(self, event) -> None:
+        with span("view.resize"):
+            super().resizeEvent(event)
+
+    def doItemsLayout(self) -> None:
+        count("view.layout")
+        with span("view.doItemsLayout"):
+            super().doItemsLayout()
+
+    def updateGeometries(self) -> None:
+        with span("view.updateGeometries"):
+            super().updateGeometries()
 
 
 class BlockPane(QWidget):
@@ -263,7 +391,7 @@ class BlockPane(QWidget):
         self._show_all = show_all
 
         self._model = GlyphGridModel(strokefont, reflib, self)
-        self._list = QListView(self)
+        self._list = _TimedListView(self)
         self._list.setModel(self._model)
         self._list.setItemDelegate(GlyphGridDelegate(self._model, self._list))
         self._list.setViewMode(QListView.ViewMode.IconMode)
@@ -301,8 +429,21 @@ class BlockPane(QWidget):
 
     # --- public API used by the parent GlyphGrid ------------------------------
     def refresh(self) -> None:
-        self._model.invalidate_previews()
-        self._recompute()
+        with span("pane.refresh"):
+            self._model.invalidate_previews()
+            self._recompute()
+
+    def perf_snapshot(self) -> dict:
+        """State for the perf log: anything here that grows over time is a leak."""
+        from PySide6.QtGui import QFontDatabase
+        return {
+            "block": self._block_combo.currentText(),
+            "rows": self._model.rowCount(),
+            "pixcache": len(self._model._pixmap_cache),
+            "qt_fonts": len(QFontDatabase.families()),
+            "visible": self._list.viewport().height() // max(1, CELL_H),
+            "pane": hex(id(self)),
+        }
 
     def invalidate_previews(self) -> None:
         self._model.invalidate_previews()
@@ -319,15 +460,16 @@ class BlockPane(QWidget):
         return max(1, (vw if vw else cell) // max(1, cell))
 
     def select_codepoint(self, cp: int, scroll: bool = True) -> None:
-        cps = self._model.codepoints()
-        try:
-            row = cps.index(cp)
-        except ValueError:
-            return
-        idx = self._model.index(row, 0)
-        self._list.setCurrentIndex(idx)
-        if scroll:
-            self._list.scrollTo(idx, QAbstractItemView.ScrollHint.PositionAtCenter)
+        with span("pane.select_codepoint"):
+            cps = self._model.codepoints()
+            try:
+                row = cps.index(cp)
+            except ValueError:
+                return
+            idx = self._model.index(row, 0)
+            self._list.setCurrentIndex(idx)
+            if scroll:
+                self._list.scrollTo(idx, QAbstractItemView.ScrollHint.PositionAtCenter)
 
     def select_block(self, name: str) -> None:
         i = self._block_combo.findText(name)
@@ -339,6 +481,8 @@ class BlockPane(QWidget):
 
     # --- internal ------------------------------------------------------------
     def _on_clicked(self, index) -> None:
+        count("pane.cell_clicked")
+        note("cell clicked")
         self.glyphChosen.emit(self._model.codepoint_at(index.row()))
 
     def _current_codepoint(self) -> Optional[int]:
@@ -348,21 +492,27 @@ class BlockPane(QWidget):
         return None
 
     def _recompute(self) -> None:
-        selected = self._current_codepoint()
-        name = self._block_combo.currentText()
-        start, end = block_range(name)
-        cps = self._compute_candidate_list(start, end)
-        self._model.set_codepoints(cps)
-        covered, allocated = self._block_coverage(start, end)
-        pct = (100.0 * covered / allocated) if allocated else 0.0
-        self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of {allocated} allocated")
-        if selected is not None and selected in cps:
-            self.select_codepoint(selected, scroll=False)
-        else:
-            saved = self._scroll_memory.get(name)
-            if saved is not None:
-                self._list.verticalScrollBar().setValue(saved)
-        self._prev_block = name
+        with span("pane.recompute"):
+            selected = self._current_codepoint()
+            name = self._block_combo.currentText()
+            start, end = block_range(name)
+            with span("pane.candidate_list"):
+                cps = self._compute_candidate_list(start, end)
+            count("pane.rows_set", len(cps))
+            with span("pane.set_codepoints"):
+                self._model.set_codepoints(cps)
+            with span("pane.block_coverage"):
+                covered, allocated = self._block_coverage(start, end)
+            pct = (100.0 * covered / allocated) if allocated else 0.0
+            self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of {allocated} allocated")
+            if selected is not None and selected in cps:
+                self.select_codepoint(selected, scroll=False)
+            else:
+                saved = self._scroll_memory.get(name)
+                if saved is not None:
+                    self._list.verticalScrollBar().setValue(saved)
+            self._prev_block = name
+            note(f"block '{name}': {len(cps)} rows")
 
     def _block_coverage(self, start: int, end: int) -> tuple:
         allocated = covered = 0
@@ -464,6 +614,9 @@ class GlyphGrid(QWidget):
 
         self._active_pane: Optional[BlockPane] = None
         self._add_pane(primary=True)
+        # The panes are the codepoint list, so their state is what the perf log reports
+        # alongside the timings (see perflog.py — always on, writes perf.log).
+        set_context(self.perf_snapshot)
 
         self._search.textChanged.connect(self._refresh_all)
         self._show_all.toggled.connect(self._refresh_all)
@@ -471,6 +624,7 @@ class GlyphGrid(QWidget):
 
     def _add_pane(self, primary: bool) -> BlockPane:
         pane = BlockPane(self.strokefont, self.reflib, self._search, self._show_all, self)
+        note(f"pane created ({len(self._panes) + 1} live)")
         pane.glyphChosen.connect(self._on_pane_chosen)
         self._pane_lay.addWidget(pane, 1)
         self._panes.append(pane)
@@ -508,7 +662,15 @@ class GlyphGrid(QWidget):
 
     # --- public API routed to the active pane (used by the main window) --------
     def refresh(self) -> None:
-        self._refresh_all()
+        with span("grid.refresh"):
+            self._refresh_all()
+
+    def perf_snapshot(self) -> dict:
+        """Pane count plus the active pane's own snapshot (the perf log reads this)."""
+        d = {"panes": len(self._panes)}
+        if self._active_pane is not None:
+            d.update(self._active_pane.perf_snapshot())
+        return d
 
     def invalidate_previews(self) -> None:
         for pane in self._panes:
