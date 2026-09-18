@@ -20,6 +20,7 @@ dependencies = [
   "uharfbuzz>=0.40",
   "pillow>=10",
   "unicodedata2",
+  "freetype-py>=2.5.1",
 ]
 
 [project.optional-dependencies]
