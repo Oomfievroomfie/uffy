@@ -140,6 +140,17 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
   cell-centre snap of a nested endpoint by up to a cell. The instance's *own* strokes are
   unaffected — those are inlined through the exact transform — and the alternative (collapsing
   nested instances into strokes) would lose the structure the pull exists to preserve.
+* **Instances carry optional provenance too.** A subcomponent's ``origin`` is exactly a stroke's:
+  the glyph the instance was *copied out of*, which need not be the codepoint it references (an
+  instance that arrived along with a copy-paste of some glyph's contents names that glyph). It is
+  never shape and never compiled. Copy-paste carries a glyph's strokes **and** its instances, by
+  the same rules: origins are stamped with the direct source only when it is allocated and differs
+  from the target, squish-pasting squishes the instance's box by the same map as the points, and
+  with the related list's **Copy as subcomponent** mode on, Ctrl+V instances the copied glyph
+  instead of pasting its contents. Both paste paths keep cycles impossible: a paste that would
+  close one is refused, and any instance in a batch that would close one is dropped with a warning
+  (pulling contents needs no such check — a reference that reached back here would already be a
+  cycle).
 * **Cycles are structurally impossible.** Creating an instance whose target already leads back to
   the host glyph is refused up front (`StrokeFont.would_create_cycle`). A file that contains one
   anyway is invalid: loading breaks the cycles greedily in sorted codepoint order — dropping the

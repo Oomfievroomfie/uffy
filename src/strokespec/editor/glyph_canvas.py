@@ -38,6 +38,7 @@ from ..model import (
     Stroke,
     Subcomponent,
     squish_strokes,
+    squish_subcomponent,
 )
 from .uiutil import ops_to_painterpath
 
@@ -61,6 +62,7 @@ class GlyphCanvas(QWidget):
     toggleWidthRequested = Signal()
     toggleCombiningRequested = Signal()
     subcomponentMenuRequested = Signal(int)  # index into glyph.subcomponents
+    subcomponentCycleBlocked = Signal(int)   # n pasted instances refused (would close a cycle)
 
     # half-size (px) of a subcomponent's corner handles, and their click tolerance
     HANDLE_PX = 5.0
@@ -79,7 +81,13 @@ class GlyphCanvas(QWidget):
         # currently-held arrow keys (for paste-into-side/corner squish via Ctrl+arrow+V)
         self._held_arrows: set = set()
         self._clip: list = []
+        self._clip_subs: list = []   # subcomponents travel with the strokes (Ctrl+C / Ctrl+V)
         self._clip_src: int = 0  # codepoint the clipboard was copied from (provenance)
+        # callbacks owned by the main window: is the related panel in 'copy as subcomponent'
+        # mode, and if so, instance that glyph instead of pasting its contents
+        self.subcomponent_mode_fn = None
+        self.paste_subcomponent_fn = None
+        self.subcomponent_cycle_fn = None   # callable(owner_cp, target_cp) -> bool
         self._undo: list = []   # list of prior item-list snapshots (strokes, subcomponents)
         self._redo: list = []   # list of undone item-list snapshots
         self.tool: str = SHAPE_LINE
@@ -127,7 +135,7 @@ class GlyphCanvas(QWidget):
 
     @staticmethod
     def _copy_subcomponents(subs) -> list:
-        return [Subcomponent(s.codepoint, s.start, s.end) for s in subs]
+        return [Subcomponent(s.codepoint, s.start, s.end, s.origin) for s in subs]
 
     def _items_snapshot(self) -> tuple:
         return (self._copy_strokes(self._glyph.strokes),
@@ -329,21 +337,73 @@ class GlyphCanvas(QWidget):
         self.glyphChanged.emit()
 
     def copy_strokes(self) -> None:
-        """Copy the current glyph's strokes to an internal clipboard."""
+        """Copy the current glyph's contents — strokes *and* subcomponents — to the clipboard.
+
+        The source codepoint is remembered too, so a paste can record where the items came from
+        (provenance) and so the 'copy as subcomponent' mode can instance that glyph.
+        """
         self._clip = [Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes]
-        # remember the source glyph so a squish-paste can record where the strokes came from
+        self._clip_subs = self._copy_subcomponents(self._glyph.subcomponents)
         self._clip_src = self._glyph.codepoint
 
-    def paste_strokes(self) -> None:
-        """Append the clipboard strokes to the current glyph.
+    def _paste_as_subcomponent(self, direction: str = "", fraction: float = 0.5) -> bool:
+        """Instance the copied glyph instead of pasting its contents (the panel's toggle).
 
-        Pasting *adds* rather than replaces; to replace, the user clears the glyph first.
+        Returns False when no handler is connected, so the plain paste happens instead.
         """
-        if self._clip:
-            self._snapshot()
-            self._glyph.strokes.extend(self._stamp_paste(self._clip, self._clip))
-            self.update()
-            self.glyphChanged.emit()
+        if self.paste_subcomponent_fn is None:
+            return False
+        self.paste_subcomponent_fn(self._clip_src, direction, fraction)
+        return True
+
+    def _subcomponent_mode(self) -> bool:
+        return bool(self.subcomponent_mode_fn is not None and self.subcomponent_mode_fn())
+
+    def _legal_pasted_subcomponents(self, subs: list) -> list:
+        """Drop pasted instances that would close a subcomponent cycle, warning if any were.
+
+        Pasting a glyph's contents into the glyph it instances would otherwise create a
+        self-reference (or an indirect loop); cycles must stay impossible.
+        """
+        if self.subcomponent_cycle_fn is None:
+            return subs
+        target = self._glyph.codepoint
+        kept, dropped = [], 0
+        for s in subs:
+            if self.subcomponent_cycle_fn(target, s.codepoint):
+                dropped += 1
+            else:
+                kept.append(s)
+        if dropped:
+            self.subcomponentCycleBlocked.emit(dropped)
+        return kept
+
+    def paste_strokes(self) -> None:
+        """Append the clipboard's contents to the current glyph.
+
+        Pasting *adds* rather than replaces; to replace, the user clears the glyph first. With the
+        related panel's 'Copy as subcomponent' mode on, a paste instead **instances** the glyph the
+        contents were copied from (the cycle check lives with the handler).
+        """
+        if not self._clip and not self._clip_subs:
+            return
+        if self._subcomponent_mode() and self._paste_as_subcomponent():
+            return
+        self._snapshot()
+        self._glyph.strokes.extend(self._stamp_paste(self._clip, self._clip))
+        subs = self._legal_pasted_subcomponents(self._clip_subs)
+        self._glyph.subcomponents.extend(
+            self._stamp_subcomponent_paste(subs, subs))
+        self.update()
+        self.glyphChanged.emit()
+
+    def _stamp_subcomponent_paste(self, src: list, transformed: list,
+                                  direction: str = None, fraction: float = None) -> list:
+        """Give pasted instances their provenance (same rule as strokes, same helper)."""
+        from ..model import copied_origin
+        target_cp = self._glyph.codepoint
+        return [t.with_origin(copied_origin(self._clip_src, target_cp, s.origin, direction, fraction))
+                for t, s in zip(transformed, src)]
 
     def _stamp_paste(self, src: list, transformed: list,
                      direction: str = None, fraction: float = None) -> list:
@@ -361,18 +421,32 @@ class GlyphCanvas(QWidget):
 
     def _paste_with_squish(self, shift: bool) -> None:
         """Ctrl+V. If arrow keys are held, squish the paste toward that side/corner
-        (Shift -> 2/3 size, otherwise 1/2); otherwise it's a plain append paste."""
-        if not self._clip:
+        (Shift -> 2/3 size, otherwise 1/2); otherwise it's a plain append paste.
+
+        Strokes and instances are squished by the same map, and in 'copy as subcomponent' mode the
+        instance's bounding box lands in that same fraction of the grid.
+        """
+        if not self._clip and not self._clip_subs:
             return
         direction = self._squish_direction(self._held_arrows)
+        fraction = 2.0 / 3.0 if shift else 0.5
+        if self._subcomponent_mode():
+            if self._paste_as_subcomponent(direction, fraction):
+                return
+            self.paste_strokes()
+            return
         if not direction:
             self.paste_strokes()
             return
-        fraction = 2.0 / 3.0 if shift else 0.5
         self._snapshot()
         src = self._clip
         squished = squish_strokes(src, direction, self._cols(), fraction)
         self._glyph.strokes.extend(self._stamp_paste(src, squished, direction, fraction))
+        sub_src = self._legal_pasted_subcomponents(self._clip_subs)
+        sub_squished = [squish_subcomponent(s, direction, self._cols(), fraction)
+                        for s in sub_src]
+        self._glyph.subcomponents.extend(
+            self._stamp_subcomponent_paste(sub_src, sub_squished, direction, fraction))
         self.update()
         self.glyphChanged.emit()
 
@@ -594,7 +668,7 @@ class GlyphCanvas(QWidget):
             sy = ny
         else:
             ey = ny
-        subs[i] = Subcomponent(sub.codepoint, (sx, sy), (ex, ey))
+        subs[i] = sub.with_box((sx, sy), (ex, ey))
         self.update()
 
     # --- geometry ------------------------------------------------------------

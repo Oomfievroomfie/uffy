@@ -135,7 +135,8 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   same codepoint, or copying out of an **unallocated** scratch/dummy glyph, copies the provenance
   data rather than overwriting or deleting it. It is recorded when copying/squishing from a
   related glyph and when copy-pasting, survives flips/rotations/nudges and undo/redo, and never
-  affects geometry or compilation.
+  affects geometry or compilation. **Subcomponents carry the same optional provenance** (the glyph
+  the instance was copied out of — not necessarily the codepoint it references).
 * Each stroke is painted with a **one-grid-cell-diameter pen**, expanded into a closed outline,
   filled with the **non-zero winding rule** so overlapping strokes **union**.
 * A glyph may also **instance** another codepoint as a **subcomponent**: a reference plus the
@@ -241,7 +242,9 @@ The full set of keyboard and mouse controls is below.
   nested instances stay instances rather than collapsing into one flat stroke list).
 * Tool toggle: **Line** / **Arc** (toolbar).
 * **Ctrl+Z** undo · **Ctrl+Shift+Z** redo
-* **Ctrl+C** copy all strokes · **Ctrl+V** paste (append) · **Ctrl+H** clear the glyph
+* **Ctrl+C** copy all strokes and subcomponents · **Ctrl+V** paste (append) them · **Ctrl+H** clear
+  the glyph. With the related list's **Copy as subcomponent** mode on, **Ctrl+V instances the glyph
+  you copied** instead of pasting its contents (a reference that would close a cycle is refused).
 * **Ctrl+V** while **holding an arrow key** squishes the paste toward that side/corner:
   one arrow = side (`Up`/`Down`/`Left`/`Right`), two arrows = corner (e.g. `Up`+`Left` =
   top-left). Holding **Shift** gives 2/3 size, otherwise 1/2.

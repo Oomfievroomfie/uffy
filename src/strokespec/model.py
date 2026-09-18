@@ -231,10 +231,16 @@ class Subcomponent:
     That transform is applied to the referenced glyph's **strokes**, and only then are they
     expanded into outlines (``geometry``); the pen therefore keeps its own width instead of being
     scaled with the instance.
+
+    ``origin`` is optional, non-shape provenance exactly like :attr:`Stroke.origin`: it records
+    the glyph this instance was *copied out of* (which is not necessarily the codepoint it
+    references — e.g. instances that came along with a copy-paste of a glyph's contents). Like a
+    stroke's, it never affects geometry or compilation.
     """
     codepoint: int
     start: Tuple[int, int] = (0, 0)
     end: Tuple[int, int] = (GRID_W, GRID_H)
+    origin: Optional[StrokeOrigin] = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "codepoint", int(self.codepoint))
@@ -255,22 +261,32 @@ class Subcomponent:
         return (self.start[0], self.start[1], self.end[0], self.end[1])
 
     def with_box(self, start, end) -> "Subcomponent":
+        """The same instance moved to another box (provenance carried through)."""
         return Subcomponent(self.codepoint, (int(start[0]), int(start[1])),
-                            (int(end[0]), int(end[1])))
+                            (int(end[0]), int(end[1])), self.origin)
+
+    def with_origin(self, origin: Optional[StrokeOrigin]) -> "Subcomponent":
+        """A copy of this instance carrying ``origin`` (geometry unchanged)."""
+        return Subcomponent(self.codepoint, self.start, self.end, origin)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "codepoint": self.codepoint,
             "start": [self.start[0], self.start[1]],
             "end": [self.end[0], self.end[1]],
         }
+        if self.origin is not None:
+            d["origin"] = self.origin.to_dict()
+        return d
 
     @classmethod
     def from_dict(cls, d: dict) -> "Subcomponent":
         start = d.get("start", (0, 0))
         end = d.get("end", (GRID_W, GRID_H))
+        o = d.get("origin")
         return cls(int(d["codepoint"]), (int(start[0]), int(start[1])),
-                   (int(end[0]), int(end[1])))
+                   (int(end[0]), int(end[1])),
+                   StrokeOrigin.from_dict(o) if o else None)
 
 
 @dataclass
@@ -407,6 +423,46 @@ def squish_strokes(
         return Point(gx, gy)
 
     return [Stroke(map_pt(s.p1), map_pt(s.p2), s.shape, origin) for s in strokes]
+
+
+def squish_subcomponent(
+    sub: Subcomponent, direction: str, width: int, fraction: float = 0.5,
+    origin: Optional[StrokeOrigin] = None,
+) -> Subcomponent:
+    """Copy + squish a subcomponent's box by the same linear map :func:`squish_strokes` uses.
+
+    A box corner at cell coordinate ``c`` is the point index ``c - 0.5``, so it maps with the same
+    ``map_v`` and comes back to the corner lattice. The map is monotonic, so a negatively sized
+    box stays negatively sized.
+    """
+    W, H = width, GRID_H
+    xmax = max(1, W - 1)
+    ymax = max(1, H - 1)
+    f = fraction
+
+    if "left" in direction:
+        x0, x1 = 0, max(0, round(W * f) - 1)
+    elif "right" in direction:
+        x0, x1 = min(max(0, W - 1), round(W * (1.0 - f))), W - 1
+    else:
+        x0 = x1 = None
+    if "down" in direction:
+        y0, y1 = 0, max(0, round(H * f) - 1)
+    elif "up" in direction:
+        y0, y1 = min(max(0, H - 1), round(H * (1.0 - f))), H - 1
+    else:
+        y0 = y1 = None
+
+    def map_cell(c, rmax, t0, t1):
+        if t0 is None:
+            return c
+        return round(t0 + (c - 0.5) * (t1 - t0) / rmax + 0.5)
+
+    sx, sy = sub.start
+    ex, ey = sub.end
+    start = (_clamp_box(map_cell(sx, xmax, x0, x1), map_cell(sy, ymax, y0, y1)))
+    end = (_clamp_box(map_cell(ex, xmax, x0, x1), map_cell(ey, ymax, y0, y1)))
+    return Subcomponent(sub.codepoint, start, end, origin if origin is not None else sub.origin)
 
 
 class StrokeFont:

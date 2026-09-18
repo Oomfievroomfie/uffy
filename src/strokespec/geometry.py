@@ -666,12 +666,12 @@ def transform_subcomponent(sub: Subcomponent, xform: XForm) -> Subcomponent:
     """The instance ``sub`` re-expressed in a space that ``xform`` maps into.
 
     Its box is a pair of cell *corners*, so it is mapped corner by corner and rounded back onto
-    the integer corner lattice (all the model stores).
+    the integer corner lattice (all the model stores). Provenance travels with it.
     """
     a = xform_apply(xform, (sub.start[0], sub.start[1]))
     b = xform_apply(xform, (sub.end[0], sub.end[1]))
     return Subcomponent(sub.codepoint, (round(a[0]), round(a[1])),
-                        (round(b[0]), round(b[1])))
+                        (round(b[0]), round(b[1])), sub.origin)
 
 
 def flatten_cell_strokes(glyph: Glyph, resolve=None, _seen=None) -> List[CellStroke]:

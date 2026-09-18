@@ -224,9 +224,9 @@ REL_PIX = Qt.ItemDataRole.UserRole + 2
 
 
 def _stroke_origin_tooltip(s) -> str:
-    """Tooltip text for a stroke's provenance (``''`` when it carries none).
+    """Tooltip text for a stroke's or instance's provenance (``''`` when it carries none).
 
-    Shows the codepoint (and character name) the stroke was copied from, plus the squish
+    Shows the codepoint (and character name) the item was copied from, plus the squish
     direction and amount when it was squished.
     """
     o = getattr(s, "origin", None)
@@ -273,6 +273,10 @@ def _subcomponent_tooltip(sub: Subcomponent) -> str:
         flips.append("vertically")
     if flips:
         head += f"\nNegatively sized: flipped {' and '.join(flips)}"
+    prov = _stroke_origin_tooltip(sub)
+    if prov:
+        # the instance's own reference is above; this is where the instance itself came from
+        head += "\n" + prov
     head += ("\nIts strokes are not editable here — drag the box corner handles, or use the"
              " context menu to open or pull its contents in.")
     return head
@@ -708,7 +712,7 @@ class GlyphEditorPanel(QWidget):
         nudge_row.setSpacing(2)
         nudge_row.setContentsMargins(0, 0, 0, 0)
         b_copy = QToolButton(); b_copy.setIcon(_icon_copy()); b_copy.setFixedSize(22, 22)
-        b_copy.setToolTip("Copy all strokes (Ctrl+C)")
+        b_copy.setToolTip("Copy all strokes and subcomponents (Ctrl+C)")
         b_paste = QToolButton(); b_paste.setIcon(_icon_paste()); b_paste.setFixedSize(22, 22)
         b_paste.setToolTip("Paste (append) strokes (Ctrl+V)")
         b_flip = QToolButton(); b_flip.setIcon(_icon_flip()); b_flip.setFixedSize(22, 22)
@@ -1005,6 +1009,12 @@ class MainWindow(QMainWindow):
         self._editor.subcomponentMenuRequested.connect(self._show_subcomponent_menu)
         self._editor.canvas.navRequested.connect(self._on_nav)
         self._editor.canvas.glyph_provider = self.strokefont.get
+        # Ctrl+C / Ctrl+V follow the related panel's 'Copy as subcomponent' mode: a paste then
+        # instances the glyph the contents were copied from instead of pasting its contents.
+        self._editor.canvas.subcomponent_mode_fn = self._refdock.subcomponent_mode
+        self._editor.canvas.paste_subcomponent_fn = self._add_related_subcomponent
+        self._editor.canvas.subcomponent_cycle_fn = self.strokefont.would_create_cycle
+        self._editor.canvas.subcomponentCycleBlocked.connect(self._on_paste_cycle_blocked)
         self._editor.set_reference_provider(self._reference_for_codepoint)
         self._editor.canvas.set_metrics(
             self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
@@ -1184,6 +1194,15 @@ class MainWindow(QMainWindow):
         start, end = self._subcomponent_box(cp, direction, fraction)
         self._editor.canvas.add_subcomponent(Subcomponent(cp, start, end))
         self._editor.canvas.setFocus()  # hand focus back to the canvas
+
+    def _on_paste_cycle_blocked(self, n: int) -> None:
+        """A paste carried instances that would have closed a subcomponent cycle."""
+        QMessageBox.warning(
+            self,
+            "Subcomponent cycle",
+            f"{n} pasted subcomponent reference(s) were dropped: they would have created a "
+            "subcomponent cycle leading back to this glyph.",
+        )
 
     def _show_subcomponent_menu(self, index: int) -> None:
         """The subcomponent context menu (shared by the stroke list and the canvas)."""
