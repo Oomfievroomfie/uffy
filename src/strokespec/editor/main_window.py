@@ -63,7 +63,7 @@ REL_PIX_W, REL_PIX_H = 60, 60
 REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
 # related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
-REL_CELL_W, REL_CELL_H = 116, 172
+REL_CELL_W, REL_CELL_H = 96, 172
 # big static "native reference" image: width enough for wide glyphs (e.g. Arabic), and a TALLER
 # height so tall descenders fit
 REF_IMG_SIZE = 240
@@ -281,21 +281,19 @@ def _subcomponent_tooltip(sub: Subcomponent) -> str:
 def _rel_button_rects(rect: QRectF) -> tuple:
     """Button rects inside a related cell (shared by paint + hit-test).
 
-    Returns ``(copy, open, sub, arrows, diags)`` where ``arrows`` maps 'up'/'down'/'left'/'right'
-    to its rect and ``diags`` maps 'upleft'/'upright'/'downleft'/'downright' to its rect.
-    Copy / Open / Sub are on a row; the four axial (copy-and-squish) arrows are a compact,
-    centered group under them, and the four diagonal (copy-and-squish) buttons sit below those.
+    Returns ``(copy, open, arrows, diags)`` where ``arrows`` maps 'up'/'down'/'left'/'right' to
+    its rect and ``diags`` maps 'upleft'/'upright'/'downleft'/'downright' to its rect. Copy/Open
+    are on a row; the four axial (copy-and-squish) arrows are a compact, centered group under
+    them, and the four diagonal (copy-and-squish) buttons sit below those.
     """
     m = 6.0
     row_h = 18.0
     row3_y = rect.bottom() - m - row_h              # diagonals (bottom row)
     row2_y = row3_y - (row_h + 2.0)                 # axial arrows
-    row1_y = row2_y - 22.0                          # copy/open/sub row (above the arrows)
-    gap = 3.0
-    bw = (rect.width() - 2 * m - 2 * gap) / 3.0
+    row1_y = row2_y - 22.0                          # copy/open row (above the arrows)
+    bw = (rect.width() - 2 * m - 4.0) / 2.0
     copy = QRectF(rect.left() + m, row1_y, bw, row_h)
-    opn = QRectF(copy.right() + gap, row1_y, bw, row_h)
-    sub = QRectF(opn.right() + gap, row1_y, bw, row_h)
+    opn = QRectF(copy.right() + 4.0, row1_y, bw, row_h)
 
     def _group(dirs, y):
         aw, gap = 18.0, 2.0
@@ -305,7 +303,7 @@ def _rel_button_rects(rect: QRectF) -> tuple:
 
     arrows = _group(["up", "down", "left", "right"], row2_y)
     diags = _group(["upleft", "upright", "downleft", "downright"], row3_y)
-    return copy, opn, sub, arrows, diags
+    return copy, opn, arrows, diags
 
 
 class _RelatedDelegate(QStyledItemDelegate):
@@ -327,7 +325,7 @@ class _RelatedDelegate(QStyledItemDelegate):
         painter.setBrush(bg)
         painter.drawRoundedRect(rect, 6, 6)
 
-        copy_r, opn_r, sub_r, arrows, diags = _rel_button_rects(QRectF(rect))
+        copy_r, opn_r, arrows, diags = _rel_button_rects(QRectF(rect))
         # preview fills the space above the button rows
         btn_h = rect.bottom() - copy_r.top()   # top edge of the copy/open row
         label_h = 14.0
@@ -363,11 +361,9 @@ class _RelatedDelegate(QStyledItemDelegate):
             f"U+{cp:04X}",
         )
 
-        # buttons: Copy (strokes) + Open + Sub (instance, instead of copying the strokes in),
-        # then the four axial copy-and-squish arrows and the diagonals
+        # buttons: Copy + Open, the four axial copy-and-squish arrows, then the diagonals
         self._draw_button(painter, copy_r, "Copy", enabled=has)
         self._draw_button(painter, opn_r, "Open", enabled=True)
-        self._draw_button(painter, sub_r, "Sub", enabled=True)
         for d in ["up", "down", "left", "right"]:
             self._draw_button(painter, arrows[d], {"up": "↑", "down": "↓", "left": "←", "right": "→"}[d], enabled=has)
         for d in ["upleft", "upright", "downleft", "downright"]:
@@ -392,11 +388,10 @@ class _RelatedDelegate(QStyledItemDelegate):
 
 class _RelatedListView(QListView):
     """The related-glyph list: same containerized IconMode list as the codepoint grid.
-    Clicking a cell BODY does nothing; only the Copy / Open / Sub buttons act."""
+    Clicking a cell BODY does nothing; only the Copy / Open buttons act."""
 
     copyRequested = Signal(int)
     openRequested = Signal(int)
-    subRequested = Signal(int)                 # instance the related glyph as a subcomponent
     squishRequested = Signal(int, str, float)  # (codepoint, up/down/left/right, fraction)
 
     def __init__(self, parent=None) -> None:
@@ -424,7 +419,7 @@ class _RelatedListView(QListView):
             if idx.isValid():
                 cp = idx.data(REL_CP)
                 has = bool(idx.data(REL_HAS))
-                copy_r, opn_r, sub_r, arrows, diags = _rel_button_rects(
+                copy_r, opn_r, arrows, diags = _rel_button_rects(
                     QRectF(self.visualRect(idx)).adjusted(3, 3, -3, -3)
                 )
                 pos = event.position()
@@ -433,9 +428,6 @@ class _RelatedListView(QListView):
                     return
                 if opn_r.contains(pos):
                     self.openRequested.emit(cp)
-                    return
-                if sub_r.contains(pos):
-                    self.subRequested.emit(cp)
                     return
                 if has:
                     for d, r in list(arrows.items()) + list(diags.items()):
@@ -456,7 +448,6 @@ class ReferenceFontsDock(QWidget):
         self._on_change = on_change
         self._copy_strokes = None   # callable(strokes) to copy a related glyph onto the canvas
         self._open_cp = None        # callable(cp) to jump the editor to a codepoint
-        self._sub_cb = None         # callable(cp) to instance the related glyph as a subcomponent
         self._squish_cb = None      # callable(cp, direction) to copy + squish into a half
         self._strokefont = None     # used to know whether a related glyph has authored data
         self._native_ghost_fn = None  # callable(on) to source the editor ghost natively
@@ -489,15 +480,25 @@ class ReferenceFontsDock(QWidget):
         # clicking a cell body does nothing; only the Copy (grey if no data) / Open buttons act.
         self._rel_title = QLabel("Related glyphs")
         self._rel_title.setStyleSheet("font-weight: bold;")
+        # ONE mode toggle for the whole list: what the cells' Copy (and copy-and-squish) buttons
+        # do — copy the related glyph's strokes in as a proper component, or instance it as a
+        # subcomponent of the current glyph instead.
+        self._rel_sub_mode = QCheckBox("Copy as subcomponent")
+        self._rel_sub_mode.setChecked(False)
+        self._rel_sub_mode.setToolTip(
+            "Copy (and the copy-and-squish arrows) in the list below instance the related\n"
+            "glyph as a subcomponent of the current glyph instead of copying its strokes in.\n"
+            "The arrows then place the instance's bounding box in that fraction of the grid."
+        )
         self._rel_model = QStandardItemModel(self)
         self._rel_list = _RelatedListView()
         self._rel_list.setModel(self._rel_model)
         self._rel_list.setItemDelegate(_RelatedDelegate(self._rel_list))
         self._rel_list.copyRequested.connect(self._copy)
         self._rel_list.openRequested.connect(self._open)
-        self._rel_list.subRequested.connect(self._sub)
         self._rel_list.squishRequested.connect(self._squish)
         lay.addWidget(self._rel_title)
+        lay.addWidget(self._rel_sub_mode)
         lay.addWidget(self._rel_list, 1)
         self._set_related([])
 
@@ -548,8 +549,9 @@ class ReferenceFontsDock(QWidget):
     def set_open_callback(self, cb) -> None:
         self._open_cp = cb
 
-    def set_subcomponent_callback(self, cb) -> None:
-        self._sub_cb = cb
+    def subcomponent_mode(self) -> bool:
+        """True when this list's Copy buttons instance instead of copying strokes in."""
+        return self._rel_sub_mode.isChecked()
 
     def set_squish_callback(self, cb) -> None:
         self._squish_cb = cb
@@ -573,15 +575,12 @@ class ReferenceFontsDock(QWidget):
     def _set_related(self, rows) -> None:
         # Always visible, even when empty. Each related glyph becomes one cell in the list.
         self._rel_model.clear()
-        legend = ("Copy = copy the strokes in (a proper component)\n"
-                  "Sub = instance it as a subcomponent instead\n"
-                  "Open = open that glyph   arrows = copy + squish")
         for cp, name, has_data in rows:
             item = QStandardItem()
             item.setData(cp, REL_CP)
             item.setData(has_data, REL_HAS)
             item.setData(self._render_related_pixmap(cp), REL_PIX)
-            item.setToolTip(f"U+{cp:04X}  {name}\n\n{legend}")
+            item.setToolTip(f"U+{cp:04X}  {name}")
             self._rel_model.appendRow(item)
 
     def _render_related_pixmap(self, cp: int):
@@ -613,10 +612,6 @@ class ReferenceFontsDock(QWidget):
     def _open(self, cp) -> None:
         if self._open_cp is not None:
             self._open_cp(cp)
-
-    def _sub(self, cp) -> None:
-        if self._sub_cb is not None:
-            self._sub_cb(cp)
 
     def _squish(self, cp, direction, fraction) -> None:
         if self._squish_cb is not None:
@@ -998,7 +993,6 @@ class MainWindow(QMainWindow):
         self._refdock = ReferenceFontsDock(self.reflib, self._on_refs_changed)
         self._refdock.set_copy_callback(self._copy_related_strokes)
         self._refdock.set_open_callback(self._open_codepoint)
-        self._refdock.set_subcomponent_callback(self._add_related_subcomponent)
         self._refdock.set_squish_callback(self._squish_related_strokes)
         self._refdock.set_native_ghost_callback(self._on_native_ghost)
         dock = QDockWidget("Reference Fonts", self)
@@ -1118,7 +1112,15 @@ class MainWindow(QMainWindow):
         self._refdock.set_native_reference(g.codepoint)
 
     def _copy_related_strokes(self, cp: int) -> None:
-        """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas."""
+        """Append the strokes of the related glyph ``cp`` (if it has data) onto the canvas.
+
+        With the related list's **Copy as subcomponent** mode on, the related glyph is instanced
+        instead: the current glyph gets a subcomponent at the identity placement (one undo step),
+        rather than a copy of the strokes.
+        """
+        if self._refdock.subcomponent_mode():
+            self._add_related_subcomponent(cp)
+            return
         g = self.strokefont.get(cp)
         if g is not None and g.strokes:
             # Provenance: the glyph actually copied from (never traced back to its own sources).
@@ -1131,13 +1133,41 @@ class MainWindow(QMainWindow):
                 [s.with_origin(copied_origin(cp, target_cp, s.origin)) for s in g.strokes])
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
-    def _add_related_subcomponent(self, cp: int) -> None:
+    def _subcomponent_box(self, cp: int, direction: str = "", fraction: float = 0.5):
+        """The destination box (cell corners) for a new instance of ``cp``.
+
+        With no ``direction`` it is the referenced glyph's own cell box — the identity placement.
+        With one it is the block that direction/fraction names: ``left``/``right`` take that
+        fraction of the *current* glyph's width, ``down``/``up`` that fraction of the line height,
+        and an unnamed axis (or a diagonal direction's other axis) stays full.
+        """
+        cur = self._editor.glyph()
+        width = cur.cell_width_grid if cur is not None else 16
+        x0, x1 = 0, width
+        y0, y1 = 0, GRID_H
+        if not direction:
+            src = self.strokefont.get(cp)
+            x1 = src.cell_width_grid if src is not None else width
+            return (x0, y0), (x1, y1)
+        xpart = max(1, int(round(width * fraction)))
+        ypart = max(1, int(round(GRID_H * fraction)))
+        if "left" in direction:
+            x1 = xpart
+        elif "right" in direction:
+            x0 = width - xpart
+        if "up" in direction:
+            y0 = GRID_H - ypart
+        elif "down" in direction:
+            y1 = ypart
+        return (x0, y0), (x1, y1)
+
+    def _add_related_subcomponent(self, cp: int, direction: str = "", fraction: float = 0.5) -> None:
         """Instance the related glyph ``cp`` as a subcomponent of the current glyph.
 
-        This is the 'Sub' button's action: instead of copying the related glyph's strokes in (a
-        proper component), the current glyph references it. The default box is the referenced
-        glyph's own cell box, i.e. the identity placement. A reference that would close a
-        subcomponent cycle is refused here — a cycle can never be authored.
+        This is what the related list's Copy buttons do in **Copy as subcomponent** mode: instead
+        of copying the related glyph's strokes in (a proper component), the current glyph
+        references it. A reference that would close a subcomponent cycle is refused here — a cycle
+        can never be authored.
         """
         cur = self._editor.glyph()
         if cur is None:
@@ -1151,10 +1181,8 @@ class MainWindow(QMainWindow):
             )
             self._editor.canvas.setFocus()
             return
-        src = self.strokefont.get(cp)
-        width = src.cell_width_grid if src is not None else 16
-        self._editor.canvas.add_subcomponent(
-            Subcomponent(cp, (0, 0), (width, GRID_H)))
+        start, end = self._subcomponent_box(cp, direction, fraction)
+        self._editor.canvas.add_subcomponent(Subcomponent(cp, start, end))
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
     def _show_subcomponent_menu(self, index: int) -> None:
@@ -1180,8 +1208,12 @@ class MainWindow(QMainWindow):
 
         ``fraction`` is 1/2 normally, or 2/3 when Shift is held. Only the added strokes are
         squished (a linear transform, then rounding); existing strokes are untouched. The append
-        is a single undo/redo step.
+        is a single undo/redo step. In **Copy as subcomponent** mode the same buttons instance the
+        related glyph instead, with its bounding box placed in that fraction of the grid.
         """
+        if self._refdock.subcomponent_mode():
+            self._add_related_subcomponent(cp, direction, fraction)
+            return
         g = self.strokefont.get(cp)
         if g is None or not g.strokes:
             return
