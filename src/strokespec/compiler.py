@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Tuple
 
 from .model import StrokeFont, PEN_CAP
-from .ufo import build_ufo
+from .ufo import build_ufo, SUBCOMPONENT_REUSE
 
 
 class CompileError(RuntimeError):
@@ -255,11 +255,16 @@ def compile_strokefont(
     tool: str = "auto",
     run_fix: bool = True,
     on_progress: Optional[Callable[[Optional[int], Optional[int]], None]] = None,
+    subcomponents: str = SUBCOMPONENT_REUSE,
 ) -> str:
     """Compile a stroke set to ``out_ttf``.
 
     ``tool`` is ``'auto'`` (or ``'ufo2ft'``) for the in-process compile, or ``'gftools'`` /
     ``'fontmake'`` to shell out to a Google CLI compiler instead.
+
+    ``subcomponents`` is the export policy for subcomponents (see ``ufo.SUBCOMPONENT_*``):
+    ``"reuse"`` emits shared composite components, ``"flatten"`` expands every instance into its
+    host glyph's own contours.
 
     ``on_progress``, if given, is called as ``on_progress(done, total)`` while the font is built
     (``total`` is the glyph count) and then as ``on_progress(None, None)`` while it is compiled
@@ -277,6 +282,7 @@ def compile_strokefont(
             cap=cap,
             pen_radius=PEN_RADIUS,
             progress=on_progress,
+            subcomponents=subcomponents,
         )
         if keep_ufo:
             ufo_font.save(keep_ufo, overwrite=True)
@@ -302,6 +308,7 @@ def compile_strokefont(
         cap=cap,
         pen_radius=PEN_RADIUS,
         progress=on_progress,
+        subcomponents=subcomponents,
     )
     try:
         if on_progress is not None:

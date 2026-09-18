@@ -38,6 +38,7 @@ def _build(args) -> int:
         style_name=args.style,
         tool=args.tool,
         run_fix=not args.no_fix,
+        subcomponents=args.subcomponents,
     )
     print(f"wrote {out}")
     return 0
@@ -134,6 +135,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     b.add_argument("--tool", default="auto", choices=["auto", "ufo2ft", "gftools", "fontmake"],
                    help="auto/ufo2ft = compile in-process (default); gftools/fontmake = shell out")
     b.add_argument("--no-fix", action="store_true", help="skip gftools fix")
+    b.add_argument(
+        "--subcomponents", default="reuse", choices=["reuse", "flatten"],
+        help="export policy for subcomponents: 'reuse' (shared composite components) or "
+             "'flatten' (each instance expanded into its host glyph's own contours)",
+    )
     b.set_defaults(func=_build)
 
     pr = sub.add_parser("preview", help="render a single stroke glyph to a PNG")

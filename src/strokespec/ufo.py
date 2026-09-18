@@ -21,6 +21,15 @@ from .geometry_merge import merge_stroke_edges
 # Op is a tuple ("M"/"L"/"Q"/"C"/"Z", ...) — reused from geometry.
 Op = tuple
 
+# How a glyph's subcomponents reach the compiled font. Internal (build-time) policy, not
+# authored data:
+#   reuse   — every distinct converted outline becomes one shared helper glyph, and every glyph
+#             producing it references that one glyph as a composite component (the default).
+#   flatten — no composites: each instance is expanded into the glyph's own contours instead.
+SUBCOMPONENT_REUSE = "reuse"
+SUBCOMPONENT_FLATTEN = "flatten"
+SUBCOMPONENT_MODES = (SUBCOMPONENT_REUSE, SUBCOMPONENT_FLATTEN)
+
 # Devanagari vowel signs the shaper reorders to sit BEFORE their consonant (verified against
 # HarfBuzz: U+093F VOWEL SIGN I and U+094E VOWEL SIGN PRISHTHAMATRA E are the only two).
 DEVANAGARI_PREBASE_MATRAS = {0x093F, 0x094E}
@@ -133,13 +142,21 @@ def make_ufo(
     notdef_width_units: Optional[int] = None,
     progress: Optional[Callable[[int, int], None]] = None,
     merge_edges: bool = True,
+    subcomponents: str = SUBCOMPONENT_REUSE,
 ) -> Font:
     """Build the UFO **in memory** and return the ``ufoLib2.Font``.
 
     Keeping the font object lets the compiler hand it straight to ufo2ft, avoiding writing and
     re-reading a UFO package with one ``.glif`` file per glyph (which dominates build time for a
     font this size). Use :func:`build_ufo` when a UFO on disk is actually wanted.
+
+    ``subcomponents`` selects how instances reach the binary (see the ``SUBCOMPONENT_*``
+    constants): shared helper glyphs + composites (``"reuse"``, the default), or no composites at
+    all with each instance flattened into its host glyph (``"flatten"``).
     """
+    if subcomponents not in SUBCOMPONENT_MODES:
+        raise ValueError(
+            f"subcomponents must be one of {SUBCOMPONENT_MODES}, got {subcomponents!r}")
     if family_name is None:
         family_name = strokefont.metadata.get("name", "Uffy Fallback")
 
@@ -182,6 +199,7 @@ def make_ufo(
     font.lib["com.strokespec.type"] = "stroke-fallback"
     font.lib["com.strokespec.penRadius"] = str(PEN_RADIUS)
     font.lib["com.strokespec.cap"] = cap
+    font.lib["com.strokespec.subcomponents"] = subcomponents
     # Drop per-glyph PostScript names from the compiled font. The 'post' table is otherwise
     # written in format 2.0 with a glyph name for every glyph (one per cmap entry), which grows
     # enormously for a large fallback font (it was ~1/10th of the compiled file). Format 3.0
@@ -204,6 +222,27 @@ def make_ufo(
             dx = -glyph.width * SCALE
             conts = [_translate_x(c, dx) for c in conts]
         return conts
+
+    def expand_full(glyph: Glyph) -> List[List[Op]]:
+        """The glyph's outline with its instances **flattened in** (``flatten`` mode).
+
+        The parts are exactly the ones ``reuse`` mode would emit — its own strokes, then each
+        instance's converted contours — just concatenated into this glyph's own contour list
+        instead of living in helper glyphs. Keeping the parts separate matters: merging a
+        stroke-edge seam *across* two parts can splice two loops into one self-intersecting loop,
+        which changes the fill under the non-zero winding rule, so the two policies would no
+        longer draw the same ink.
+        """
+        conts = expand(glyph)
+        for sub in glyph.subcomponents:
+            conts.extend(instance_contours(glyph, sub))
+        return conts
+
+    def rendered(glyph: Glyph) -> List[List[Op]]:
+        """A glyph's full outline: instances flattened in only in ``flatten`` mode."""
+        if glyph.subcomponents and subcomponents == SUBCOMPONENT_FLATTEN:
+            return expand_full(glyph)
+        return expand(glyph)
 
     def instance_contours(glyph: Glyph, sub) -> List[List[Op]]:
         """The contours one subcomponent of ``glyph`` converts to, in ``glyph``'s own space.
@@ -280,8 +319,9 @@ def make_ufo(
     # many codepoints is a needless departure from ordinary fonts — e.g. it made U+0020 share a
     # glyph with U+061C/U+2000–U+200A/U+202F/U+205F/U+FFA0.
     #
-    # Glyphs carrying subcomponents do NOT take part in this whole-glyph merge: they are emitted
-    # as composites below, where each of their parts is pooled on its own.
+    # Glyphs carrying subcomponents do NOT take part in this whole-glyph merge in ``reuse`` mode:
+    # they are emitted as composites below, where each of their parts is pooled on its own. In
+    # ``flatten`` mode they are ordinary simple glyphs like every other.
     groups: "dict[Any, List[int]]" = {}
     composite_cps: List[int] = []
     for i, cp in enumerate(cps):
@@ -290,10 +330,10 @@ def make_ufo(
         glyph = strokefont.get(cp)
         if glyph is None:
             continue
-        if glyph.subcomponents:
+        if glyph.subcomponents and subcomponents == SUBCOMPONENT_REUSE:
             composite_cps.append(cp)
             continue
-        contours = expand(glyph)
+        contours = rendered(glyph)
         key = ("empty", cp) if not contours else (_outline_key(contours), glyph.advance_units)
         groups.setdefault(key, []).append(cp)
 
@@ -305,7 +345,7 @@ def make_ufo(
         ufo_glyph.unicodes = group          # map every codepoint in the group to this glyph
         ufo_glyph.width = rep_glyph.advance_units
         pen = ufo_glyph.getPen()
-        contours = expand(rep_glyph)
+        contours = rendered(rep_glyph)
         for contour in contours:
             op_to_pen(contour, pen)
         order.append(name)

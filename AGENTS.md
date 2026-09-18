@@ -220,7 +220,12 @@ The editor is a *front end* for the same model, not a parallel definition:
 - **`ufo.py` is the only place that decides simple vs composite.** A glyph with subcomponents
   becomes a ufoLib2 composite; each part (own strokes, then one per instance) is pooled in
   `.subNNNNN` helper glyphs keyed on **outline data alone** — never codepoint or transform — so
-  identical converted outlines are stored once. Glyphs without subcomponents keep the old
+  identical converted outlines are stored once. `make_ufo(..., subcomponents=)` switches the
+  export policy between `SUBCOMPONENT_REUSE` (that) and `SUBCOMPONENT_FLATTEN` (inline each
+  instance into its host glyph, no composites — `uffy build --subcomponents flatten`); flatten
+  concatenates the SAME parts reuse would pool, never one merged blob, so both policies emit the
+  same contour coordinates and render identically (verified over every instance-bearing glyph —
+  check that way, not with a clipped render canvas). Glyphs without subcomponents keep the old
   whole-glyph merge and must stay byte-identical: verify with
   `glyph_contours(g, resolve=sf.get) == [stroke_outline(s) for s in g.strokes]` over the real set.
 - **Cycles:** `StrokeFont.would_create_cycle` blocks one at creation (editor), and

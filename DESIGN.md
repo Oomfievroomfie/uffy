@@ -163,6 +163,22 @@ position. Components nest, so `maxp.maxComponentDepth` is computed by fontTools 
 with no subcomponents is still written as a plain simple glyph with the pre-existing whole-glyph
 merge (identical outlines *and* advance share one glyph).
 
+**The export policy is switchable** (`make_ufo(..., subcomponents=)`, `uffy build
+--subcomponents`): `"reuse"` is the above, `"flatten"` inlines each instance's converted contours
+into its host glyph instead and emits no composites and no helpers at all. Both policies emit the
+*same parts* — the flatten path concatenates exactly the contour lists the reuse path would put in
+helper glyphs, rather than merging the whole glyph's flattened contours in one pass — so the two
+differ only in where the bytes live. Verified over every instance-bearing glyph: identical contour
+coordinates (same multiset, same contour order; a contour may merely start at a different vertex,
+which cannot affect rendering) and identical rendering at 256 ppem, as well as identical advances.
+Measured on the 11888-glyph set at the time (126 glyphs instancing, 238 instances, 176 distinct
+converted outlines): reuse 1,050,760 bytes vs flatten 1,046,820 — reuse is **3,940 bytes (0.38%)
+larger**. That is because a 1.35× reuse factor barely pays for what a composite costs: reuse saves
+~1 KB of outline bytes but spends ~2.8 KB on composite records, ~1.4 KB on the extra `loca`/`hmtx`
+rows for the 176 helper glyphs, and shifts the `cmap` by ~1.8 KB. Sharing wins once shapes repeat
+across many glyphs (a shape used twice already roughly breaks even; CJK components reused across
+dozens of hanzi win clearly).
+
 ## Fallback philosophy
 
 This is a **fallback** font, not a full one: no complex shaping, no ligatures, no kerning, no
