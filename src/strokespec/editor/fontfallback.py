@@ -250,6 +250,11 @@ def _is_unifont(fam: str) -> bool:
     return fam.lower().startswith("unifont")
 
 
+_BASE_SANS = "Noto Sans"
+_SYMBOL_BUNDLED = ("Noto Sans Symbols", "Noto Sans Symbols 2")
+_SYMBOL_NATIVE = ("Segoe UI Historic", "Segoe UI Symbol")
+
+
 def _native_text_families(cp: int) -> list[str]:
     cps = _load_family_cps()
     app = QApplication.instance()
@@ -270,6 +275,14 @@ def _native_text_families(cp: int) -> list[str]:
            if _is_han_block(cp) else [])
     bundled = [f for f in _bundled_families
                if not _is_unifont(f) and cp in cps.get(f, ())]
+    # Noto Sans is the catch-all: only where nothing else, native or bundled, has the codepoint.
+    if _BASE_SANS in bundled and (relevant or han or len(bundled) > 1):
+        bundled = [f for f in bundled if f != _BASE_SANS]
     if not relevant and not han and not bundled:
         return [primary]
-    return [primary] + relevant + han + bundled
+    chain = [primary] + relevant + han + bundled
+    # The symbol faces only work after the native symbol/historic faces have had their turn.
+    if any(f in _SYMBOL_BUNDLED for f in chain):
+        first = min(i for i, f in enumerate(chain) if f in _SYMBOL_BUNDLED)
+        chain[first:first] = [f for f in _SYMBOL_NATIVE if f not in chain]
+    return chain

@@ -37,3 +37,6 @@ _test_ufo_build/
 # Reference font binaries
 ref fonts/
 
+# Download cache for the bundled Noto faces (tools/noto_bundle.py)
+.noto-cache/
+
