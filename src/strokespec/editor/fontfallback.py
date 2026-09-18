@@ -11,10 +11,14 @@ Ethiopic stack without Ebrima or Nyala), Qt renders it through a font that doesn
 it, and its measuring-vs-layout font-stack mismatch makes that visible as a clipped/broken glyph.
 So the rule is simple: attach every OS-default font whose cmap covers the codepoint.
 
-The consultation pool is strictly the fonts that ship with a clean Windows install
-(``DEFAULT_WINDOWS_FONTS``) plus the primary app font. Fonts a user has added themselves (Noto,
-Source Han, HanaMinA, …) are deliberately NOT consulted: they may be absent on another machine,
-so treating them as system coverage would be wrong.
+The consultation pool is the fonts that ship with a clean Windows install (``DEFAULT_WINDOWS_FONTS``),
+the primary app font, and the fonts bundled with this application in ``data/fonts``. Fonts a user
+has added themselves (Source Han, HanaMinA, …) are deliberately NOT consulted: they may be absent
+on another machine, so treating them as system coverage would be wrong. The bundled ones are
+always present, and they are the only source for the scripts Windows ships no font for — Tai Tham,
+Balinese, Bamum, SignWriting, Tangut, Duployan and the rest — so their cmaps are read alongside the
+OS fonts'. Qt's own fallback does not reach application fonts, which is exactly why they have to be
+attached by name.
 """
 from __future__ import annotations
 
@@ -24,6 +28,11 @@ from pathlib import Path
 
 from fontTools.ttLib import TTFont
 from PySide6.QtWidgets import QApplication
+
+# The fonts that ship with this application (``data/fonts``). Unlike a user's own fonts — which may
+# be absent on another machine and are therefore never consulted — these are guaranteed present, so
+# their cmaps belong in the same analysis as the OS fonts.
+_BUNDLED_FONTS_DIR = Path(__file__).resolve().parent.parent / "data" / "fonts"
 
 # The families that ship with a clean Windows 10 install (Microsoft Typography, "Fonts included
 # in Windows 10"). Fallback detection may consult ONLY these plus the primary app font; a user's
@@ -86,6 +95,7 @@ DEFAULT_WINDOWS_FONTS = [
 
 _family_cps: dict[str, set] | None = None
 _primary_cps: set = set()
+_bundled_families: list[str] = []
 
 # Extra intentional fallback fonts for the hanzi/kanji (CJK ideograph) blocks. These are NOT
 # OS-default fonts, but the Hanazono Mincho ("HanaMin") faces cover the ideograph blocks far more
@@ -122,8 +132,13 @@ def _cps(font: TTFont) -> set:
 
 
 def _load_family_cps() -> dict[str, set]:
-    """family -> set(codepoints) for the OS-default fallback candidates + the primary font."""
-    global _family_cps, _primary_cps
+    """family -> set(codepoints) for the fallback candidates the chain may attach.
+
+    Reads the cmaps of the OS font directories (keeping only families that ship with Windows, plus
+    the primary app font's own cmap) and of every font bundled in ``data/fonts``. The bundled
+    families are collected in ``_bundled_families``, in file order, so the chain can order them.
+    """
+    global _family_cps, _primary_cps, _bundled_families
     if _family_cps is not None:
         return _family_cps
     cps: dict[str, set] = {}
@@ -149,6 +164,22 @@ def _load_family_cps() -> dict[str, set]:
                 tt.close()
             except Exception:
                 continue
+    # The fonts bundled with the application: all of them, by cmap, like the OS ones.
+    bundled: list[str] = []
+    for path in sorted(glob.glob(os.path.join(str(_BUNDLED_FONTS_DIR), "*"))):
+        if os.path.splitext(path)[1].lower() not in (".ttf", ".otf", ".ttc"):
+            continue
+        try:
+            tt = TTFont(path, fontNumber=0, lazy=True) if path.lower().endswith(".ttc") else TTFont(path, lazy=True)
+            fam = _family_name(tt)
+            if fam:
+                cps.setdefault(fam, set()).update(_cps(tt))
+                if fam not in bundled:
+                    bundled.append(fam)
+            tt.close()
+        except Exception:
+            continue
+    _bundled_families = bundled
     _family_cps = cps
     return _family_cps
 
@@ -235,7 +266,7 @@ def _native_text_families(cp: int) -> list[str]:
         return [primary]
     # Attach every OS-default font whose cmap covers this codepoint so the script is rendered
     # through a font that truly supports it (e.g. Ebrima/Nyala for Ethiopic, JhengHei/YaHei for
-    # CJK). If none is needed, fall through to Qt's own platform chain.
+    # CJK).
     relevant: list[str] = []
     for fam in DEFAULT_WINDOWS_FONTS:
         if fam in ("Unifont", "Unifont Upper"):
@@ -243,10 +274,16 @@ def _native_text_families(cp: int) -> list[str]:
         if cp in cps.get(fam, ()):
             relevant.append(fam)
     # hanzi/kanji blocks: also attach the HanaMin faces (when present and covering the
-    # codepoint), after the OS defaults so an OS font that covers the character still wins, and
-    # before Unifont.
+    # codepoint), after the OS defaults so an OS font that covers the character still wins.
     han = ([f for f in HANZI_FALLBACK_FONTS if cp in cps.get(f, ())]
            if _is_han_block(cp) else [])
-    if not relevant and not han:
+    # The fonts bundled with the application, by cmap: they are the only source for the scripts
+    # Windows ships no font for (Tai Tham, Balinese, Bamum, SignWriting, Tangut, Duployan, ...),
+    # and Qt's own fallback does not reach application fonts, so a codepoint none of them is
+    # attached for is rendered as Qt's missing-glyph box.
+    bundled = [f for f in _bundled_families
+               if f not in ("Unifont", "Unifont Upper") and cp in cps.get(f, ())]
+    last = [f for f in ("Unifont", "Unifont Upper") if cp in cps.get(f, ())]
+    if not relevant and not han and not bundled and not last:
         return [primary]
-    return [primary] + relevant + han + ["Unifont", "Unifont Upper"]
+    return [primary] + relevant + han + bundled + last
