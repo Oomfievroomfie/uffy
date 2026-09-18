@@ -157,7 +157,9 @@ These are the things that repeatedly cost time when forgotten.
      (filled = 100%, mostly-filled = 50–99%, slightly-filled = 1–49%, untouched = 0%; blocks with
      0 allocated codepoints are excluded) — then edit `README.md` to match.
 
-  Then commit that refreshed result per the standing "always commit your work" rule above.
+  Then commit that refreshed result per the standing "always commit your work" rule above — and
+  that commit **includes `glyphs.strokes.json`**, the authored data the report was computed from
+  (the routine is exactly the case where committing the live glyph file is wanted).
 - Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
   gitignored.
 
