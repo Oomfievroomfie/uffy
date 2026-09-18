@@ -632,6 +632,18 @@ def resolve_glyph(resolve, codepoint: int) -> "Glyph | None":
     return g if isinstance(g, Glyph) else None
 
 
+def snap_cell_point(p: Pt) -> Pt:
+    """Snap a cell-space point to the nearest **cell centre** (the integer ``Point`` lattice).
+
+    ``Point`` index ``g`` sits at cell coordinate ``g + 0.5``, so a transformed position is
+    rounded to the nearest half-integer cell coordinate. An instance's box is generally a
+    non-integer number of cells tall/wide, so without this every instanced stroke would land
+    between cells — off-grid centre lines, and butt/arc decisions taken against a rounded-up
+    cell instead of the cell the point is in.
+    """
+    return (round(p[0] - 0.5) + 0.5, round(p[1] - 0.5) + 0.5)
+
+
 def flatten_cell_strokes(
     glyph: Glyph,
     resolve=None,
@@ -645,6 +657,10 @@ def flatten_cell_strokes(
     so that an arc — whose bend is a pure function of point order — bows the mirrored way once
     its control point is recomputed from the transformed endpoints.
 
+    Each transformed endpoint is then snapped to the nearest **cell centre**
+    (:func:`snap_cell_point`), which is the only lattice the stroke geometry is defined on, so an
+    instance's strokes are expanded exactly like authored ones.
+
     ``_seen`` guards against a cycle in malformed data (the model breaks cycles on load, so a
     well-formed font never needs it).
     """
@@ -657,7 +673,7 @@ def flatten_cell_strokes(
         p2 = xform_apply(xform, (s.p2.x + 0.5, s.p2.y + 0.5))
         if mirror:
             p1, p2 = p2, p1
-        out.append((p1, p2, s.shape))
+        out.append((snap_cell_point(p1), snap_cell_point(p2), s.shape))
     for sub in glyph.subcomponents:
         if sub.codepoint in _seen:
             continue

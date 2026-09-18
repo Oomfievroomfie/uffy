@@ -97,6 +97,13 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
   — the butt snap onto the cell's own edge/diagonal, the arc's axis-aligned control corner — are
   taken in the *host* glyph's grid. Transforming the outlines afterwards would scale the pen and
   break both.
+* **Each transformed endpoint is snapped to the nearest cell centre.** The stroke geometry only
+  exists on the integer point lattice, and a box is rarely a whole number of cells tall/wide
+  (U+51A4's second instance is 13 cells of a 16-cell-tall source), so without the snap every
+  instanced stroke would sit between cells: an off-grid centreline, a butt snapped against a
+  rounded-to-the-wrong-cell `_cell_min`, and an arc bulging to a fractional box corner. Snapping
+  here is what makes an instance expand *exactly* like authored strokes — and it is the same
+  rounding `pull contents` does, so pulling an instance in reproduces what was drawn.
 * **Instances nest** (an instance's source may itself instance something), so an instance is
   flattened into a flat list of cell-space strokes with the transforms *composed*
   (`geometry.flatten_cell_strokes`). That keeps the "transform, then expand" rule exact for a

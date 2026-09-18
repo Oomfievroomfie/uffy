@@ -144,8 +144,11 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   `end.x < start.x` mirrors the instance horizontally, and likewise vertically. The referenced
   glyph's own cell box `(0,0)→(its width,16)` is mapped onto that box, so a full-cell box of the
   same width is the identity placement. The transform is applied to the referenced glyph's
-  **strokes**, and only then are they expanded into outlines, so the pen keeps its own width and
-  the cell-quantised butt snap is taken in the *host* glyph's grid. Instances nest (transforms
+  **strokes**, each transformed endpoint is snapped to the nearest **cell centre** (the stroke
+  lattice — a box is rarely a whole number of cells, and off-lattice endpoints would put the
+  pen, the butt snap and an arc's box on the wrong cell), and only then are they expanded into
+  outlines, so the pen keeps its own width and the cell-quantised butt snap is taken in the
+  *host* glyph's grid. Instances nest (transforms
   compose), and a subcomponent's own strokes are never editable — only its box. **Cycles are
   impossible**: a reference that would close one is refused, and a file that contains one has it
   broken on load (with a warning).

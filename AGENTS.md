@@ -207,7 +207,10 @@ The editor is a *front end* for the same model, not a parallel definition:
   cell `g + 0.5`), whose negative size means a flip. `geometry.flatten_cell_strokes` composes
   nested instance transforms and returns the referenced glyphs' *strokes* in the host's cell
   space; only then does `cell_stroke_outline` expand them, so the pen keeps its width and the butt
-  snap happens in the host grid. A negative-determinant transform **swaps each stroke's two
+  snap happens in the host grid. Every transformed endpoint is then snapped to the nearest **cell
+  centre** (`geometry.snap_cell_point`) — a box is rarely a whole number of cells, and an
+  off-lattice endpoint puts the centreline, `_cell_min`'s butt snap and an arc's box on the wrong
+  cell. Do not remove that snap. A negative-determinant transform **swaps each stroke's two
   points** (`arc` bends come from point order) — do not "fix" that by transforming the control
   point. Anything that expands a glyph must be handed a `resolve` callable (`StrokeFont.get`) or
   the instances silently vanish (`expand()` in `ufo.py` deliberately omits it: it is only the
