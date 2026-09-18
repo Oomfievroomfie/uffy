@@ -11,10 +11,11 @@ import os
 from typing import Callable, List, Optional
 
 from ufoLib2 import Font
+from ufoLib2.objects import Component
 from ufoLib2.objects import Glyph as UFOGlyph
 
 from .model import GRID_H, SCALE, UPEM, StrokeFont, Glyph, PEN_RADIUS, PEN_CAP
-from .geometry import glyph_contours
+from .geometry import glyph_contours, subcomponent_contours
 from .geometry_merge import merge_stroke_edges
 
 # Op is a tuple ("M"/"L"/"Q"/"C"/"Z", ...) — reused from geometry.
@@ -81,12 +82,16 @@ def op_to_pen(ops: List[Op], pen) -> None:
 
 
 def glyph_outline_from_strokes(glyph: Glyph, pen_radius: float, baseline: float) -> List[List[Op]]:
-    """Expand a glyph's strokes to fill outlines from our own stroke geometry.
+    """Expand a glyph's **own** strokes to fill outlines from our own stroke geometry.
 
     This is the canonical stroke expansion (each stroke swept by the pen into a closed
     contour, one contour per stroke, no boolean merge — overlapping strokes stay as
     redundant subpaths and union visually under the non-zero winding rule). The editor preview
     uses the same path, so preview and compiled font can never differ.
+
+    Subcomponents are deliberately *not* included: a glyph that instances another codepoint is
+    emitted as a composite (each part pooled separately), never with its instances' outlines
+    merged into its own contour list.
     """
     return glyph_contours(glyph, r=pen_radius, baseline=baseline)
 
@@ -200,6 +205,48 @@ def make_ufo(
             conts = [_translate_x(c, dx) for c in conts]
         return conts
 
+    def instance_contours(glyph: Glyph, sub) -> List[List[Op]]:
+        """The contours one subcomponent of ``glyph`` converts to, in ``glyph``'s own space.
+
+        The referenced glyph's strokes are transformed by the instance's box *before* being
+        expanded (``geometry.subcomponent_contours``), so the pen keeps its own width. The
+        combining-mark shift is the host glyph's, exactly as for its own strokes.
+        """
+        conts = subcomponent_contours(
+            sub, strokefont.get, r=pen_radius, cap=cap, baseline=baseline
+        )
+        if merge_edges:
+            conts = merge_stroke_edges(conts)
+        if glyph.combining and glyph.codepoint not in DEVANAGARI_PREBASE_MATRAS:
+            conts = [_translate_x(c, -glyph.width * SCALE) for c in conts]
+        return conts
+
+    # Pool of already-emitted outlines, keyed on the OUTLINE DATA alone (never on the codepoint
+    # or the transform). Every distinct outline an instance converts to becomes one shared helper
+    # glyph, and every glyph that produces those same outlines references that one glyph as a
+    # TrueType composite component — so a shape instanced in twenty glyphs is stored once.
+    pool: "dict[tuple, str]" = {}
+    pool_seq = [0]
+
+    def pooled(contours: List[List[Op]]) -> Optional[str]:
+        """Emit ``contours`` once and return the helper glyph name (``None`` if empty)."""
+        if not contours:
+            return None
+        key = _outline_key(contours)
+        name = pool.get(key)
+        if name is None:
+            pool_seq[0] += 1
+            name = ".sub%05d" % pool_seq[0]
+            helper = font.newGlyph(name)
+            helper.unicodes = []
+            helper.width = 0
+            pen = helper.getPen()
+            for contour in contours:
+                op_to_pen(contour, pen)
+            order.append(name)
+            pool[key] = name
+        return name
+
     # .notdef always first.
     nd_cmds = _notdef_ops(UPEM, cap, pen_radius, descent, ascent)
     notdef = font.newGlyph(".notdef")
@@ -232,12 +279,19 @@ def make_ufo(
     # save (an empty glyph is just a loca entry and an hmtx row), and sharing one glyph across
     # many codepoints is a needless departure from ordinary fonts — e.g. it made U+0020 share a
     # glyph with U+061C/U+2000–U+200A/U+202F/U+205F/U+FFA0.
+    #
+    # Glyphs carrying subcomponents do NOT take part in this whole-glyph merge: they are emitted
+    # as composites below, where each of their parts is pooled on its own.
     groups: "dict[Any, List[int]]" = {}
+    composite_cps: List[int] = []
     for i, cp in enumerate(cps):
         if progress is not None:
             progress(i, total)
         glyph = strokefont.get(cp)
         if glyph is None:
+            continue
+        if glyph.subcomponents:
+            composite_cps.append(cp)
             continue
         contours = expand(glyph)
         key = ("empty", cp) if not contours else (_outline_key(contours), glyph.advance_units)
@@ -254,6 +308,41 @@ def make_ufo(
         contours = expand(rep_glyph)
         for contour in contours:
             op_to_pen(contour, pen)
+        order.append(name)
+
+    # Subcomponent-bearing glyphs: a glyph is either simple (its own contours) or a composite
+    # (components), so each glyph that instances another codepoint is written as a composite with
+    # one component per part — its own strokes first (if any), then one per subcomponent, in
+    # order. Each part's converted outlines are pooled on their outline data, so identical parts
+    # (from any glyph, any codepoint, any transform) are stored once and shared.
+    for cp in composite_cps:
+        glyph = strokefont.get(cp)
+        if glyph is None:
+            continue
+        parts: List[str] = []
+        own = pooled(expand(glyph))
+        if own is not None:
+            parts.append(own)
+        for sub in glyph.subcomponents:
+            name = pooled(instance_contours(glyph, sub))
+            if name is not None:
+                parts.append(name)
+        if not parts:
+            # Every part was empty (e.g. instances of blank glyphs): nothing to draw.
+            name = glyph_name(cp)
+            ufo_glyph = font.newGlyph(name)
+            ufo_glyph.unicodes = [cp]
+            ufo_glyph.width = glyph.advance_units
+            order.append(name)
+            continue
+        name = glyph_name(cp)
+        ufo_glyph = font.newGlyph(name)
+        ufo_glyph.unicodes = [cp]
+        ufo_glyph.width = glyph.advance_units
+        for part in parts:
+            ufo_glyph.components.append(
+                Component(baseGlyph=part, transformation=(1, 0, 0, 1, 0, 0))
+            )
         order.append(name)
 
     # Give the font a de-facto-empty GPOS table. HarfBuzz only runs its extents-based fallback

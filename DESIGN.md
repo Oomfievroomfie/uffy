@@ -78,6 +78,64 @@ instead, and hand the outlines to the compiler.
   they are left unshifted. Complex shaping is otherwise out of scope (consistent with "no
   shaping").
 
+## Subcomponents (instancing other codepoints)
+
+A glyph may **instance** another codepoint instead of repeating its strokes. An instance is a
+codepoint reference plus a **destination bounding box**, given as its **start and end corners** in
+the *host* glyph's **cell** coordinates (integer coordinates are cell corners, so a full cell is
+`(0,0)→(16,16)`; a `Point` index `g` sits at cell coordinate `g + 0.5`).
+
+* **The box may be negatively sized.** `end.x < start.x` mirrors the instance horizontally,
+  `end.y < start.y` vertically — both at once is a 180° turn. That is the only way an instance is
+  flipped; there is no separate flip flag.
+* **What the box maps is the referenced glyph's own cell box** — `(0,0)→(its width, 16)` — onto
+  the destination box, so a full-cell box of the same width is the identity placement. The source
+  box is the glyph's *cell*, never its ink: an ink-box fit would make every instance jump whenever
+  the source is edited.
+* **The transform is applied to the strokes, before they are expanded into outlines.** That is
+  the whole point: the pen keeps its own (unscaled) one-cell width, and cell-quantised decisions
+  — the butt snap onto the cell's own edge/diagonal, the arc's axis-aligned control corner — are
+  taken in the *host* glyph's grid. Transforming the outlines afterwards would scale the pen and
+  break both.
+* **Instances nest** (an instance's source may itself instance something), so an instance is
+  flattened into a flat list of cell-space strokes with the transforms *composed*
+  (`geometry.flatten_cell_strokes`). That keeps the "transform, then expand" rule exact for a
+  whole chain instead of quantising the grid at every level.
+* **A mirror is handled by swapping the two points of each stroke** when the composed transform
+  has a negative determinant. An arc's bend is a pure function of point order, and its control
+  point is recomputed from the transformed endpoints as the box corner on the right of the chord;
+  swapping is exactly what makes that recomputation land on the *mirrored* corner. (For a
+  diagonal transform with `sx·sy < 0` the argmin corner flips sign, and `cross(-d, c-p2) =
+  cross(d, c-p1)`, so the swap reproduces the affine image of the original arc, including its
+  nudged flat butt ends.)
+* **Instances are not editable through their contents.** In the editor an instance is drawn with a
+  dashed box and four corner handles, and it is picked up by those handles (or its stroke-list
+  row) — never by the nodes inside it, which are not strokes of this glyph. Its *contents* can be
+  taken over, though: **pull contents** deep-flattens the instance through the same pipeline the
+  renderer uses (rounded to the integer grid) and replaces it with those strokes.
+* **Cycles are structurally impossible.** Creating an instance whose target already leads back to
+  the host glyph is refused up front (`StrokeFont.would_create_cycle`). A file that contains one
+  anyway is invalid: loading breaks the cycles greedily in sorted codepoint order — dropping the
+  instance that would close the cycle — and the editor reports how many references were removed.
+  (A malformed file may also reference a codepoint that has no glyph; that instance simply
+  converts to nothing.)
+
+### In the compiled font
+
+A glyph that instances something is written as a TrueType **composite**, because a `glyf` entry
+is either simple contours or components and can never mix the two. Its parts are:
+
+1. its own strokes (if any), and
+2. one component per subcomponent, in order.
+
+Every part is **pooled on its converted outline data alone** — never on the codepoint or the
+transform — so one helper glyph (`.subNNNNN`, no cmap entry, zero advance) serves every glyph
+that converts to those same outlines, no matter which codepoint or box produced them, and the
+component offset is always `(0,0)` because the outlines are already in the host's absolute
+position. Components nest, so `maxp.maxComponentDepth` is computed by fontTools as usual. A glyph
+with no subcomponents is still written as a plain simple glyph with the pre-existing whole-glyph
+merge (identical outlines *and* advance share one glyph).
+
 ## Fallback philosophy
 
 This is a **fallback** font, not a full one: no complex shaping, no ligatures, no kerning, no

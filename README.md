@@ -138,6 +138,17 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   affects geometry or compilation.
 * Each stroke is painted with a **one-grid-cell-diameter pen**, expanded into a closed outline,
   filled with the **non-zero winding rule** so overlapping strokes **union**.
+* A glyph may also **instance** another codepoint as a **subcomponent**: a reference plus the
+  **start and end corners of a bounding box**, stored in *cell* coordinates (integer values are
+  cell corners, so the full cell box is `(0,0)→(16,16)`). The box may be **negatively sized** —
+  `end.x < start.x` mirrors the instance horizontally, and likewise vertically. The referenced
+  glyph's own cell box `(0,0)→(its width,16)` is mapped onto that box, so a full-cell box of the
+  same width is the identity placement. The transform is applied to the referenced glyph's
+  **strokes**, and only then are they expanded into outlines, so the pen keeps its own width and
+  the cell-quantised butt snap is taken in the *host* glyph's grid. Instances nest (transforms
+  compose), and a subcomponent's own strokes are never editable — only its box. **Cycles are
+  impossible**: a reference that would close one is refused, and a file that contains one has it
+  broken on load (with a warning).
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
   the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
   set's metadata.
@@ -202,7 +213,8 @@ src/strokespec/
   the editor. Each visible cell also carries a small **native-text character badge** (the
   codepoint's character rendered with the fallback chain).
 * a **glyph editor** on the right (the 16x16 canvas + stroke list + tool row). Hovering a row in
-  the stroke list shows that stroke's provenance (if any) as a tooltip.
+  the stroke list shows that stroke's provenance (if any) as a tooltip; **subcomponents** are
+  listed there too, naming the codepoint they reference.
 * a **Reference Fonts** dock with a big **native reference** panel and a **related-glyphs**
   list.
 * **File → Compile TTF…** to build the font with Google's tools.
@@ -214,6 +226,12 @@ The full set of keyboard and mouse controls is below.
 ### Glyph editor (canvas — needs keyboard focus)
 
 * **Click two grid points** to add a stroke; **drag an endpoint** to move it.
+* **Subcomponents** (instances of other codepoints) are drawn with a **dashed bounding box** and a
+  **handle on each corner**: drag a handle to move that corner, dragging one corner past its
+  opposite flips the instance. Their contained strokes are not draggable here — only the box is
+  (plus the whole-glyph moves below, which carry the boxes with them). **Right-click** a box (or
+  its row in the stroke list) for its menu: **open the referenced codepoint**, or **pull its
+  contents into this glyph** (which converts the instance to editable strokes and kills it).
 * Tool toggle: **Line** / **Arc** (toolbar).
 * **Ctrl+Z** undo · **Ctrl+Shift+Z** redo
 * **Ctrl+C** copy all strokes · **Ctrl+V** paste (append) · **Ctrl+H** clear the glyph
@@ -227,7 +245,7 @@ The full set of keyboard and mouse controls is below.
   rotate 90° clockwise (in 16x16 space).
 * **B** — toggle the selected stroke between line and arc.
 * **R** — reverse the selected stroke's points (flips an arc's bend).
-* **Delete** — delete the selected stroke.
+* **Delete** — delete the selected stroke (or the selected subcomponent).
 * **N** — toggle the glyph width between 8 and 16.
 * **M** — toggle the combining flag.
 * **Reference ghost** checkbox — overlay a reference-font ghost behind your strokes. Ghosts are
@@ -256,11 +274,13 @@ The full set of keyboard and mouse controls is below.
 
 * **Add folder** to load reference fonts; **Clear** to drop them.
 * **Native reference** panel — the current codepoint as a big character.
-* **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open**,
-  four **axial squish arrows** (↑↓←→), and four **diagonal squish buttons** (↖↗↙↘) below them.
-  Clicking a squish button copies the related glyph into a fraction of the current glyph's grid
-  toward that edge/corner (same as pasting while holding the arrow key(s)); **Shift** gives 2/3
-  size instead of 1/2.
+* **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open** /
+  **Sub**, four **axial squish arrows** (↑↓←→), and four **diagonal squish buttons** (↖↗↙↘) below
+  them. **Copy** copies the related glyph's strokes in (a proper component); **Sub** instead
+  instances it as a **subcomponent** at the identity placement (a reference that would close a
+  cycle is refused, with a warning). Clicking a squish button copies the related glyph into a
+  fraction of the current glyph's grid toward that edge/corner (same as pasting while holding the
+  arrow key(s)); **Shift** gives 2/3 size instead of 1/2.
 
 ### Menus
 

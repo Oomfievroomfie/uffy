@@ -147,7 +147,7 @@ class GlyphGridModel(QAbstractListModel):
 
     def _render_preview(self, cp: int) -> Optional[QPixmap]:
         glyph = self.strokefont.get(cp)
-        if glyph is not None and glyph.strokes:
+        if glyph is not None and (glyph.strokes or glyph.subcomponents):
             pm = QPixmap(PIX_W, PIX_H)
             pm.fill(Qt.GlobalColor.transparent)
             painter = QPainter(pm)
@@ -155,6 +155,7 @@ class GlyphGridModel(QAbstractListModel):
                 painter, glyph, QRectF(2, 2, PIX_W - 4, PIX_H - 4),
                 color=QColor(25, 25, 25),
                 baseline=self.strokefont.baseline,
+                resolve=self.strokefont.get,
             )
             painter.end()
             return pm

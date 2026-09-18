@@ -202,6 +202,25 @@ The editor is a *front end* for the same model, not a parallel definition:
 - **Never re-derive the outline a second way.** Preview and compiled font must use the same
   `geometry.py` output; if a change only lands in one path, they drift. This is the whole point
   of having `geometry.py` be canonical.
+- **Subcomponents transform strokes, not outlines.** A `Subcomponent` is a codepoint reference
+  plus a destination box in **cell** coordinates (integer = cell corner; a `Point` index `g` is at
+  cell `g + 0.5`), whose negative size means a flip. `geometry.flatten_cell_strokes` composes
+  nested instance transforms and returns the referenced glyphs' *strokes* in the host's cell
+  space; only then does `cell_stroke_outline` expand them, so the pen keeps its width and the butt
+  snap happens in the host grid. A negative-determinant transform **swaps each stroke's two
+  points** (`arc` bends come from point order) — do not "fix" that by transforming the control
+  point. Anything that expands a glyph must be handed a `resolve` callable (`StrokeFont.get`) or
+  the instances silently vanish (`expand()` in `ufo.py` deliberately omits it: it is only the
+  glyph's OWN strokes).
+- **`ufo.py` is the only place that decides simple vs composite.** A glyph with subcomponents
+  becomes a ufoLib2 composite; each part (own strokes, then one per instance) is pooled in
+  `.subNNNNN` helper glyphs keyed on **outline data alone** — never codepoint or transform — so
+  identical converted outlines are stored once. Glyphs without subcomponents keep the old
+  whole-glyph merge and must stay byte-identical: verify with
+  `glyph_contours(g, resolve=sf.get) == [stroke_outline(s) for s in g.strokes]` over the real set.
+- **Cycles:** `StrokeFont.would_create_cycle` blocks one at creation (editor), and
+  `break_subcomponent_cycles` (run by `from_dict`, i.e. every load) drops the instance that closes
+  one and records it in `broken_subcomponent_cycles` (never persisted) for the editor's warning.
 - **Ops shape:** `("M",pt)  ("L",pt)  ("Q",ctrl,pt)  ("C",c1,c2,pt)  ("Z",)`, y-up font units.
   Contour helpers in geometry (`_flatten`, `_reverse`, `_orient_ccw`, `_signed_area`) all
   understand M/L/Q/C/Z. Keep that set closed when adding ops.

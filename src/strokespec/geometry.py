@@ -19,11 +19,28 @@ holes.
 A glyph is a set of such strokes; each is expanded independently (no boolean merge)
 and the glyph outline is the per-stroke contours, which union visually when rendered.
 
+Subcomponents
+-------------
+A glyph may also *instance* another codepoint (:class:`strokespec.model.Subcomponent`): a
+reference plus a destination **bounding box** in the containing glyph's cell coordinates. The
+referenced glyph's own cell box maps onto that box, and — importantly — the transform is applied
+to the referenced glyph's **strokes**, which are only then expanded into outlines here. The pen
+therefore keeps its own (unscaled) width, and cell-quantised decisions such as the butt snap are
+taken in the *host* glyph's grid. A negatively sized box mirrors the instance.
+
+Instances nest, so an instance is flattened into a flat list of cell-space strokes
+(:func:`flatten_cell_strokes`) with the transforms composed; a mirror (negative determinant)
+swaps a stroke's two points, which is what keeps an arc bending the mirrored way after its
+control point is recomputed from the transformed endpoints.
+
 Coordinate conventions
 ----------------------
 * Font units, y-up, baseline at ``y = 0``. The grid row 0 maps to ``y = 0`` and grid row
   16 maps to ``y = UPEM``. One grid unit = ``SCALE`` units.
-* ``Point`` grid coords are multiplied by ``SCALE`` on entry.
+* ``Point`` grid coords are multiplied by ``SCALE`` on entry. **Cell** coordinates (used by
+  subcomponent boxes, and by the flattened stroke list) are instead the continuous coordinates
+  whose integer values are cell *corners*: cell coordinate ``g`` is where ``Point`` index
+  ``g - 0.5`` sits, so a point's cell coordinate is ``(p.x + 0.5, p.y + 0.5)``.
 """
 
 from __future__ import annotations
@@ -33,12 +50,14 @@ from typing import Callable, List, Sequence, Tuple
 
 from .model import (
     DEFAULT_BASELINE,
+    GRID_H,
     PEN_CAP,
     PEN_RADIUS,
     SCALE,
     SHAPE_ARC,
     SHAPE_LINE,
     Stroke,
+    Subcomponent,
     Glyph,
 )
 
@@ -46,6 +65,14 @@ from .model import (
 # where each pt is an (x, y) tuple in font units.
 Op = Tuple
 Pt = Tuple[float, float]
+
+# A cell-space affine transform, restricted to what a subcomponent box can express: an
+# axis-aligned scale plus a translation. Applied as ``p -> (p.x*sx + tx, p.y*sy + ty)``.
+XForm = Tuple[float, float, float, float]   # (sx, sy, tx, ty)
+IDENTITY_XFORM: XForm = (1.0, 1.0, 0.0, 0.0)
+
+# A stroke after flattening/transforming into the host glyph's CELL space.
+CellStroke = Tuple[Pt, Pt, str]   # (p1, p2, shape)
 
 _TWO_PI = 2.0 * math.pi
 
@@ -525,21 +552,13 @@ def arc_outline(p1: Pt, p2: Pt, r: float, cap: str) -> List[Op]:
     return _orient_ccw(ops)
 
 
-def stroke_outline(
-    stroke: Stroke,
-    r: float = PEN_RADIUS,
-    cap: str = PEN_CAP,
-    baseline: float = DEFAULT_BASELINE,
-) -> List[Op]:
-    """Expand a single stroke to a closed outline (list of M/L/C/Z ops).
+def outline_from_font_points(p1: Pt, p2: Pt, shape: str, r: float, cap: str) -> List[Op]:
+    """Expand a single stroke whose two endpoints are already in font units.
 
-    Arcs use a **flat (butt)** end — no half-pen extension along the centreline — so each arc
-    end is half a pen-width shorter than a square butt, giving a visibly different (shorter)
-    shape. Lines keep the given butt style.
+    This is the whole expansion: everything else (grid points, subcomponent transforms) only
+    decides *where* the two endpoints are.
     """
-    p1 = stroke.p1.as_font_units(baseline)
-    p2 = stroke.p2.as_font_units(baseline)
-    if stroke.shape == SHAPE_ARC:
+    if shape == SHAPE_ARC:
         if arc_degenerates_to_line(p1, p2):
             # Axis-aligned (or zero-length) arc: it has no ellipse, so it is exactly the
             # straight segment between its two points. Expand it EXACTLY as a SHAPE_LINE with
@@ -555,14 +574,147 @@ def stroke_outline(
     return line_outline(p1, p2, r, cap)
 
 
-def glyph_outline(
-    glyph: Glyph, r: float = PEN_RADIUS, cap: str = PEN_CAP, baseline: float = DEFAULT_BASELINE
+def stroke_outline(
+    stroke: Stroke,
+    r: float = PEN_RADIUS,
+    cap: str = PEN_CAP,
+    baseline: float = DEFAULT_BASELINE,
 ) -> List[Op]:
-    """Expand every stroke in ``glyph`` into one flat op stream (multiple closed
-    subpaths, one per stroke)."""
+    """Expand a single stroke to a closed outline (list of M/L/C/Z ops).
+
+    Arcs use a **flat (butt)** end — no half-pen extension along the centreline — so each arc
+    end is half a pen-width shorter than a square butt, giving a visibly different (shorter)
+    shape. Lines keep the given butt style.
+    """
+    p1 = stroke.p1.as_font_units(baseline)
+    p2 = stroke.p2.as_font_units(baseline)
+    return outline_from_font_points(p1, p2, stroke.shape, r, cap)
+
+
+# --------------------------------------------------------------------------- #
+# subcomponents
+# --------------------------------------------------------------------------- #
+def xform_apply(t: XForm, p: Pt) -> Pt:
+    return (p[0] * t[0] + t[2], p[1] * t[1] + t[3])
+
+
+def xform_compose(outer: XForm, inner: XForm) -> XForm:
+    """``outer ∘ inner`` — apply ``inner`` first, then ``outer``."""
+    return (
+        outer[0] * inner[0],
+        outer[1] * inner[1],
+        outer[0] * inner[2] + outer[2],
+        outer[1] * inner[3] + outer[3],
+    )
+
+
+def xform_mirrors(t: XForm) -> bool:
+    """True if the transform reverses handedness (an odd number of flips)."""
+    return t[0] * t[1] < 0.0
+
+
+def subcomponent_xform(sub: Subcomponent, source: Glyph) -> XForm:
+    """The cell-space transform placing ``source``'s glyph into ``sub``'s bounding box.
+
+    The source's own cell box ``(0,0)-(source width, GRID_H)`` maps onto the subcomponent's box.
+    """
+    w = max(1, int(source.cell_width_grid))
+    sx = (sub.end[0] - sub.start[0]) / float(w)
+    sy = (sub.end[1] - sub.start[1]) / float(GRID_H)
+    return (sx, sy, float(sub.start[0]), float(sub.start[1]))
+
+
+def resolve_glyph(resolve, codepoint: int) -> "Glyph | None":
+    """Look up a codepoint through a resolver (``None`` when there is nothing to instance)."""
+    if resolve is None:
+        return None
+    g = resolve(int(codepoint))
+    return g if isinstance(g, Glyph) else None
+
+
+def flatten_cell_strokes(
+    glyph: Glyph,
+    resolve=None,
+    xform: XForm = IDENTITY_XFORM,
+    _seen=None,
+) -> List[CellStroke]:
+    """Every stroke of ``glyph`` (including its instances, recursively) in CELL space.
+
+    Transforms composed from nested instances are applied to the *strokes*; outlines are built
+    from the result by :func:`cell_stroke_outline`. A mirroring transform swaps a stroke's points
+    so that an arc — whose bend is a pure function of point order — bows the mirrored way once
+    its control point is recomputed from the transformed endpoints.
+
+    ``_seen`` guards against a cycle in malformed data (the model breaks cycles on load, so a
+    well-formed font never needs it).
+    """
+    if _seen is None:
+        _seen = {int(glyph.codepoint)}
+    mirror = xform_mirrors(xform)
+    out: List[CellStroke] = []
+    for s in glyph.strokes:
+        p1 = xform_apply(xform, (s.p1.x + 0.5, s.p1.y + 0.5))
+        p2 = xform_apply(xform, (s.p2.x + 0.5, s.p2.y + 0.5))
+        if mirror:
+            p1, p2 = p2, p1
+        out.append((p1, p2, s.shape))
+    for sub in glyph.subcomponents:
+        if sub.codepoint in _seen:
+            continue
+        src = resolve_glyph(resolve, sub.codepoint)
+        if src is None:
+            continue
+        inner = xform_compose(xform, subcomponent_xform(sub, src))
+        out.extend(flatten_cell_strokes(src, resolve, inner, _seen | {sub.codepoint}))
+    return out
+
+
+def cell_stroke_outline(
+    cs: CellStroke,
+    r: float = PEN_RADIUS,
+    cap: str = PEN_CAP,
+    baseline: float = DEFAULT_BASELINE,
+) -> List[Op]:
+    """Expand one cell-space stroke to its outline (cell coords -> font units, then expand)."""
+    p1, p2, shape = cs
+    f1 = (p1[0] * SCALE, (p1[1] - baseline) * SCALE)
+    f2 = (p2[0] * SCALE, (p2[1] - baseline) * SCALE)
+    return outline_from_font_points(f1, f2, shape, r, cap)
+
+
+def subcomponent_contours(
+    sub: Subcomponent,
+    resolve,
+    r: float = PEN_RADIUS,
+    cap: str = PEN_CAP,
+    baseline: float = DEFAULT_BASELINE,
+    outer: XForm = IDENTITY_XFORM,
+) -> List[List[Op]]:
+    """The contours an instance converts to *inside its host glyph* (empty when unresolved).
+
+    ``outer`` maps the instance's host glyph cell space into whatever space the caller wants the
+    result in (the host's own space by default).
+    """
+    src = resolve_glyph(resolve, sub.codepoint)
+    if src is None:
+        return []
+    x = xform_compose(outer, subcomponent_xform(sub, src))
+    return [cell_stroke_outline(cs, r, cap, baseline)
+            for cs in flatten_cell_strokes(src, resolve, x, {int(src.codepoint)})]
+
+
+def glyph_outline(
+    glyph: Glyph,
+    r: float = PEN_RADIUS,
+    cap: str = PEN_CAP,
+    baseline: float = DEFAULT_BASELINE,
+    resolve=None,
+) -> List[Op]:
+    """Expand every stroke in ``glyph`` (and its instances) into one flat op stream
+    (multiple closed subpaths, one per stroke)."""
     ops: List[Op] = []
-    for stroke in glyph.strokes:
-        ops.extend(stroke_outline(stroke, r, cap, baseline))
+    for cs in flatten_cell_strokes(glyph, resolve):
+        ops.extend(cell_stroke_outline(cs, r, cap, baseline))
     return ops
 
 
@@ -571,9 +723,15 @@ def glyph_contours(
     r: float = PEN_RADIUS,
     cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
+    resolve=None,
 ) -> List[List[Op]]:
-    """Expand every stroke to its own closed contour (list of M/L/C/Z op lists)."""
-    return [stroke_outline(s, r, cap, baseline) for s in glyph.strokes]
+    """Expand every stroke to its own closed contour (list of M/L/C/Z op lists).
+
+    ``resolve`` is a ``codepoint -> Glyph`` callable used to instance subcomponents; without it
+    subcomponents contribute nothing.
+    """
+    return [cell_stroke_outline(cs, r, cap, baseline)
+            for cs in flatten_cell_strokes(glyph, resolve)]
 
 
 def outline_to_paths(
@@ -582,11 +740,12 @@ def outline_to_paths(
     r: float = PEN_RADIUS,
     cap: str = PEN_CAP,
     baseline: float = DEFAULT_BASELINE,
+    resolve=None,
 ) -> List[Tuple[float, List[Op]]]:
     """Convenience: a list of ``(advance, contours)`` ready to be written as glyphs.
 
     Provided mainly as a stable API boundary between the model and the builders.
     """
     advance = 0 if glyph.combining else cell_width_units
-    return [(advance, glyph_contours(glyph, r, cap, baseline))]
+    return [(advance, glyph_contours(glyph, r, cap, baseline, resolve))]
 

@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QBrush,
     QColor,
     QCloseEvent,
+    QCursor,
     QFont,
     QIcon,
     QKeySequence,
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressDialog,
     QPushButton,
@@ -46,7 +48,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..model import SHAPE_ARC, SHAPE_LINE, Glyph, StrokeFont
+from ..model import GRID_H, SHAPE_ARC, SHAPE_LINE, Glyph, StrokeFont, Subcomponent
 from ..refbrowser import ReferenceLibrary
 from .glyph_canvas import GlyphCanvas
 from .grid import GlyphGrid, _tint_grey
@@ -61,7 +63,7 @@ REL_PIX_W, REL_PIX_H = 60, 60
 REL_REF_PX = 96
 # related-glyph cell size (a bit taller than the codepoint grid to fit two buttons)
 # related-glyph cell size (tall enough for the preview, the char/ID and TWO button rows)
-REL_CELL_W, REL_CELL_H = 96, 172
+REL_CELL_W, REL_CELL_H = 116, 172
 # big static "native reference" image: width enough for wide glyphs (e.g. Arabic), and a TALLER
 # height so tall descenders fit
 REF_IMG_SIZE = 240
@@ -249,22 +251,51 @@ def _stroke_origin_tooltip(s) -> str:
     return head
 
 
+def _subcomponent_tooltip(sub: Subcomponent) -> str:
+    """Tooltip for a subcomponent row: what it references and how its box is oriented."""
+    ch = chr(sub.codepoint) if 0 <= sub.codepoint <= 0x10FFFF else ""
+    try:
+        import unicodedata2 as unicodedata
+        name = unicodedata.name(ch, "")
+    except Exception:
+        name = ""
+    head = f"Subcomponent: instances U+{sub.codepoint:04X}"
+    if ch and not ch.isspace():
+        head += f"  {ch}"
+    if name:
+        head += f"\n{name}"
+    x0, y0, x1, y1 = sub.box
+    head += f"\nBox ({x0},{y0})→({x1},{y1}) in cell coordinates"
+    flips = []
+    if sub.flipped_x:
+        flips.append("horizontally")
+    if sub.flipped_y:
+        flips.append("vertically")
+    if flips:
+        head += f"\nNegatively sized: flipped {' and '.join(flips)}"
+    head += ("\nIts strokes are not editable here — drag the box corner handles, or use the"
+             " context menu to open or pull its contents in.")
+    return head
+
+
 def _rel_button_rects(rect: QRectF) -> tuple:
     """Button rects inside a related cell (shared by paint + hit-test).
 
-    Returns ``(copy, open, arrows, diags)`` where ``arrows`` maps 'up'/'down'/'left'/'right' to
-    its rect and ``diags`` maps 'upleft'/'upright'/'downleft'/'downright' to its rect. Copy/Open
-    are on a row; the four axial (copy-and-squish) arrows are a compact, centered group under
-    them, and the four diagonal (copy-and-squish) buttons sit below those.
+    Returns ``(copy, open, sub, arrows, diags)`` where ``arrows`` maps 'up'/'down'/'left'/'right'
+    to its rect and ``diags`` maps 'upleft'/'upright'/'downleft'/'downright' to its rect.
+    Copy / Open / Sub are on a row; the four axial (copy-and-squish) arrows are a compact,
+    centered group under them, and the four diagonal (copy-and-squish) buttons sit below those.
     """
     m = 6.0
     row_h = 18.0
     row3_y = rect.bottom() - m - row_h              # diagonals (bottom row)
     row2_y = row3_y - (row_h + 2.0)                 # axial arrows
-    row1_y = row2_y - 22.0                          # copy/open row (above the arrows)
-    bw = (rect.width() - 2 * m - 4.0) / 2.0
+    row1_y = row2_y - 22.0                          # copy/open/sub row (above the arrows)
+    gap = 3.0
+    bw = (rect.width() - 2 * m - 2 * gap) / 3.0
     copy = QRectF(rect.left() + m, row1_y, bw, row_h)
-    opn = QRectF(copy.right() + 4.0, row1_y, bw, row_h)
+    opn = QRectF(copy.right() + gap, row1_y, bw, row_h)
+    sub = QRectF(opn.right() + gap, row1_y, bw, row_h)
 
     def _group(dirs, y):
         aw, gap = 18.0, 2.0
@@ -274,7 +305,7 @@ def _rel_button_rects(rect: QRectF) -> tuple:
 
     arrows = _group(["up", "down", "left", "right"], row2_y)
     diags = _group(["upleft", "upright", "downleft", "downright"], row3_y)
-    return copy, opn, arrows, diags
+    return copy, opn, sub, arrows, diags
 
 
 class _RelatedDelegate(QStyledItemDelegate):
@@ -296,7 +327,7 @@ class _RelatedDelegate(QStyledItemDelegate):
         painter.setBrush(bg)
         painter.drawRoundedRect(rect, 6, 6)
 
-        copy_r, opn_r, arrows, diags = _rel_button_rects(QRectF(rect))
+        copy_r, opn_r, sub_r, arrows, diags = _rel_button_rects(QRectF(rect))
         # preview fills the space above the button rows
         btn_h = rect.bottom() - copy_r.top()   # top edge of the copy/open row
         label_h = 14.0
@@ -332,9 +363,11 @@ class _RelatedDelegate(QStyledItemDelegate):
             f"U+{cp:04X}",
         )
 
-        # buttons: Copy + Open, the four axial copy-and-squish arrows, then the diagonals
+        # buttons: Copy (strokes) + Open + Sub (instance, instead of copying the strokes in),
+        # then the four axial copy-and-squish arrows and the diagonals
         self._draw_button(painter, copy_r, "Copy", enabled=has)
         self._draw_button(painter, opn_r, "Open", enabled=True)
+        self._draw_button(painter, sub_r, "Sub", enabled=True)
         for d in ["up", "down", "left", "right"]:
             self._draw_button(painter, arrows[d], {"up": "↑", "down": "↓", "left": "←", "right": "→"}[d], enabled=has)
         for d in ["upleft", "upright", "downleft", "downright"]:
@@ -359,10 +392,11 @@ class _RelatedDelegate(QStyledItemDelegate):
 
 class _RelatedListView(QListView):
     """The related-glyph list: same containerized IconMode list as the codepoint grid.
-    Clicking a cell BODY does nothing; only the Copy / Open buttons act."""
+    Clicking a cell BODY does nothing; only the Copy / Open / Sub buttons act."""
 
     copyRequested = Signal(int)
     openRequested = Signal(int)
+    subRequested = Signal(int)                 # instance the related glyph as a subcomponent
     squishRequested = Signal(int, str, float)  # (codepoint, up/down/left/right, fraction)
 
     def __init__(self, parent=None) -> None:
@@ -390,7 +424,7 @@ class _RelatedListView(QListView):
             if idx.isValid():
                 cp = idx.data(REL_CP)
                 has = bool(idx.data(REL_HAS))
-                copy_r, opn_r, arrows, diags = _rel_button_rects(
+                copy_r, opn_r, sub_r, arrows, diags = _rel_button_rects(
                     QRectF(self.visualRect(idx)).adjusted(3, 3, -3, -3)
                 )
                 pos = event.position()
@@ -399,6 +433,9 @@ class _RelatedListView(QListView):
                     return
                 if opn_r.contains(pos):
                     self.openRequested.emit(cp)
+                    return
+                if sub_r.contains(pos):
+                    self.subRequested.emit(cp)
                     return
                 if has:
                     for d, r in list(arrows.items()) + list(diags.items()):
@@ -419,6 +456,7 @@ class ReferenceFontsDock(QWidget):
         self._on_change = on_change
         self._copy_strokes = None   # callable(strokes) to copy a related glyph onto the canvas
         self._open_cp = None        # callable(cp) to jump the editor to a codepoint
+        self._sub_cb = None         # callable(cp) to instance the related glyph as a subcomponent
         self._squish_cb = None      # callable(cp, direction) to copy + squish into a half
         self._strokefont = None     # used to know whether a related glyph has authored data
         self._native_ghost_fn = None  # callable(on) to source the editor ghost natively
@@ -457,6 +495,7 @@ class ReferenceFontsDock(QWidget):
         self._rel_list.setItemDelegate(_RelatedDelegate(self._rel_list))
         self._rel_list.copyRequested.connect(self._copy)
         self._rel_list.openRequested.connect(self._open)
+        self._rel_list.subRequested.connect(self._sub)
         self._rel_list.squishRequested.connect(self._squish)
         lay.addWidget(self._rel_title)
         lay.addWidget(self._rel_list, 1)
@@ -509,6 +548,9 @@ class ReferenceFontsDock(QWidget):
     def set_open_callback(self, cb) -> None:
         self._open_cp = cb
 
+    def set_subcomponent_callback(self, cb) -> None:
+        self._sub_cb = cb
+
     def set_squish_callback(self, cb) -> None:
         self._squish_cb = cb
 
@@ -524,19 +566,22 @@ class ReferenceFontsDock(QWidget):
             except ValueError:
                 pass
             g = self._strokefont.get(cp) if self._strokefont is not None else None
-            has_data = g is not None and bool(g.strokes)
+            has_data = g is not None and not g.is_empty
             rows.append((cp, name, has_data))
         self._set_related(rows)
 
     def _set_related(self, rows) -> None:
         # Always visible, even when empty. Each related glyph becomes one cell in the list.
         self._rel_model.clear()
+        legend = ("Copy = copy the strokes in (a proper component)\n"
+                  "Sub = instance it as a subcomponent instead\n"
+                  "Open = open that glyph   arrows = copy + squish")
         for cp, name, has_data in rows:
             item = QStandardItem()
             item.setData(cp, REL_CP)
             item.setData(has_data, REL_HAS)
             item.setData(self._render_related_pixmap(cp), REL_PIX)
-            item.setToolTip(f"U+{cp:04X}  {name}")
+            item.setToolTip(f"U+{cp:04X}  {name}\n\n{legend}")
             self._rel_model.appendRow(item)
 
     def _render_related_pixmap(self, cp: int):
@@ -544,13 +589,14 @@ class ReferenceFontsDock(QWidget):
         from PySide6.QtGui import QPainter, QPixmap
         from PySide6.QtCore import QRectF
         glyph = self._strokefont.get(cp) if self._strokefont is not None else None
-        if glyph is not None and glyph.strokes:
+        if glyph is not None and (glyph.strokes or glyph.subcomponents):
             pm = QPixmap(REL_PIX_W, REL_PIX_H)
             pm.fill(Qt.GlobalColor.transparent)
             painter = QPainter(pm)
             paint_stroke_glyph(
                 painter, glyph, QRectF(2, 2, REL_PIX_W - 4, REL_PIX_H - 4),
                 color=QColor(25, 25, 25), baseline=self._strokefont.baseline,
+                resolve=self._strokefont.get,
             )
             painter.end()
             return pm
@@ -567,6 +613,10 @@ class ReferenceFontsDock(QWidget):
     def _open(self, cp) -> None:
         if self._open_cp is not None:
             self._open_cp(cp)
+
+    def _sub(self, cp) -> None:
+        if self._sub_cb is not None:
+            self._sub_cb(cp)
 
     def _squish(self, cp, direction, fraction) -> None:
         if self._squish_cb is not None:
@@ -597,6 +647,7 @@ class GlyphEditorPanel(QWidget):
     """Right-hand panel: codepoint controls + stroke canvas + stroke list."""
 
     glyphChanged = Signal()
+    subcomponentMenuRequested = Signal(int)   # index into the glyph's subcomponent list
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -633,6 +684,7 @@ class GlyphEditorPanel(QWidget):
 
         self._stroke_list = QListWidget()
         self._stroke_list.setMinimumWidth(190)
+        self._stroke_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         col = QVBoxLayout()
         col.setContentsMargins(0, 0, 0, 0)
@@ -733,6 +785,9 @@ class GlyphEditorPanel(QWidget):
         b_w.clicked.connect(self._focus_back(lambda: self.canvas.nudge(-1, 0)))
         b_e.clicked.connect(self._focus_back(lambda: self.canvas.nudge(1, 0)))
         self._stroke_list.itemClicked.connect(lambda _item: self.canvas.setFocus())
+        self._stroke_list.customContextMenuRequested.connect(self._on_stroke_list_menu)
+        self.canvas.selectionChanged.connect(self._sync_stroke_list)
+        self.canvas.subcomponentMenuRequested.connect(self.subcomponentMenuRequested)
         self.canvas.glyphChanged.connect(self._on_canvas_changed)
         self.canvas.clearRequested.connect(self._on_clear)
         self.canvas.toggleWidthRequested.connect(self._toggle_width)
@@ -823,13 +878,26 @@ class GlyphEditorPanel(QWidget):
     def _on_clear(self) -> None:
         if self._glyph is None:
             return
-        if self._glyph.strokes and QMessageBox.question(
-            self, "Clear strokes", "Remove all strokes from this glyph?"
+        if (self._glyph.strokes or self._glyph.subcomponents) and QMessageBox.question(
+            self, "Clear strokes", "Remove all strokes and subcomponents from this glyph?"
         ) != QMessageBox.StandardButton.Yes:
             return
         self._glyph.strokes.clear()
+        self._glyph.subcomponents.clear()
         self.canvas.update()
         self.glyphChanged.emit()
+
+    def _on_stroke_list_menu(self, pos) -> None:
+        """Right-click in the stroke list: the subcomponent menu (strokes have no menu)."""
+        item = self._stroke_list.itemAt(pos)
+        if item is None:
+            return
+        row = self._stroke_list.row(item)
+        base = len(self._glyph.strokes) if self._glyph is not None else 0
+        if row < base:
+            return
+        self.canvas.select_stroke(row)
+        self.subcomponentMenuRequested.emit(row - base)
 
     def _sync_stroke_list(self) -> None:
         self._stroke_list.blockSignals(True)
@@ -844,7 +912,18 @@ class GlyphEditorPanel(QWidget):
                 if tip:
                     item.setToolTip(tip)
                 self._stroke_list.addItem(item)
-            if 0 <= self.canvas._selected_index < len(self._glyph.strokes):
+            # Subcomponents share the item numbering (they follow the strokes), and appear in the
+            # same list so they can be selected, opened and pulled like anything else.
+            base = len(self._glyph.strokes)
+            for j, sub in enumerate(self._glyph.subcomponents):
+                x0, y0, x1, y1 = sub.box
+                item = QListWidgetItem(
+                    f"{base + j}: Sub U+{sub.codepoint:04X} ({x0},{y0})→({x1},{y1})"
+                )
+                item.setToolTip(_subcomponent_tooltip(sub))
+                self._stroke_list.addItem(item)
+            total = base + len(self._glyph.subcomponents)
+            if 0 <= self.canvas._selected_index < total:
                 self._stroke_list.setCurrentRow(self.canvas._selected_index)
         self._stroke_list.blockSignals(False)
 
@@ -919,6 +998,7 @@ class MainWindow(QMainWindow):
         self._refdock = ReferenceFontsDock(self.reflib, self._on_refs_changed)
         self._refdock.set_copy_callback(self._copy_related_strokes)
         self._refdock.set_open_callback(self._open_codepoint)
+        self._refdock.set_subcomponent_callback(self._add_related_subcomponent)
         self._refdock.set_squish_callback(self._squish_related_strokes)
         self._refdock.set_native_ghost_callback(self._on_native_ghost)
         dock = QDockWidget("Reference Fonts", self)
@@ -928,7 +1008,9 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._grid.glyphChosen.connect(self._open_codepoint)
         self._editor.glyphChanged.connect(self._on_glyph_changed)
+        self._editor.subcomponentMenuRequested.connect(self._show_subcomponent_menu)
         self._editor.canvas.navRequested.connect(self._on_nav)
+        self._editor.canvas.glyph_provider = self.strokefont.get
         self._editor.set_reference_provider(self._reference_for_codepoint)
         self._editor.canvas.set_metrics(
             self.strokefont.baseline, self.strokefont.x_height, self.strokefont.cap_height
@@ -1049,6 +1131,50 @@ class MainWindow(QMainWindow):
                 [s.with_origin(copied_origin(cp, target_cp, s.origin)) for s in g.strokes])
         self._editor.canvas.setFocus()  # hand focus back to the canvas
 
+    def _add_related_subcomponent(self, cp: int) -> None:
+        """Instance the related glyph ``cp`` as a subcomponent of the current glyph.
+
+        This is the 'Sub' button's action: instead of copying the related glyph's strokes in (a
+        proper component), the current glyph references it. The default box is the referenced
+        glyph's own cell box, i.e. the identity placement. A reference that would close a
+        subcomponent cycle is refused here — a cycle can never be authored.
+        """
+        cur = self._editor.glyph()
+        if cur is None:
+            return
+        if self.strokefont.would_create_cycle(cur.codepoint, cp):
+            QMessageBox.warning(
+                self,
+                "Subcomponent cycle",
+                f"U+{cur.codepoint:04X} cannot instance U+{cp:04X}: that would create a "
+                "subcomponent cycle (it already leads back to this glyph).",
+            )
+            self._editor.canvas.setFocus()
+            return
+        src = self.strokefont.get(cp)
+        width = src.cell_width_grid if src is not None else 16
+        self._editor.canvas.add_subcomponent(
+            Subcomponent(cp, (0, 0), (width, GRID_H)))
+        self._editor.canvas.setFocus()  # hand focus back to the canvas
+
+    def _show_subcomponent_menu(self, index: int) -> None:
+        """The subcomponent context menu (shared by the stroke list and the canvas)."""
+        glyph = self._editor.glyph()
+        if glyph is None or not (0 <= index < len(glyph.subcomponents)):
+            return
+        sub = glyph.subcomponents[index]
+        self._editor.canvas._select_item(len(glyph.strokes) + index)
+        ch = chr(sub.codepoint) if 0 <= sub.codepoint <= 0x10FFFF else ""
+        menu = QMenu(self)
+        act_open = menu.addAction(f"Open U+{sub.codepoint:04X}" + (f"  {ch}" if ch.isprintable() else ""))
+        act_pull = menu.addAction("Pull contents into this glyph")
+        chosen = menu.exec(QCursor.pos())
+        if chosen is act_open:
+            self._open_codepoint(sub.codepoint)
+        elif chosen is act_pull:
+            self._editor.canvas.pull_subcomponent(index)
+            self._editor.canvas.setFocus()
+
     def _squish_related_strokes(self, cp: int, direction: str, fraction: float = 0.5) -> None:
         """Copy + squish the related glyph's strokes into a fraction of the current glyph's grid.
 
@@ -1075,6 +1201,7 @@ class MainWindow(QMainWindow):
         """Persist the current editor glyph into the stroke set (add or update)."""
         stored = self.strokefont.ensure(glyph.codepoint)
         stored.strokes[:] = glyph.strokes
+        stored.subcomponents[:] = glyph.subcomponents
         stored.width = glyph.width
         stored.combining = glyph.combining
         stored.name = glyph.name
@@ -1084,17 +1211,17 @@ class MainWindow(QMainWindow):
     def _on_glyph_changed(self) -> None:
         """Resolve the glyph's assigned/unassigned state.
 
-        A glyph is ASSIGNED iff it has strokes or is marked ``empty`` (an intentional blank).
-        Otherwise (no strokes, not marked empty) it is UNASSIGNED: it is dropped from the stroke
-        set (so 'Show unassigned' shows it again). Combining marks are treated exactly like any
-        other glyph — they are zero-ADVANCE, not zero-ink, so an authored mark has strokes and
-        an intentional blank mark must be marked Empty. The 'Empty' checkbox is the control for
-        keeping any blank glyph as assigned.
+        A glyph is ASSIGNED iff it has strokes, has subcomponents, or is marked ``empty`` (an
+        intentional blank). Otherwise (nothing drawn, not marked empty) it is UNASSIGNED: it is
+        dropped from the stroke set (so 'Show unassigned' shows it again). Combining marks are
+        treated exactly like any other glyph — they are zero-ADVANCE, not zero-ink, so an authored
+        mark has strokes and an intentional blank mark must be marked Empty. The 'Empty' checkbox
+        is the control for keeping any blank glyph as assigned.
         """
         glyph = self._editor.glyph()
         if glyph is None:
             return
-        assigned = bool(glyph.strokes) or glyph.empty
+        assigned = bool(glyph.strokes) or bool(glyph.subcomponents) or glyph.empty
         in_set = self.strokefont.has(glyph.codepoint)
 
         if assigned:
@@ -1104,8 +1231,10 @@ class MainWindow(QMainWindow):
                 # stored glyph and refresh the grid so it appears in the block.
                 self._pending_commit = None
                 self._editor.set_glyph(stored)
-                if stored.strokes:
-                    self._editor.canvas._selected_index = len(stored.strokes) - 1
+                if stored.strokes or stored.subcomponents:
+                    self._editor.canvas._selected_index = (
+                        len(stored.strokes) + len(stored.subcomponents) - 1
+                    )
                     self._editor._sync_stroke_list()
                     self._editor.canvas.update()
                 self._grid.refresh()
@@ -1158,6 +1287,7 @@ class MainWindow(QMainWindow):
             return
         self.strokefont.glyphs = loaded.glyphs
         self.strokefont.metadata = loaded.metadata
+        self.strokefont.broken_subcomponent_cycles = loaded.broken_subcomponent_cycles
         self._path = path
         self._dirty = False
         self._set_window_title()
@@ -1166,6 +1296,28 @@ class MainWindow(QMainWindow):
         )
         self._grid.refresh()
         self._open_codepoint(0x20)
+        self._warn_broken_cycles()
+
+    def _warn_broken_cycles(self) -> None:
+        """Report subcomponent cycles a load had to break (only malformed files have them)."""
+        broken = list(self.strokefont.broken_subcomponent_cycles)
+        if not broken:
+            return
+        for owner, target in broken:
+            if self.strokefont.has(owner):
+                self._dirty = True          # the data had to change to be loadable
+        self._set_window_title()
+        shown = "\n".join(f"  U+{o:04X} → U+{t:04X}" for o, t in broken[:12])
+        if len(broken) > 12:
+            shown += f"\n  … and {len(broken) - 12} more"
+        QMessageBox.warning(
+            self,
+            "Subcomponent cycles broken",
+            "This stroke set contained cyclical subcomponents, which cannot be rendered.\n"
+            f"{len(broken)} subcomponent reference(s) were removed to break the cycle(s):\n\n"
+            f"{shown}\n\nSubcomponent cycles are only possible in invalid data; save the file to "
+            "persist the repaired version.",
+        )
 
     def _save(self) -> None:
         if not self._path:

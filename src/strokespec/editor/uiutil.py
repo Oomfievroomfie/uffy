@@ -33,16 +33,20 @@ def ops_to_painterpath(ops: list) -> QPainterPath:
     return path
 
 
-def glyph_qpainterpath(glyph: Glyph, baseline: float = DEFAULT_BASELINE) -> QPainterPath:
+def glyph_qpainterpath(
+    glyph: Glyph, baseline: float = DEFAULT_BASELINE, resolve=None
+) -> QPainterPath:
     """Build one QPainterPath (in font units, baseline at y=0) for all strokes.
 
     Uses the same stroke geometry as the font compiler (each stroke swept by the pen, one
     contour per stroke, no boolean merge), so the preview and the compiled glyph can never
     differ. Non-zero winding so overlapping strokes union visually.
+
+    ``resolve`` is a ``codepoint -> Glyph`` callable so subcomponents can be instanced.
     """
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)
-    for contour in glyph_contours(glyph, r=PEN_RADIUS, baseline=baseline):
+    for contour in glyph_contours(glyph, r=PEN_RADIUS, baseline=baseline, resolve=resolve):
         path.addPath(ops_to_painterpath(contour))
     return path
 
@@ -64,13 +68,14 @@ def paint_stroke_glyph(
     color: QColor = QColor(20, 20, 20),
     baseline: float = DEFAULT_BASELINE,
     offset_y: float = 0.0,
+    resolve=None,
 ) -> None:
     """Paint a glyph's stroke outline aspect-fitted into ``rect`` (baseline-aware)."""
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
-    path = glyph_qpainterpath(glyph, baseline=baseline)
+    path = glyph_qpainterpath(glyph, baseline=baseline, resolve=resolve)
     if offset_y:
         rect = rect.translated(0, offset_y)
     width_units = glyph.cell_width_units

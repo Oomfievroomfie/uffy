@@ -9,10 +9,16 @@ box; descenders are drawn in the cells below it.
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QTransform
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF, QTransform
 from PySide6.QtWidgets import QWidget
 
-from ..geometry import stroke_outline, glyph_contours
+from ..geometry import (
+    flatten_cell_strokes,
+    glyph_contours,
+    stroke_outline,
+    subcomponent_contours,
+    subcomponent_xform,
+)
 from ..model import (
     PEN_CAP,
     PEN_RADIUS,
@@ -21,6 +27,7 @@ from ..model import (
     DEFAULT_X_HEIGHT,
     GRID_H,
     GRID_N,
+    GRID_W,
     SCALE,
     SHAPE_ARC,
     SHAPE_LINE,
@@ -28,6 +35,7 @@ from ..model import (
     Glyph,
     Point,
     Stroke,
+    Subcomponent,
     squish_strokes,
 )
 from .uiutil import ops_to_painterpath
@@ -38,13 +46,24 @@ class GlyphCanvas(QWidget):
 
     The tool mode (line / arc) and the arc bend are owned by the widget so the main window
     can drive them from its toolbar.
+
+    A glyph's subcomponents are drawn as their instanced outlines plus a dashed bounding box
+    with a handle on each corner; they are driven by those handles (their instanced strokes are
+    not editable here). The item order used for selection is the stroke list followed by the
+    subcomponent list.
     """
 
     glyphChanged = Signal()
     clearRequested = Signal()
+    selectionChanged = Signal()
     navRequested = Signal(str)  # 'up'/'down'/'left'/'right' in the codepoint list
     toggleWidthRequested = Signal()
     toggleCombiningRequested = Signal()
+    subcomponentMenuRequested = Signal(int)  # index into glyph.subcomponents
+
+    # half-size (px) of a subcomponent's corner handles, and their click tolerance
+    HANDLE_PX = 5.0
+    HANDLE_TOL = 7.0
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -60,14 +79,15 @@ class GlyphCanvas(QWidget):
         self._held_arrows: set = set()
         self._clip: list = []
         self._clip_src: int = 0  # codepoint the clipboard was copied from (provenance)
-        self._undo: list = []   # list of prior stroke-list snapshots (list[Stroke])
-        self._redo: list = []   # list of undone stroke-list snapshots
+        self._undo: list = []   # list of prior item-list snapshots (strokes, subcomponents)
+        self._redo: list = []   # list of undone item-list snapshots
         self.tool: str = SHAPE_LINE
         self.cap: str = PEN_CAP  # pen shape is a tool-level choice; not exposed
         self.baseline: float = DEFAULT_BASELINE
         self.x_height: float = DEFAULT_X_HEIGHT
         self.cap_height: float = DEFAULT_CAP_HEIGHT
         self.reference_provider = None
+        self.glyph_provider = None   # callable(codepoint) -> Glyph, to instance subcomponents
         self.show_reference = True
         self.wireframe: bool = False
 
@@ -85,27 +105,64 @@ class GlyphCanvas(QWidget):
         self._redo = []
         self.update()
 
+    # --- item indexing (strokes first, then subcomponents) --------------------
+    def stroke_count(self) -> int:
+        return len(self._glyph.strokes)
+
+    def subcomponent_count(self) -> int:
+        return len(self._glyph.subcomponents)
+
+    def selected_subcomponent_index(self) -> int:
+        """Index into ``glyph.subcomponents`` of the selected instance, or -1."""
+        i = self._selected_index - self.stroke_count()
+        if 0 <= i < self.subcomponent_count():
+            return i
+        return -1
+
     # --- undo / redo (current glyph only) ------------------------------------
+    @staticmethod
+    def _copy_strokes(strokes) -> list:
+        return [Stroke(s.p1, s.p2, s.shape, s.origin) for s in strokes]
+
+    @staticmethod
+    def _copy_subcomponents(subs) -> list:
+        return [Subcomponent(s.codepoint, s.start, s.end) for s in subs]
+
+    def _items_snapshot(self) -> tuple:
+        return (self._copy_strokes(self._glyph.strokes),
+                self._copy_subcomponents(self._glyph.subcomponents))
+
+    def _restore_items(self, snap: tuple) -> None:
+        strokes, subs = snap
+        self._glyph.strokes[:] = strokes
+        self._glyph.subcomponents[:] = subs
+
     def _snapshot(self) -> None:
-        """Record the current strokes before a mutation, so it can be undone."""
-        self._undo.append([Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes])
+        """Record the current items before a mutation, so it can be undone."""
+        self._undo.append(self._items_snapshot())
         self._redo.clear()
 
     def undo(self) -> None:
         if not self._undo:
             return
-        self._redo.append([Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes])
-        self._glyph.strokes[:] = self._undo.pop()
+        self._redo.append(self._items_snapshot())
+        self._restore_items(self._undo.pop())
+        self._clamp_selection()
         self.update()
         self.glyphChanged.emit()
 
     def redo(self) -> None:
         if not self._redo:
             return
-        self._undo.append([Stroke(s.p1, s.p2, s.shape, s.origin) for s in self._glyph.strokes])
-        self._glyph.strokes[:] = self._redo.pop()
+        self._undo.append(self._items_snapshot())
+        self._restore_items(self._redo.pop())
+        self._clamp_selection()
         self.update()
         self.glyphChanged.emit()
+
+    def _clamp_selection(self) -> None:
+        if self._selected_index >= self.stroke_count() + self.subcomponent_count():
+            self._selected_index = -1
 
     def event(self, ev) -> bool:
         # Qt handles Tab/Backtab for focus traversal at this level and sends Shift+Tab as
@@ -216,15 +273,24 @@ class GlyphCanvas(QWidget):
             return self._glyph.strokes[self._selected_index]
         return None
 
+    def selected_subcomponent(self) -> Subcomponent | None:
+        i = self.selected_subcomponent_index()
+        return self._glyph.subcomponents[i] if i >= 0 else None
+
     def delete_selected(self) -> bool:
-        if 0 <= self._selected_index < len(self._glyph.strokes):
+        i = self._selected_index
+        if 0 <= i < self.stroke_count():
             self._snapshot()
-            del self._glyph.strokes[self._selected_index]
-            self._selected_index = -1
-            self.update()
-            self.glyphChanged.emit()
-            return True
-        return False
+            del self._glyph.strokes[i]
+        elif 0 <= self.selected_subcomponent_index() < self.subcomponent_count():
+            self._snapshot()
+            del self._glyph.subcomponents[self.selected_subcomponent_index()]
+        else:
+            return False
+        self._selected_index = -1
+        self.update()
+        self.glyphChanged.emit()
+        return True
 
     def reverse_selected(self) -> None:
         """Reverse the selected stroke's points — this is what flips an arc's bend."""
@@ -246,14 +312,18 @@ class GlyphCanvas(QWidget):
             self.glyphChanged.emit()
 
     def nudge(self, dx: int, dy: int) -> None:
-        """Shift every point of every stroke by ``(dx, dy)`` grid cells (a 1-pixel nudge)."""
+        """Shift every point of every stroke, and every instance's box, by ``(dx, dy)`` cells."""
         strokes = self._glyph.strokes
-        if not strokes:
+        subs = self._glyph.subcomponents
+        if not strokes and not subs:
             return
         self._snapshot()
         for i, s in enumerate(strokes):
             strokes[i] = Stroke(Point(s.p1.x + dx, s.p1.y + dy),
                                 Point(s.p2.x + dx, s.p2.y + dy), s.shape, s.origin)
+        for i, sub in enumerate(subs):
+            subs[i] = sub.with_box((sub.start[0] + dx, sub.start[1] + dy),
+                                   (sub.end[0] + dx, sub.end[1] + dy))
         self.update()
         self.glyphChanged.emit()
 
@@ -333,62 +403,187 @@ class GlyphCanvas(QWidget):
         self.update()
         self.glyphChanged.emit()
 
+    def add_subcomponent(self, sub: Subcomponent) -> None:
+        """Append a subcomponent instance to the current glyph (one undo step)."""
+        self._snapshot()
+        self._glyph.add_subcomponent(sub)
+        self._select_item(self.stroke_count() + self.subcomponent_count() - 1)
+        self.glyphChanged.emit()
+
+    def pull_subcomponent(self, index: int) -> bool:
+        """Turn instance ``index`` into editable strokes of this glyph, killing the instance.
+
+        The instance is deep-flattened through the same transform pipeline the renderer uses (so
+        the result is the instance's own geometry, rounded to the integer grid), and its nested
+        instances are flattened with it — that is what makes the contents editable here.
+        """
+        if not (0 <= index < self.subcomponent_count()):
+            return False
+        sub = self._glyph.subcomponents[index]
+        src = self.glyph_provider(sub.codepoint) if self.glyph_provider is not None else None
+        cells = []
+        if src is not None:
+            x = subcomponent_xform(sub, src)
+            cells = flatten_cell_strokes(src, self.glyph_provider, x, {int(src.codepoint)})
+        self._snapshot()
+        del self._glyph.subcomponents[index]
+        for c1, c2, shape in cells:
+            self._glyph.add_stroke(Stroke(
+                Point(int(round(c1[0] - 0.5)), int(round(c1[1] - 0.5))),
+                Point(int(round(c2[0] - 0.5)), int(round(c2[1] - 0.5))),
+                shape,
+            ))
+        self._selected_index = -1
+        self.update()
+        self.glyphChanged.emit()
+        return True
+
     def flip_horizontal(self) -> None:
-        """Mirror every stroke left-right across the glyph's cell centre.
+        """Mirror every stroke, and every instance's box, left-right across the glyph's centre.
 
         Only an arc's point order is swapped: the mirror flips the handedness of the geometry,
         and an arc's bulge comes from the point ordering, so without the swap arcs would re-bow
         in the *opposite* direction. A straight line has no bend, so its points are mirrored but
-        NOT reversed.
+        NOT reversed. An instance's box is mirrored in cell coordinates (``x -> cols - x``),
+        which is the same physical mirror; a negatively sized box stays negatively sized.
         """
-        m = self._cols() - 1
+        cols = self._cols()
+        m = cols - 1
         strokes = self._glyph.strokes
-        if not strokes:
+        subs = self._glyph.subcomponents
+        if not strokes and not subs:
             return
         self._snapshot()
         for i, s in enumerate(strokes):
             p1 = Point(m - s.p1.x, s.p1.y)
             p2 = Point(m - s.p2.x, s.p2.y)
             strokes[i] = Stroke(p2, p1, s.shape, s.origin) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape, s.origin)
+        for i, sub in enumerate(subs):
+            subs[i] = sub.with_box((cols - sub.start[0], sub.start[1]),
+                                   (cols - sub.end[0], sub.end[1]))
         self.update()
         self.glyphChanged.emit()
 
     def flip_vertical(self) -> None:
-        """Mirror every stroke top-bottom across the glyph's cell centre.
+        """Mirror every stroke, and every instance's box, top-bottom across the glyph's centre.
 
         Same handedness caveat as :meth:`flip_horizontal`: only an arc's points are swapped so
         it keeps bending the right way; a straight line's points are mirrored but not reversed.
         """
         m = GRID_H - 1
         strokes = self._glyph.strokes
-        if not strokes:
+        subs = self._glyph.subcomponents
+        if not strokes and not subs:
             return
         self._snapshot()
         for i, s in enumerate(strokes):
             p1 = Point(s.p1.x, m - s.p1.y)
             p2 = Point(s.p2.x, m - s.p2.y)
             strokes[i] = Stroke(p2, p1, s.shape, s.origin) if s.shape == SHAPE_ARC else Stroke(p1, p2, s.shape, s.origin)
+        for i, sub in enumerate(subs):
+            subs[i] = sub.with_box((sub.start[0], GRID_H - sub.start[1]),
+                                   (sub.end[0], GRID_H - sub.end[1]))
         self.update()
         self.glyphChanged.emit()
 
     def rotate_90_cw(self) -> None:
-        """Rotate every stroke 90 degrees clockwise, in 16x16 space.
+        """Rotate every stroke, and every instance's box, 90 degrees clockwise, in 16x16 space.
 
         The rotation is carried out on the 16x16 lattice even when the glyph is 8x16 (a narrow
         glyph becomes wide and lands somewhere in the 16x16 box; the user nudges it into place
-        afterwards). Rotation is orientation-preserving, so the point order is NOT swapped.
+        afterwards). Rotation is orientation-preserving, so the point order is NOT swapped. In
+        cell coordinates the same rotation is ``(x, y) -> (y, 16 - x)``.
         """
         n = 16
         strokes = self._glyph.strokes
-        if not strokes:
+        subs = self._glyph.subcomponents
+        if not strokes and not subs:
             return
         self._snapshot()
         for i, s in enumerate(strokes):
             p1 = Point(s.p1.y, n - 1 - s.p1.x)
             p2 = Point(s.p2.y, n - 1 - s.p2.x)
             strokes[i] = Stroke(p1, p2, s.shape, s.origin)
+        for i, sub in enumerate(subs):
+            subs[i] = sub.with_box((sub.start[1], n - sub.start[0]),
+                                   (sub.end[1], n - sub.end[0]))
         self.update()
         self.glyphChanged.emit()
+
+    # --- subcomponent boxes --------------------------------------------------
+    SUB_PEN = QColor(150, 60, 190)          # not selected
+    SUB_PEN_SEL = QColor(0, 110, 220)       # selected
+
+    @staticmethod
+    def subcomponent_corners(sub: Subcomponent) -> list:
+        """The instance's four box corners (cell coords), starting at its ``start`` corner."""
+        x0, y0, x1, y1 = sub.box
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+    def _subcomponent_scene_corners(self, sub: Subcomponent) -> list:
+        return [self._cell_to_scene(x, y) for x, y in self.subcomponent_corners(sub)]
+
+    def _paint_subcomponent_box(self, p: QPainter, sub: Subcomponent, selected: bool) -> None:
+        """A dashed bounding polygon plus a square handle on each corner (scene coords)."""
+        corners = self._subcomponent_scene_corners(sub)
+        color = self.SUB_PEN_SEL if selected else self.SUB_PEN
+        p.save()
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(color, 2.0 if selected else 1.5, Qt.PenStyle.DashLine))
+        p.drawPolygon(QPolygonF(corners))
+        h = self.HANDLE_PX
+        p.setPen(QPen(color, 1.0))
+        p.setBrush(QBrush(QColor(255, 255, 255)))
+        for c in corners:
+            p.drawRect(QRectF(c.x() - h, c.y() - h, 2 * h, 2 * h))
+        p.restore()
+
+    def _subcomponent_handle_at(self, pos: QPointF):
+        """``(subcomponent index, corner index)`` whose handle is under ``pos``, else ``None``."""
+        for i in range(len(self._glyph.subcomponents) - 1, -1, -1):
+            for k, c in enumerate(self._subcomponent_scene_corners(self._glyph.subcomponents[i])):
+                if abs(c.x() - pos.x()) <= self.HANDLE_TOL and abs(c.y() - pos.y()) <= self.HANDLE_TOL:
+                    return (i, k)
+        return None
+
+    def _subcomponent_at(self, pos: QPointF):
+        """Index of the instance whose box (interior or handle) is under ``pos``, else ``None``."""
+        handle = self._subcomponent_handle_at(pos)
+        if handle is not None:
+            return handle[0]
+        for i in range(len(self._glyph.subcomponents) - 1, -1, -1):
+            sc = self._subcomponent_scene_corners(self._glyph.subcomponents[i])
+            xs = [c.x() for c in sc]
+            ys = [c.y() for c in sc]
+            if min(xs) <= pos.x() <= max(xs) and min(ys) <= pos.y() <= max(ys):
+                return i
+        return None
+
+    def _move_subcomponent_corner(self, i: int, k: int, pos: QPointF) -> None:
+        """Drag corner ``k`` of instance ``i`` to ``pos`` (rounded to the grid, clamped).
+
+        A corner may be dragged past the opposite one, which makes the box negatively sized and
+        therefore mirrors the instance.
+        """
+        subs = self._glyph.subcomponents
+        if not (0 <= i < len(subs)):
+            return
+        sub = subs[i]
+        cx, cy = self._scene_to_cell(pos)
+        nx = max(0, min(GRID_W, int(round(cx))))
+        ny = max(0, min(GRID_H, int(round(cy))))
+        sx, sy = sub.start
+        ex, ey = sub.end
+        if k in (0, 3):
+            sx = nx
+        else:
+            ex = nx
+        if k in (0, 1):
+            sy = ny
+        else:
+            ey = ny
+        subs[i] = Subcomponent(sub.codepoint, (sx, sy), (ex, ey))
+        self.update()
 
     # --- geometry ------------------------------------------------------------
     def _cols(self) -> int:
@@ -427,6 +622,18 @@ class GlyphCanvas(QWidget):
         gx = round((pos.x() - r.left()) / c - 0.5)
         gy = round(GRID_H - (pos.y() - r.top()) / c - 0.5)
         return Point(gx, gy)
+
+    def _cell_to_scene(self, x: float, y: float) -> QPointF:
+        """Cell coordinates (integer values are cell CORNERS) -> scene point."""
+        r = self._grid_rect()
+        c = self._cell()
+        return QPointF(r.left() + x * c, r.top() + (GRID_H - y) * c)
+
+    def _scene_to_cell(self, pos: QPointF):
+        """Scene point -> cell coordinates (the inverse of :meth:`_cell_to_scene`)."""
+        r = self._grid_rect()
+        c = self._cell()
+        return ((pos.x() - r.left()) / c, GRID_H - (pos.y() - r.top()) / c)
 
     def _apply_grid_transform(self, p: QPainter, rect: QRectF) -> None:
         c = rect.width() / self._cols()
@@ -517,12 +724,14 @@ class GlyphCanvas(QWidget):
 
         # stroke fills — real-time outline from our own fast geometry (pure Python),
         # drawn as ONE non-zero-winding path so inner counters punch their holes. We do NOT clip
-        # to the grid rect: out-of-bounds strokes stay visible (in red).
+        # to the grid rect: out-of-bounds strokes stay visible (in red). Subcomponent instances
+        # contribute their transformed strokes here, exactly as the compiler expands them.
         p.save()
         self._apply_grid_transform(p, rect)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(QColor(30, 30, 30)))
-        p.drawPath(self._path_from(glyph_contours(self._glyph, cap=PEN_CAP, baseline=self.baseline)))
+        p.drawPath(self._path_from(glyph_contours(
+            self._glyph, cap=PEN_CAP, baseline=self.baseline, resolve=self.glyph_provider)))
         oob_strokes = [s for s in self._glyph.strokes
                        if not (self._in_bounds(s.p1) and self._in_bounds(s.p2))]
         sel = self.selected_stroke()
@@ -533,6 +742,11 @@ class GlyphCanvas(QWidget):
             p.setBrush(QBrush(color))
             contours = [stroke_outline(st, cap=PEN_CAP, baseline=self.baseline) for st in sub_strokes]
             p.drawPath(self._path_from(contours))
+        sel_sub = self.selected_subcomponent()
+        if sel_sub is not None:
+            p.setBrush(QBrush(QColor(0, 110, 220)))
+            p.drawPath(self._path_from(subcomponent_contours(
+                sel_sub, self.glyph_provider, cap=PEN_CAP, baseline=self.baseline)))
         p.restore()
 
         # if any stroke is out of bounds, ring the working AABB in red so it is unmistakable
@@ -550,6 +764,12 @@ class GlyphCanvas(QWidget):
             for gy in range(GRID_H):
                 q = self._grid_to_scene(gx, gy)
                 p.drawEllipse(q, dot, dot)
+
+        # subcomponents: a distinctive dashed bounding box per instance, with a handle on each
+        # corner — the instances are driven by those handles (their contents are not editable).
+        sel_i = self.selected_subcomponent_index()
+        for i, sub in enumerate(self._glyph.subcomponents):
+            self._paint_subcomponent_box(p, sub, selected=(i == sel_i))
 
         # pending first point + preview stroke
         if self._pending is not None:
@@ -630,7 +850,8 @@ class GlyphCanvas(QWidget):
             p.drawEllipse(b, 2.0, 2.0)
 
     # --- interaction ---------------------------------------------------------
-    # _drag is None, ("endpoint", idx, ep) to move an endpoint, or ("new",) to draw a stroke.
+    # _drag is None, ("endpoint", idx, ep) to move an endpoint, ("subcorner", i, k) to move a
+    # subcomponent box corner, or ("new",) to draw a stroke.
     def mouseMoveEvent(self, event) -> None:
         pos = event.position()
         if self._drag is not None:
@@ -645,6 +866,8 @@ class GlyphCanvas(QWidget):
                                     else Stroke(s.p1, gp, s.shape, s.origin))
                     self.update()  # repaint the canvas only; the grid refresh is
                     # deferred to mouseRelease so it doesn't run on every drag step.
+            elif kind == "subcorner":
+                self._move_subcomponent_corner(self._drag[1], self._drag[2], pos)
             else:  # "new": preview the stroke while dragging
                 self._hover = self._scene_to_grid(pos)
                 self.update()
@@ -652,23 +875,44 @@ class GlyphCanvas(QWidget):
             self._hover = self._scene_to_grid(pos)
             self.update()
 
+    def _select_item(self, index: int) -> None:
+        if self._selected_index != index:
+            self._selected_index = index
+            self.selectionChanged.emit()
+        self.update()
+
     def mousePressEvent(self, event) -> None:
+        pos = event.position()
+        if event.button() == Qt.MouseButton.RightButton:
+            # Right-clicking an instance selects it and asks the main window for its menu.
+            i = self._subcomponent_at(pos)
+            if i is not None:
+                self._select_item(self.stroke_count() + i)
+                self.subcomponentMenuRequested.emit(i)
+            return
         if event.button() != Qt.MouseButton.LeftButton:
             return
-        pos = event.position()
         gp = self._scene_to_grid(pos)
         shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
         if not shift:
+            handle = self._subcomponent_handle_at(pos)
+            if handle is not None:
+                i, k = handle
+                self._snapshot()  # one undo step covers the whole drag
+                self._drag = ("subcorner", i, k)
+                self._pending = None
+                self._hover = None
+                self._select_item(self.stroke_count() + i)
+                return
             endpoint = self._find_endpoint(gp)
             if endpoint is not None:
                 idx, ep = endpoint
                 self._snapshot()  # one undo step covers the whole drag
                 self._drag = ("endpoint", idx, ep)
-                self._selected_index = idx
+                self._select_item(idx)
                 self._pending = None  # selecting/dragging a node cancels any half-made (click1) stroke
                 self._hover = None
-                self.update()
                 return
 
         # Blank space (or Shift): begin a new stroke. The pending start point is set or,
@@ -686,7 +930,7 @@ class GlyphCanvas(QWidget):
         if event.button() != Qt.MouseButton.LeftButton or self._drag is None:
             return
         kind = self._drag[0]
-        if kind == "endpoint":
+        if kind in ("endpoint", "subcorner"):
             self._drag = None
             self.update()
             self.glyphChanged.emit()  # commit the drag once, on release

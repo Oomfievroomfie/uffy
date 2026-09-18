@@ -43,7 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     # Keep only glyphs that actually exist (codepoints() may include empty entries).
     authored = {cp: g for cp, g in authored.items() if g is not None}
     authored_set = set(authored)
-    with_strokes = sum(1 for g in authored.values() if g.strokes)
+    # "with strokes" = any glyph that actually draws something: its own strokes, or the
+    # subcomponents it instances (an instance-only glyph is authored, not an intentional blank).
+    with_strokes = sum(1 for g in authored.values() if not g.is_empty)
 
     blocks = block_ranges()
     tot_alloc = tot_cov = 0

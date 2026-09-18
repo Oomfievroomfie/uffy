@@ -69,7 +69,7 @@ def _preview(args) -> int:
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     paint_stroke_glyph(
         painter, glyph, QRectF(4, 4, size - 8, size - 8),
-        color=QColor(20, 20, 20), baseline=sf.baseline,
+        color=QColor(20, 20, 20), baseline=sf.baseline, resolve=sf.get,
     )
     painter.end()
     img.save(args.output)

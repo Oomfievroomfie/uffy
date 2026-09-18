@@ -207,6 +207,72 @@ class Stroke:
                    StrokeOrigin.from_dict(o) if o else None)
 
 
+def _clamp_box(x, y) -> Tuple[int, int]:
+    """Clamp a bounding-box corner into the cell lattice (``0..GRID_W`` x ``0..GRID_H``).
+
+    Corner coordinates are cell corners, so the maximum is the number of cells, not one less.
+    """
+    return (max(0, min(GRID_W, int(x))), max(0, min(GRID_H, int(y))))
+
+
+@dataclass(frozen=True)
+class Subcomponent:
+    """A reference to another codepoint, placed in this glyph by a bounding box.
+
+    ``start``/``end`` are the two opposite corners of the instance's bounding box, in **cell**
+    coordinates of the *containing* glyph's grid (``0..GRID_W`` across, ``0..GRID_H`` up — cell
+    coordinates, not cell-centre point indices, so the full cell box is ``(0,0)-(16,16)``).
+
+    The box may be **negatively sized**: if ``end.x < start.x`` the instance is mirrored
+    horizontally, and likewise vertically for ``y``. It is the *destination* box: the referenced
+    glyph's own cell box — ``(0,0)`` to ``(its width, GRID_H)`` — is mapped onto it, so a
+    full-cell box of the same width is the identity placement.
+
+    That transform is applied to the referenced glyph's **strokes**, and only then are they
+    expanded into outlines (``geometry``); the pen therefore keeps its own width instead of being
+    scaled with the instance.
+    """
+    codepoint: int
+    start: Tuple[int, int] = (0, 0)
+    end: Tuple[int, int] = (GRID_W, GRID_H)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "codepoint", int(self.codepoint))
+        object.__setattr__(self, "start", _clamp_box(*self.start))
+        object.__setattr__(self, "end", _clamp_box(*self.end))
+
+    @property
+    def flipped_x(self) -> bool:
+        return self.end[0] < self.start[0]
+
+    @property
+    def flipped_y(self) -> bool:
+        return self.end[1] < self.start[1]
+
+    @property
+    def box(self) -> Tuple[int, int, int, int]:
+        """``(x0, y0, x1, y1)`` as stored (sizes may be negative)."""
+        return (self.start[0], self.start[1], self.end[0], self.end[1])
+
+    def with_box(self, start, end) -> "Subcomponent":
+        return Subcomponent(self.codepoint, (int(start[0]), int(start[1])),
+                            (int(end[0]), int(end[1])))
+
+    def to_dict(self) -> dict:
+        return {
+            "codepoint": self.codepoint,
+            "start": [self.start[0], self.start[1]],
+            "end": [self.end[0], self.end[1]],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Subcomponent":
+        start = d.get("start", (0, 0))
+        end = d.get("end", (GRID_W, GRID_H))
+        return cls(int(d["codepoint"]), (int(start[0]), int(start[1])),
+                   (int(end[0]), int(end[1])))
+
+
 @dataclass
 class Glyph:
     """A glyph, implicitly mapped to a Unicode codepoint.
@@ -217,9 +283,14 @@ class Glyph:
     When ``width``/``combining`` are not given explicitly they are **derived from
     Unicode**: full-width (East Asian Width ``W``/``F``) characters get a 16-cell width,
     and combining marks (general category ``Mn``/``Mc``/``Me``) start as combining.
+
+    ``subcomponents`` are instances of other codepoints' glyphs (see :class:`Subcomponent`).
+    They are kept in a separate list from ``strokes``; their *content* is not editable, only
+    their box transform.
     """
     codepoint: int
     strokes: List[Stroke] = field(default_factory=list)
+    subcomponents: List[Subcomponent] = field(default_factory=list)
     width: Optional[int] = None        # None -> derive from Unicode East Asian Width
     combining: Optional[bool] = None   # None -> derive from Unicode mark category
     name: Optional[str] = None
@@ -253,6 +324,14 @@ class Glyph:
     def add_stroke(self, stroke: Stroke) -> None:
         self.strokes.append(stroke)
 
+    def add_subcomponent(self, sub: Subcomponent) -> None:
+        self.subcomponents.append(sub)
+
+    @property
+    def is_empty(self) -> bool:
+        """True when the glyph carries no ink of its own and no instances."""
+        return not self.strokes and not self.subcomponents
+
     def to_dict(self) -> dict:
         d: dict = {
             "codepoint": self.codepoint,
@@ -260,6 +339,8 @@ class Glyph:
             "combining": self.combining,
             "strokes": [s.to_dict() for s in self.strokes],
         }
+        if self.subcomponents:
+            d["subcomponents"] = [s.to_dict() for s in self.subcomponents]
         if self.name:
             d["name"] = self.name
         if self.empty:
@@ -275,6 +356,8 @@ class Glyph:
         return cls(
             codepoint=int(d["codepoint"]),
             strokes=[Stroke.from_dict(s) for s in d.get("strokes", [])],
+            subcomponents=[Subcomponent.from_dict(s)
+                           for s in d.get("subcomponents", [])],
             width=(int(width) if width is not None else None),
             combining=(bool(combining) if combining is not None else None),
             name=d.get("name"),
@@ -342,6 +425,9 @@ class StrokeFont:
             "x_height": DEFAULT_X_HEIGHT,
             "cap_height": DEFAULT_CAP_HEIGHT,
         }
+        # Subcomponents that a load had to drop because they closed a cycle (invalid data).
+        # Never persisted; the editor reports it after loading.
+        self.broken_subcomponent_cycles: List[Tuple[int, int]] = []
 
     @property
     def baseline(self) -> float:
@@ -395,6 +481,77 @@ class StrokeFont:
     def codepoints(self) -> List[int]:
         return sorted(self.glyphs)
 
+    # --- subcomponent graph -----------------------------------------------------
+    def references(self, codepoint: int) -> List[int]:
+        """The codepoints ``codepoint``'s glyph references directly, in instance order."""
+        g = self.glyphs.get(int(codepoint))
+        return [s.codepoint for s in g.subcomponents] if g is not None else []
+
+    def reaches(self, start: int, target: int) -> bool:
+        """True if ``target`` is reachable from ``start`` by following subcomponents.
+
+        Safe on cyclic data: every codepoint is visited once.
+        """
+        start, target = int(start), int(target)
+        seen = {start}
+        stack = [start]
+        while stack:
+            cp = stack.pop()
+            for nxt in self.references(cp):
+                if nxt == target:
+                    return True
+                if nxt not in seen:
+                    seen.add(nxt)
+                    stack.append(nxt)
+        return False
+
+    def would_create_cycle(self, owner: int, target: int) -> bool:
+        """True if adding ``owner -> target`` would make a subcomponent cycle.
+
+        A self-reference counts, as does an indirect path back from ``target`` to ``owner``.
+        """
+        owner, target = int(owner), int(target)
+        if owner == target:
+            return True
+        return self.reaches(target, owner)
+
+    def break_subcomponent_cycles(self) -> List[Tuple[int, int]]:
+        """Drop the subcomponents that close a cycle (invalid data). Returns what was dropped.
+
+        Codepoints are walked in sorted order and each glyph's subcomponents in order, keeping an
+        instance only when it does not reach back to its own glyph through instances that were
+        already kept. Where a cycle is broken is therefore arbitrary but deterministic — any
+        member of the cycle is a valid place to break it.
+        """
+        broken: List[Tuple[int, int]] = []
+        # Edges kept so far, as a plain adjacency map (the glyphs' own lists are rewritten).
+        kept: Dict[int, List[int]] = {cp: [] for cp in self.glyphs}
+
+        def reaches(cp: int, target: int) -> bool:
+            seen = {cp}
+            stack = [cp]
+            while stack:
+                cur = stack.pop()
+                for nxt in kept.get(cur, ()):
+                    if nxt == target:
+                        return True
+                    if nxt not in seen:
+                        seen.add(nxt)
+                        stack.append(nxt)
+            return False
+
+        for cp in sorted(self.glyphs):
+            g = self.glyphs[cp]
+            survivors: List[Subcomponent] = []
+            for sub in g.subcomponents:
+                if sub.codepoint == cp or reaches(sub.codepoint, cp):
+                    broken.append((cp, sub.codepoint))
+                    continue
+                survivors.append(sub)
+                kept.setdefault(cp, []).append(sub.codepoint)
+            g.subcomponents = survivors
+        return broken
+
     # --- Unicode block grouping ------------------------------------------------
     def by_block(self) -> Dict[str, List[int]]:
         """Group codepoints by Unicode block name (sorted blocks, sorted codepoints)."""
@@ -420,6 +577,9 @@ class StrokeFont:
         for gd in d.get("glyphs", []):
             g = Glyph.from_dict(gd)
             sf.glyphs[g.codepoint] = g
+        # A file must never carry a subcomponent cycle (the editor cannot author one): if it
+        # does, the data is invalid, so break the cycles and record what was dropped.
+        sf.broken_subcomponent_cycles = sf.break_subcomponent_cycles()
         return sf
 
     def save(self, path: str) -> None:
