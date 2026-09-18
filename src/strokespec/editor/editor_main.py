@@ -41,6 +41,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     path = argv[0] if argv and not argv[0].startswith("-") else None
     window = MainWindow(path)
     window.show()
+    # Qt searches the installed font collection the first time it resolves a codepoint nothing in
+    # the chain covers (0.7 s once per process); do that after the window is up, so no codepoint
+    # list page pays for it when it is opened.
+    from PySide6.QtCore import QTimer
+    from .fontfallback import warm_native_text_fallback
+    QTimer.singleShot(500, warm_native_text_fallback)
     return app.exec()
 
 

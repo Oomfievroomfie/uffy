@@ -209,6 +209,23 @@ def native_text_unmapped(cp: int, chain: list[str] | None = None) -> bool:
     return native_text_resolution(cp) is None
 
 
+# One codepoint per region Qt resolves through a different part of its fallback machinery.
+WARMUP_CODEPOINTS = (0x0378, 0x1FA74, 0x30000, 0x1D800, 0x2A700, 0x10A00, 0x1682F, 0x1E900)
+
+
+def warm_native_text_fallback() -> None:
+    """Ask Qt about a spread of codepoints once, so the first page open does not pay for it.
+
+    The first time Qt resolves a codepoint that no family in the chain covers, it searches the
+    installed font collection: measured 614 ms for U+0378, 72 ms for U+30000, a few ms for each
+    further region, 730 ms in total, once per process. Left alone that lands inside the first paint
+    that shows such a cell — opening Greek and Coptic measured 767 ms, of which 735 ms was the
+    badge for U+0378 alone — while every later open of every block measured 25-45 ms.
+    """
+    for cp in WARMUP_CODEPOINTS:
+        native_text_resolution(cp)
+
+
 def _native_text_families(cp: int) -> list[str]:
     cps = _load_family_cps()
     app = QApplication.instance()
