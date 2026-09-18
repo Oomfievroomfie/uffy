@@ -167,6 +167,36 @@ def native_text_families(cp: int) -> list[str]:
         return _native_text_families(cp)
 
 
+# Codepoints Qt resolves to nothing: the chain has no glyph AND Qt's own platform fallback finds
+# none either (see native_text_unmapped). Session-global; a codepoint is resolved once, not once
+# per render.
+_unmapped: set[int] = set()
+
+
+def native_text_unmapped(cp: int, chain: list[str] | None = None) -> bool:
+    """True when nothing Qt could draw this codepoint with: not the chain, not its fallback.
+
+    There is no cheaper question to ask — asking *is* the resolution — so the answer is recorded,
+    because the failed resolution is the expensive one: the platform searches the installed font
+    collection for a character nothing has, which costs 15 ms to 850 ms and which Qt does not keep
+    (measured: gone again after ~1200 draws, and it is re-paid inside every paint that asks).
+
+    Asked through ``QFontMetricsF.inFontUcs4`` on the codepoint's own chain, which is the only
+    query that includes Qt's platform fallback: a first-font-only query (``QRawFont``) reports
+    False for Thai, emoji and CJK, which the platform chain in fact draws.
+    """
+    cp = int(cp)
+    if cp in _unmapped:
+        return True
+    from PySide6.QtGui import QFont, QFontMetricsF
+    f = QFont()
+    f.setFamilies(chain if chain is not None else native_text_families(cp))
+    if QFontMetricsF(f).inFontUcs4(cp):
+        return False
+    _unmapped.add(cp)
+    return True
+
+
 def _native_text_families(cp: int) -> list[str]:
     cps = _load_family_cps()
     app = QApplication.instance()

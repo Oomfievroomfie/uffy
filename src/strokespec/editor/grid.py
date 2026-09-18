@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from ..model import StrokeFont, Glyph, GRID_H
 from ..refbrowser import ReferenceLibrary
-from .fontfallback import native_text_families
+from .fontfallback import native_text_families, native_text_unmapped
 from .perflog import count, note, set_context, span
 from .uiutil import pil_to_qpixmap, paint_stroke_glyph
 
@@ -70,10 +70,14 @@ def _badge_scale() -> float:
 def render_badge_pixmap(cp: int) -> Optional[QPixmap]:
     """The cell's native-text badge (white rounded box + the character), as a bitmap.
 
-    Rendering it per paint meant building a ``QFont`` carrying a whole family *chain*, which the
-    platform then has to resolve for every cell of every repaint — and for a codepoint no
-    installed font covers, that resolution means the platform's fallback search, repeated on
-    every frame. The badge is static, so it is rasterised once, exactly like the preview.
+    Drawn with the codepoint's real family chain (see native_text_families). The expensive case is
+    a codepoint *no* family in that chain covers — 98 of the 114 in Symbols and Pictographs
+    Extended-A: Qt then asks the platform for a fallback engine for that character, the platform
+    searches the whole installed font collection and finds nothing, and the answer is re-paid
+    whenever Qt has dropped it (15-18 ms, measured again after a ~1200-draw sweep), against
+    0.01-0.2 ms when a listed family has the glyph. Rasterising once per codepoint keeps that off
+    the paint path, so the cache must outlive a block switch (a badge depends only on the
+    codepoint).
     """
     if not _is_printable(cp):
         return None
@@ -89,7 +93,16 @@ def render_badge_pixmap(cp: int) -> Optional[QPixmap]:
     painter.setBrush(BADGE_BG)
     painter.drawRoundedRect(rect, 4.0, 4.0)
     f = QFont()
-    f.setFamilies(native_text_families(cp))
+    chain = native_text_families(cp)
+    if native_text_unmapped(cp, chain):
+        # Qt has already resolved this codepoint to nothing — neither the chain nor its platform
+        # fallback has it (see fontfallback.native_text_unmapped). Asking again means the platform
+        # searches the whole font collection for it again: 15-850 ms, inside the paint, for the
+        # same notdef box. With nothing left to merge in, draw the notdef directly.
+        f.setFamilies(chain[:1])
+        f.setStyleStrategy(QFont.StyleStrategy.NoFontMerging)
+    else:
+        f.setFamilies(chain)
     f.setPixelSize(13)
     painter.setFont(f)
     painter.setPen(BADGE_FG)
@@ -136,10 +149,12 @@ class GlyphGridModel(QAbstractListModel):
         self._badge_cache: Dict[int, Optional[QPixmap]] = {}
 
     def set_codepoints(self, cps: List[int]) -> None:
+        """Show a different block's codepoints. The caches are keyed by codepoint and depend on
+        nothing about the block, so they survive the switch: re-building them here made every
+        block change re-pay every badge (including Qt's unresolved-codepoint searches) and every
+        reference preview."""
         self.beginResetModel()
         self._cps = list(cps)
-        self._pixmap_cache.clear()
-        self._badge_cache.clear()
         self.endResetModel()
 
     def codepoints(self) -> List[int]:
