@@ -644,6 +644,37 @@ def snap_cell_point(p: Pt) -> Pt:
     return (round(p[0] - 0.5) + 0.5, round(p[1] - 0.5) + 0.5)
 
 
+def own_cell_strokes(glyph: Glyph, xform: XForm = IDENTITY_XFORM) -> List[CellStroke]:
+    """The glyph's **own** strokes (never its instances) transformed into cell space.
+
+    The transform is applied to the endpoints, a mirroring transform swaps each stroke's points
+    (so an arc keeps bending the right way once its control point is recomputed), and every
+    endpoint is snapped to the nearest cell centre — the only lattice the stroke geometry is
+    defined on.
+    """
+    mirror = xform_mirrors(xform)
+    out: List[CellStroke] = []
+    for s in glyph.strokes:
+        p1 = xform_apply(xform, (s.p1.x + 0.5, s.p1.y + 0.5))
+        p2 = xform_apply(xform, (s.p2.x + 0.5, s.p2.y + 0.5))
+        if mirror:
+            p1, p2 = p2, p1
+        out.append((snap_cell_point(p1), snap_cell_point(p2), s.shape))
+    return out
+
+
+def transform_subcomponent(sub: Subcomponent, xform: XForm) -> Subcomponent:
+    """The instance ``sub`` re-expressed in a space that ``xform`` maps into.
+
+    Its box is a pair of cell *corners*, so it is mapped corner by corner and rounded back onto
+    the integer corner lattice (all the model stores).
+    """
+    a = xform_apply(xform, (sub.start[0], sub.start[1]))
+    b = xform_apply(xform, (sub.end[0], sub.end[1]))
+    return Subcomponent(sub.codepoint, (round(a[0]), round(a[1])),
+                        (round(b[0]), round(b[1])))
+
+
 def flatten_cell_strokes(
     glyph: Glyph,
     resolve=None,
@@ -666,14 +697,7 @@ def flatten_cell_strokes(
     """
     if _seen is None:
         _seen = {int(glyph.codepoint)}
-    mirror = xform_mirrors(xform)
-    out: List[CellStroke] = []
-    for s in glyph.strokes:
-        p1 = xform_apply(xform, (s.p1.x + 0.5, s.p1.y + 0.5))
-        p2 = xform_apply(xform, (s.p2.x + 0.5, s.p2.y + 0.5))
-        if mirror:
-            p1, p2 = p2, p1
-        out.append((snap_cell_point(p1), snap_cell_point(p2), s.shape))
+    out = own_cell_strokes(glyph, xform)
     for sub in glyph.subcomponents:
         if sub.codepoint in _seen:
             continue

@@ -13,11 +13,12 @@ from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF, QTransform
 from PySide6.QtWidgets import QWidget
 
 from ..geometry import (
-    flatten_cell_strokes,
     glyph_contours,
+    own_cell_strokes,
     stroke_outline,
     subcomponent_contours,
     subcomponent_xform,
+    transform_subcomponent,
 )
 from ..model import (
     PEN_CAP,
@@ -411,28 +412,39 @@ class GlyphCanvas(QWidget):
         self.glyphChanged.emit()
 
     def pull_subcomponent(self, index: int) -> bool:
-        """Turn instance ``index`` into editable strokes of this glyph, killing the instance.
+        """Turn instance ``index`` into its contents, killing the instance.
 
-        The instance is deep-flattened through the same transform pipeline the renderer uses (so
-        the result is the instance's own geometry, rounded to the integer grid), and its nested
-        instances are flattened with it — that is what makes the contents editable here.
+        The referenced glyph's **actual contents** are inlined, appropriately transformed:
+
+        * its own strokes come in as strokes — the box transform applied to their endpoints, on
+          the cell lattice, with the points swapped where the box mirrors so an arc keeps bending
+          the right way — and
+        * its own **subcomponents come in as subcomponents**, their boxes mapped by the same
+          transform, so nested instances stay instances instead of collapsing into one flat
+          stroke list.
+
+        Because the source glyph has no path back here (that would be a cycle), inlining its
+        references can never create one.
         """
         if not (0 <= index < self.subcomponent_count()):
             return False
         sub = self._glyph.subcomponents[index]
         src = self.glyph_provider(sub.codepoint) if self.glyph_provider is not None else None
-        cells = []
-        if src is not None:
-            x = subcomponent_xform(sub, src)
-            cells = flatten_cell_strokes(src, self.glyph_provider, x, {int(src.codepoint)})
+        from ..model import copied_origin
+        host_cp = self._glyph.codepoint
         self._snapshot()
         del self._glyph.subcomponents[index]
-        for c1, c2, shape in cells:
-            self._glyph.add_stroke(Stroke(
-                Point(int(round(c1[0] - 0.5)), int(round(c1[1] - 0.5))),
-                Point(int(round(c2[0] - 0.5)), int(round(c2[1] - 0.5))),
-                shape,
-            ))
+        if src is not None:
+            x = subcomponent_xform(sub, src)
+            for s, (p1, p2, shape) in zip(src.strokes, own_cell_strokes(src, x)):
+                self._glyph.add_stroke(Stroke(
+                    Point(round(p1[0] - 0.5), round(p1[1] - 0.5)),
+                    Point(round(p2[0] - 0.5), round(p2[1] - 0.5)),
+                    shape,
+                    copied_origin(sub.codepoint, host_cp, s.origin),
+                ))
+            for child in src.subcomponents:
+                self._glyph.add_subcomponent(transform_subcomponent(child, x))
         self._selected_index = -1
         self.update()
         self.glyphChanged.emit()

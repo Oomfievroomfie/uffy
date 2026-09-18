@@ -103,7 +103,8 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
   instanced stroke would sit between cells: an off-grid centreline, a butt snapped against a
   rounded-to-the-wrong-cell `_cell_min`, and an arc bulging to a fractional box corner. Snapping
   here is what makes an instance expand *exactly* like authored strokes — and it is the same
-  rounding `pull contents` does, so pulling an instance in reproduces what was drawn.
+  rounding `pull contents` does to the strokes it inlines, so the strokes of a pulled instance
+  land exactly where they were drawn.
 * **Instances nest** (an instance's source may itself instance something), so an instance is
   flattened into a flat list of cell-space strokes with the transforms *composed*
   (`geometry.flatten_cell_strokes`). That keeps the "transform, then expand" rule exact for a
@@ -118,8 +119,21 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
 * **Instances are not editable through their contents.** In the editor an instance is drawn with a
   dashed box and four corner handles, and it is picked up by those handles (or its stroke-list
   row) — never by the nodes inside it, which are not strokes of this glyph. Its *contents* can be
-  taken over, though: **pull contents** deep-flattens the instance through the same pipeline the
-  renderer uses (rounded to the integer grid) and replaces it with those strokes.
+  taken over, though: **pull contents** inlines what the referenced codepoint *actually holds*,
+  appropriately transformed. That is its own strokes (the box transform applied to their
+  endpoints, snapped to the cell lattice, points swapped where the box mirrors) **and its own
+  subcomponent references** (boxes mapped by the same transform) — not a flattened copy of one
+  stroke list, so an instance of a glyph that is itself built from instances stays a mixture of
+  strokes and instances, and each pulled stroke records its provenance (the referenced codepoint)
+  exactly as the Copy button does. Since the pulled glyph's references cannot reach back to the
+  host (that would already be a cycle), inlining never creates one.
+* **Pulling re-quantises a nested instance's box, and that is expected to shift its rounding.**
+  A box corner is an integer cell corner, so a nested box mapped by a scaled transform (it lands
+  on something like `5.375`) has to be rounded back onto that lattice. The nested content is then
+  transformed by the rounded box instead of the exact composition, which can flip the cell-centre
+  snap of a nested endpoint by up to a cell. The instance's *own* strokes are unaffected — those
+  are inlined through the exact transform — and the alternative (collapsing nested instances into
+  strokes) would lose the structure the pull exists to preserve.
 * **Cycles are structurally impossible.** Creating an instance whose target already leads back to
   the host glyph is refused up front (`StrokeFont.would_create_cycle`). A file that contains one
   anyway is invalid: loading breaks the cycles greedily in sorted codepoint order — dropping the

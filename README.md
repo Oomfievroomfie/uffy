@@ -234,7 +234,9 @@ The full set of keyboard and mouse controls is below.
   opposite flips the instance. Their contained strokes are not draggable here — only the box is
   (plus the whole-glyph moves below, which carry the boxes with them). **Right-click** a box (or
   its row in the stroke list) for its menu: **open the referenced codepoint**, or **pull its
-  contents into this glyph** (which converts the instance to editable strokes and kills it).
+  contents into this glyph** — which inlines the referenced glyph's *actual contents*, its strokes
+  **and** its own subcomponent references, appropriately transformed, and kills the instance (so
+  nested instances stay instances rather than collapsing into one flat stroke list).
 * Tool toggle: **Line** / **Arc** (toolbar).
 * **Ctrl+Z** undo · **Ctrl+Shift+Z** redo
 * **Ctrl+C** copy all strokes · **Ctrl+V** paste (append) · **Ctrl+H** clear the glyph
