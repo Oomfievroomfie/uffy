@@ -357,6 +357,16 @@ class GlyphCanvas(QWidget):
         return True
 
     def _subcomponent_mode(self) -> bool:
+        """True when a paste should instance the copied glyph instead of pasting its contents.
+
+        **Bypassed when the clipboard came from the glyph being pasted into**: an instance of
+        yourself is a cycle, and Ctrl+C then Ctrl+V inside one glyph is the ordinary "duplicate the
+        contents" gesture, so it always pastes the contents. (Pasting them can still involve
+        instances, which is why the paste path checks those for cycles regardless — see
+        :meth:`_legal_pasted_subcomponents`.)
+        """
+        if self._clip_src == self._glyph.codepoint:
+            return False
         return bool(self.subcomponent_mode_fn is not None and self.subcomponent_mode_fn())
 
     def _legal_pasted_subcomponents(self, subs: list) -> list:

@@ -147,10 +147,12 @@ the *host* glyph's **cell** coordinates (integer coordinates are cell corners, s
   the same rules: origins are stamped with the direct source only when it is allocated and differs
   from the target, squish-pasting squishes the instance's box by the same map as the points, and
   with the related list's **Copy as subcomponent** mode on, Ctrl+V instances the copied glyph
-  instead of pasting its contents. Both paste paths keep cycles impossible: a paste that would
-  close one is refused, and any instance in a batch that would close one is dropped with a warning
-  (pulling contents needs no such check — a reference that reached back here would already be a
-  cycle).
+  instead of pasting its contents — *except* when the clipboard came from the glyph being pasted
+  into, which always pastes the contents: an instance of yourself is a cycle, and Ctrl+C/Ctrl+V
+  inside one glyph is the ordinary "duplicate the contents" gesture. Both paste paths keep cycles
+  impossible: a paste that would close one is refused, and any instance in a batch that would close
+  one is dropped with a warning (pulling contents needs no such check — a reference that reached
+  back here would already be a cycle).
 * **Cycles are structurally impossible.** Creating an instance whose target already leads back to
   the host glyph is refused up front (`StrokeFont.would_create_cycle`). A file that contains one
   anyway is invalid: loading breaks the cycles greedily in sorted codepoint order — dropping the

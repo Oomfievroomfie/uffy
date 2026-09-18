@@ -244,7 +244,9 @@ The full set of keyboard and mouse controls is below.
 * **Ctrl+Z** undo · **Ctrl+Shift+Z** redo
 * **Ctrl+C** copy all strokes and subcomponents · **Ctrl+V** paste (append) them · **Ctrl+H** clear
   the glyph. With the related list's **Copy as subcomponent** mode on, **Ctrl+V instances the glyph
-  you copied** instead of pasting its contents (a reference that would close a cycle is refused).
+  you copied** instead of pasting its contents (a reference that would close a cycle is refused) —
+  except when the clipboard came from the glyph you are pasting into, which always pastes the
+  contents, since an instance of yourself is a cycle.
 * **Ctrl+V** while **holding an arrow key** squishes the paste toward that side/corner:
   one arrow = side (`Up`/`Down`/`Left`/`Right`), two arrows = corner (e.g. `Up`+`Left` =
   top-left). Holding **Shift** gives 2/3 size, otherwise 1/2.
