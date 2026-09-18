@@ -19,9 +19,13 @@ def main() -> int:
         tree = json.load(fh)
     paths = [e["path"] for e in tree["tree"] if e["type"] == "blob" and e["path"].endswith(".ttf")]
 
-    by_family: dict[str, list[str]] = {}
+    def slug_of(path: str) -> str:
+        parts = path.split("/")
+        return parts[1].lower() if len(parts) > 2 and parts[0] == "ofl" else ""
+
+    by_dir: dict[str, list[str]] = {}
     for p in paths:
-        by_family.setdefault(os.path.basename(p).split("-")[0].lower(), []).append(p)
+        by_dir.setdefault(slug_of(p), []).append(p)
 
     want = []
     with open(os.path.join(CACHE, "urls.txt"), encoding="utf-8") as fh:
@@ -35,7 +39,8 @@ def main() -> int:
     resolved = 0
     for member in want:
         family = member.split("-")[0]
-        cands = by_family.get(family.lower(), [])
+        slug = "".join(ch for ch in family.lower() if ch.isalnum())
+        cands = [p for p in by_dir.get(slug, []) if "Italic" not in p]
         pick = None
         for p in cands:
             if os.path.basename(p) == member:
@@ -43,7 +48,7 @@ def main() -> int:
                 break
         if pick is None:
             for p in cands:
-                if os.path.basename(p).endswith("Regular.ttf"):
+                if os.path.basename(p).endswith("Regular.ttf") or "-Regular" in p:
                     pick = p
                     break
         if pick is None and cands:
