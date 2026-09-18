@@ -217,24 +217,10 @@ The editor is a *front end* for the same model, not a parallel definition:
   bug, still live: `glyph_canvas` calls its `reference_provider` on **every canvas repaint**, and
   the native ghost (`main_window.native_reference_bitmap`) builds a `QTextLayout` + a 160 px chain
   font + a pixmap + `drawText` inside that call.
-- **Ask Qt once which codepoints resolve to nothing, and remember it.** For a codepoint whose
-  chain resolves nowhere, `drawText` makes the platform search the whole installed font collection
-  for a character nothing has: **15 ms to 850 ms**, and Qt does not keep the answer (measured gone
-  again after ~1200 draws; only 16 distinct defs, so it is draw volume, not def pressure). It is
-  not DirectWrite-specific (Qt's bundled FreeType is worse: 1594 ms first hit) and not our chain's
-  length (a 12-family chain costs 0.76 ms). Ask with **`QFontMetricsF(font-with-the-chain)
-  .inFontUcs4(cp)`** — the only query that includes Qt's platform fallback; a first-font-only query
-  (`QRawFont.supportsCharacter`) answers False for Thai, emoji and CJK, which the platform chain in
-  fact draws. `fontfallback.native_text_unmapped()` records the negatives in a session-global set,
-  and the badge then draws the notdef with merging off (`NoFontMerging`), which cannot lose a glyph
-  because Qt already said nothing resolves it. Do **not** set `NoFontMerging` on the chain in
-  general: Qt implements a `setFamilies()` list *through* merging, so it means "first family only"
-  and renders U+0E01/U+4E2D/U+1F600/U+1FA70 as tofu.
 - **A cache keyed by codepoint must not be cleared on a block switch.** `set_codepoints()` used to
-  wipe the preview and badge caches, so every block change re-paid every badge render — including
-  the failed resolutions above (98 of SAPE-A's 114 codepoints). Revisiting that block after three
-  other blocks went from ~658 ms to 13.7 ms. Stroke-dependent caches are still dropped by
-  `invalidate_previews()`; badges are not stroke-dependent, so they survive it.
+  wipe the preview and badge caches, so every block change re-paid every badge render. Revisiting
+  that block after three other blocks went from ~658 ms to 13.7 ms. Stroke-dependent caches are
+  still dropped by `invalidate_previews()`; badges are not stroke-dependent, so they survive it.
 - **Never re-derive the outline a second way.** Preview and compiled font must use the same
   `geometry.py` output; if a change only lands in one path, they drift. This is the whole point
   of having `geometry.py` be canonical.

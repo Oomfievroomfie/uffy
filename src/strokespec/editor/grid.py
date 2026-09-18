@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from ..model import StrokeFont, Glyph, GRID_H
 from ..refbrowser import ReferenceLibrary
-from .fontfallback import native_text_families, native_text_unmapped
+from .fontfallback import native_text_families
 from .perflog import count, note, set_context, span
 from .uiutil import pil_to_qpixmap, paint_stroke_glyph
 
@@ -70,14 +70,7 @@ def _badge_scale() -> float:
 def render_badge_pixmap(cp: int) -> Optional[QPixmap]:
     """The cell's native-text badge (white rounded box + the character), as a bitmap.
 
-    Drawn with the codepoint's real family chain (see native_text_families). The expensive case is
-    a codepoint *no* family in that chain covers — 98 of the 114 in Symbols and Pictographs
-    Extended-A: Qt then asks the platform for a fallback engine for that character, the platform
-    searches the whole installed font collection and finds nothing, and the answer is re-paid
-    whenever Qt has dropped it (15-18 ms, measured again after a ~1200-draw sweep), against
-    0.01-0.2 ms when a listed family has the glyph. Rasterising once per codepoint keeps that off
-    the paint path, so the cache must outlive a block switch (a badge depends only on the
-    codepoint).
+    The badge is static, so it is rasterised once, exactly like the preview.
     """
     if not _is_printable(cp):
         return None
@@ -93,16 +86,7 @@ def render_badge_pixmap(cp: int) -> Optional[QPixmap]:
     painter.setBrush(BADGE_BG)
     painter.drawRoundedRect(rect, 4.0, 4.0)
     f = QFont()
-    chain = native_text_families(cp)
-    if native_text_unmapped(cp, chain):
-        # Qt has already resolved this codepoint to nothing — neither the chain nor its platform
-        # fallback has it (see fontfallback.native_text_unmapped). Asking again means the platform
-        # searches the whole font collection for it again: 15-850 ms, inside the paint, for the
-        # same notdef box. With nothing left to merge in, draw the notdef directly.
-        f.setFamilies(chain[:1])
-        f.setStyleStrategy(QFont.StyleStrategy.NoFontMerging)
-    else:
-        f.setFamilies(chain)
+    f.setFamilies(native_text_families(cp))
     f.setPixelSize(13)
     painter.setFont(f)
     painter.setPen(BADGE_FG)
@@ -437,15 +421,28 @@ class BlockPane(QWidget):
         lay.addLayout(header)
         lay.addWidget(self._list, 1)
 
-        self._block_combo.currentIndexChanged.connect(self.refresh)
+        self._block_combo.currentIndexChanged.connect(self.relist)
         self._list.clicked.connect(self._on_clicked)
         self._list.doubleClicked.connect(self._on_clicked)
         self.refresh()
 
     # --- public API used by the parent GlyphGrid ------------------------------
     def refresh(self) -> None:
+        """The authored data changed: drop every cached preview, then rebuild the list."""
         with span("pane.refresh"):
             self._model.invalidate_previews()
+            self.relist()
+
+    def relist(self) -> None:
+        """Re-filter and re-show this pane's block, keeping every cached bitmap.
+
+        Switching block (or typing in the search box, or toggling 'show unassigned') changes which
+        codepoints are *listed*, not what any of them looks like: previews and badges are keyed by
+        codepoint and depend on the strokes and the fonts, not on the block. Wiping them here made
+        every block open re-render all ~88 visible previews (30-47 ms) and badges (17-25 ms) on
+        top of the ~13 ms paint, on every open and every reopen.
+        """
+        with span("pane.recompute"):
             self._recompute()
 
     def perf_snapshot(self) -> dict:
@@ -673,11 +670,14 @@ class GlyphGrid(QWidget):
 
     def _refresh_all(self) -> None:
         for pane in self._panes:
-            pane.refresh()
+            pane.relist()
 
     # --- public API routed to the active pane (used by the main window) --------
     def refresh(self) -> None:
         with span("grid.refresh"):
+            # The authored data changed (a glyph was stored, removed, or the file was reloaded):
+            # every preview is stale. Merely re-listing a block does not come through here.
+            self.invalidate_previews()
             self._refresh_all()
 
     def perf_snapshot(self) -> dict:

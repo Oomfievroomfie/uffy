@@ -167,34 +167,46 @@ def native_text_families(cp: int) -> list[str]:
         return _native_text_families(cp)
 
 
-# Codepoints Qt resolves to nothing: the chain has no glyph AND Qt's own platform fallback finds
-# none either (see native_text_unmapped). Session-global; a codepoint is resolved once, not once
-# per render.
-_unmapped: set[int] = set()
+# Codepoint -> the family Qt resolves it to, or None when nothing on the system can draw it.
+# Session-global: resolving is the expensive part and the answer does not depend on the pixel size.
+_resolved: dict[int, Optional[str]] = {}
+
+
+def native_text_resolution(cp: int) -> Optional[str]:
+    """The family Qt draws ``cp`` with, through the codepoint's chain and its platform fallback.
+
+    ``None`` when nothing on this system can draw it. Resolving is the expensive part — the
+    platform searches the installed font collection, measured at 15 ms to 3.5 s, and does not keep
+    the answer — and it is the SAME resolution at every pixel size. So it is asked once per
+    codepoint and remembered, because the cell badge (13 px), the native reference panel (110 px)
+    and the native ghost (160 px) all draw the same character and would otherwise each ask Qt the
+    same question again, back to back.
+    """
+    cp = int(cp)
+    if cp in _resolved:
+        return _resolved[cp]
+    from PySide6.QtGui import QFont, QTextLayout
+    f = QFont()
+    f.setFamilies(native_text_families(cp))
+    f.setPixelSize(13)
+    layout = QTextLayout(chr(cp), f)
+    layout.beginLayout()
+    line = layout.createLine()
+    line.setLineWidth(64.0)
+    layout.endLayout()
+    family: Optional[str] = None
+    runs = line.glyphRuns()
+    if runs:
+        gids = runs[0].glyphIndexes()
+        if gids and int(gids[0]) != 0:
+            family = runs[0].rawFont().familyName() or None
+    _resolved[cp] = family
+    return family
 
 
 def native_text_unmapped(cp: int, chain: list[str] | None = None) -> bool:
-    """True when nothing Qt could draw this codepoint with: not the chain, not its fallback.
-
-    There is no cheaper question to ask — asking *is* the resolution — so the answer is recorded,
-    because the failed resolution is the expensive one: the platform searches the installed font
-    collection for a character nothing has, which costs 15 ms to 850 ms and which Qt does not keep
-    (measured: gone again after ~1200 draws, and it is re-paid inside every paint that asks).
-
-    Asked through ``QFontMetricsF.inFontUcs4`` on the codepoint's own chain, which is the only
-    query that includes Qt's platform fallback: a first-font-only query (``QRawFont``) reports
-    False for Thai, emoji and CJK, which the platform chain in fact draws.
-    """
-    cp = int(cp)
-    if cp in _unmapped:
-        return True
-    from PySide6.QtGui import QFont, QFontMetricsF
-    f = QFont()
-    f.setFamilies(chain if chain is not None else native_text_families(cp))
-    if QFontMetricsF(f).inFontUcs4(cp):
-        return False
-    _unmapped.add(cp)
-    return True
+    """True when nothing Qt could draw this codepoint with: not the chain, not its fallback."""
+    return native_text_resolution(cp) is None
 
 
 def _native_text_families(cp: int) -> list[str]:
