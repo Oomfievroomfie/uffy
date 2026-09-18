@@ -262,8 +262,6 @@ def _native_text_families(cp: int) -> list[str]:
     # CJK).
     relevant: list[str] = []
     for fam in DEFAULT_WINDOWS_FONTS:
-        if _is_unifont(fam):
-            continue
         if cp in cps.get(fam, ()):
             relevant.append(fam)
     # hanzi/kanji blocks: also attach the HanaMin faces (when present and covering the
