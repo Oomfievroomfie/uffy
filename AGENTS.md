@@ -199,6 +199,15 @@ The editor is a *front end* for the same model, not a parallel definition:
   it — don't let it drift or re-introduce it as the compile source).
 
 ### Intuitions / rules of thumb
+- **Never park a widget on a grid index to draw per-cell decoration.** The codepoint grid paints
+  its per-cell character badge in `GlyphGridDelegate.paint` (native family chain + `drawText`).
+  `setIndexWidget` invalidates the item view's layout, and a wrapping `QListView` in IconMode is
+  **not lazy** — invalidating it re-lays out every row, i.e. ~87,000 Python model callbacks per
+  scroll step on CJK Ext B's 42,720 rows (measured: 114 ms per scroll step, 80 ms per arrow-key
+  step, scaling with the block size). Painting instead costs one `drawText` on the cells that were
+  actually exposed: 39 ms scrolling, 16 ms navigating. Anything else that wants to appear on a cell
+  gets painted there too (and a blocked badge update measured 6 ms/step, so the layout — not the
+  cell paint — is the cost).
 - **Never re-derive the outline a second way.** Preview and compiled font must use the same
   `geometry.py` output; if a change only lands in one path, they drift. This is the whole point
   of having `geometry.py` be canonical.

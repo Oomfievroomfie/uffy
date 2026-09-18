@@ -17,13 +17,11 @@ from PIL import Image
 
 from PySide6.QtCore import (
     QAbstractListModel,
-    QEvent,
     QModelIndex,
     QRect,
     QRectF,
     QSize,
     Qt,
-    QTimer,
     Signal,
 )
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPixmap
@@ -212,8 +210,24 @@ class GlyphGridDelegate(QStyledItemDelegate):
             py = rect.top() + 2.0 + max(0.0, (avail_h - scaled.height()) / 2.0)
             painter.drawPixmap(px, py, scaled)
 
-        # Small plaintext character is supplied by a NATIVE QLabel per cell (setIndexWidget in
-        # _populate_badges), so it is NOT drawn here via drawText.
+        # Small native-text character badge (top-left), drawn here rather than with a per-cell
+        # QLabel: setIndexWidget invalidates the icon-mode item layout, and a wrapping QListView
+        # lays out ALL of its rows whenever the layout is invalidated — so on a 40k-cell block
+        # every scroll step re-laid out every row (~87k model callbacks, ~110ms per step).
+        # Painting it costs one drawText on the cells that were actually exposed.
+        ch = chr(cp) if _is_printable(cp) else ""
+        if ch:
+            badge = QRectF(rect.left() + 2.0, rect.top() + 2.0, 18.0, 18.0)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 210))
+            painter.drawRoundedRect(badge, 4.0, 4.0)
+            f = QFont()
+            f.setFamilies(native_text_families(cp))
+            f.setPixelSize(13)
+            painter.setFont(f)
+            painter.setPen(QColor(60, 60, 72))
+            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, ch)
+
         # Codepoint id pinned to the bottom.
         painter.setPen(QColor(130, 130, 140))
         painter.setFont(QFont("", 8))
@@ -263,9 +277,6 @@ class BlockPane(QWidget):
         self._list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._list.setGridSize(QSize(CELL_W, CELL_H))
         self._list.setIconSize(QSize(PIX_W, PIX_H))
-        self._badge_rows: set = set()
-        self._list.verticalScrollBar().valueChanged.connect(self._update_visible_badges)
-        self._list.viewport().installEventFilter(self)
         self._scroll_memory: dict = {}
         self._prev_block: Optional[str] = None
 
@@ -345,9 +356,6 @@ class BlockPane(QWidget):
         covered, allocated = self._block_coverage(start, end)
         pct = (100.0 * covered / allocated) if allocated else 0.0
         self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of {allocated} allocated")
-        self._clear_badges()
-        self._update_visible_badges()
-        QTimer.singleShot(0, self._update_visible_badges)
         if selected is not None and selected in cps:
             self.select_codepoint(selected, scroll=False)
         else:
@@ -355,59 +363,6 @@ class BlockPane(QWidget):
             if saved is not None:
                 self._list.verticalScrollBar().setValue(saved)
         self._prev_block = name
-
-    def _clear_badges(self) -> None:
-        for row in list(self._badge_rows):
-            self._list.setIndexWidget(self._model.index(row, 0), None)
-        self._badge_rows.clear()
-
-    def eventFilter(self, obj, event) -> bool:
-        if obj is self._list.viewport() and event.type() == QEvent.Type.Resize:
-            QTimer.singleShot(0, self._update_visible_badges)
-        return super().eventFilter(obj, event)
-
-    def _update_visible_badges(self) -> None:
-        from PySide6.QtWidgets import QLabel, QWidget
-        from PySide6.QtCore import QPoint, QSize
-        vp = self._list.viewport()
-        if not vp.rect().isValid():
-            return
-        first = self._list.indexAt(QPoint(vp.rect().left() + 2, vp.rect().top() + 2))
-        if not first.isValid():
-            return
-        vp_h = vp.rect().height()
-        last = first
-        for r in range(first.row(), self._model.rowCount()):
-            idx = self._model.index(r, 0)
-            vr = self._list.visualRect(idx)
-            if not vr.isEmpty() and vr.top() < vp_h:
-                last = idx
-            else:
-                break
-        lo, hi = min(first.row(), last.row()), max(first.row(), last.row())
-        for row in list(self._badge_rows):
-            if not (lo <= row <= hi):
-                self._list.setIndexWidget(self._model.index(row, 0), None)
-                self._badge_rows.discard(row)
-        for row in range(lo, hi + 1):
-            if row in self._badge_rows:
-                continue
-            cp = self._model.codepoint_at(row)
-            ch = chr(cp) if _is_printable(cp) else ""
-            container = QWidget()
-            container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-            container.setAutoFillBackground(False)
-            lbl = QLabel(container)
-            lbl.setGeometry(2, 2, 18, 18)
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            f = QFont()
-            f.setFamilies(native_text_families(cp))
-            f.setPixelSize(13)
-            lbl.setFont(f)
-            lbl.setText(ch)
-            lbl.setStyleSheet("background:rgba(255,255,255,210); color:#3c3c48;")
-            self._list.setIndexWidget(self._model.index(row, 0), container)
-            self._badge_rows.add(row)
 
     def _block_coverage(self, start: int, end: int) -> tuple:
         allocated = covered = 0
