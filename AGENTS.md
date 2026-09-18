@@ -64,6 +64,13 @@ These are the things that repeatedly cost time when forgotten.
 
 ## Sandbox discipline
 
+- **NEVER look outside the workspace directory.** Never read, list, search, glob, grep, stat, or
+  otherwise inspect anything outside `C:\Users\wareya\dev\uffy` — not `C:\Windows`, not
+  `C:\Program Files`, not `%USERPROFILE%`, not `%TEMP%`, not the registry, not other drives, not
+  the OS font folders, not the process's own environment-derived paths. HARD RULE. No exceptions,
+  no matter the task, no matter how helpful it would be. Everything that is needed comes from
+  inside the workspace: the repo tree, the vendored data, and files placed there.
+
 - File writes run under a **workspace-write** sandbox. NO privilege escalation, NO sandbox
   escapes, work only inside `C:\Users\wareya\dev\uffy`. Do not attempt `sandbox_permissions`.
 
