@@ -1,7 +1,7 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-18 15:16  
+Generated: 2026-09-18 15:20  
 
 ## Summary
 
