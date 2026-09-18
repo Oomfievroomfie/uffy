@@ -37,6 +37,17 @@ the strokes by our own geometry (`geometry.py`) — it is **not** a preview conv
 editor canvas, the grid previews and the compiled font all expand strokes through the *same*
 code path, so preview and output can never disagree about a shape.
 
+### The authored file on disk is line-oriented
+
+`StrokeFont.save()` writes **one glyph per line** (ascending codepoint, compact inside the line,
+metadata on one line) rather than pretty-printing the whole document. A glyph is the unit of
+editing, so an edit rewrites exactly that one line, adding a glyph inserts one line and deleting
+one removes one line — which is what makes the authored `glyphs.strokes.json` diffable and
+mergeable in `git`. Pretty-printing expands every point onto its own line: the same 11.9k-glyph
+set is 1,001,297 lines / 15.9 MB that way and 11,895 lines / 4.7 MB this way, and *every* save
+then looks like a whole-file rewrite. `load()` accepts either shape — the reader is `json.load`,
+and the writer's output is idempotent.
+
 ### Why not `.glyphs`/`glyphsLib`
 
 `fontmake`'s `glyphsLib` pipeline has **no stroke support** (no stroke attributes/classes on

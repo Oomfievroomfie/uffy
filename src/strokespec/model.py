@@ -638,9 +638,28 @@ class StrokeFont:
         sf.broken_subcomponent_cycles = sf.break_subcomponent_cycles()
         return sf
 
+    def to_json_text(self) -> str:
+        """The stroke set as line-oriented JSON: one glyph per line, ascending codepoint.
+
+        A glyph is the unit of editing, so a single line per glyph makes an edit rewrite exactly
+        that line, an added glyph insert one line and a deleted glyph remove one line — which is
+        what keeps the authored file diffable and mergeable. Strokes, subcomponents and points
+        stay compact inside their glyph's line; the metadata block is one line too.
+        """
+        meta = json.dumps(self.metadata, ensure_ascii=False, sort_keys=True)
+        cps = self.codepoints()
+        lines = ["{", f'  "metadata": {meta},', '  "glyphs": [']
+        for i, cp in enumerate(cps):
+            body = json.dumps(self.glyphs[cp].to_dict(), ensure_ascii=False,
+                              separators=(",", ":"))
+            lines.append(f"    {body}{',' if i + 1 < len(cps) else ''}")
+        lines.append("  ]")
+        lines.append("}")
+        return "\n".join(lines) + "\n"
+
     def save(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump(self.to_dict(), fh, ensure_ascii=False, indent=2)
+            fh.write(self.to_json_text())
 
     @classmethod
     def load(cls, path: str) -> "StrokeFont":
