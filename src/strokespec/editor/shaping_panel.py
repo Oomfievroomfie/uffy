@@ -8,6 +8,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -173,9 +174,17 @@ class ShapingExample(QWidget):
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._strip)
         self._scroll.setWidgetResizable(False)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._scroll.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        # The viewport is the display area: same background as the strip, so the run sits on one
+        # continuous surface instead of on a strip inside a frame.
+        self._scroll.viewport().setAutoFillBackground(True)
+        pal = self._scroll.viewport().palette()
+        pal.setColor(self._scroll.viewport().backgroundRole(), QColor(BACKGROUND))
+        self._scroll.viewport().setPalette(pal)
+        self._scroll.horizontalScrollBar().rangeChanged.connect(self._fit_scroll_height)
         self._fit_scroll_height()
         lay.addWidget(self._scroll)
 
@@ -184,9 +193,11 @@ class ShapingExample(QWidget):
         self._size.valueChanged.connect(self._on_size)
         self._reshape()
 
-    def _fit_scroll_height(self) -> None:
-        self._scroll.setFixedHeight(
-            self._strip.height() + self._scroll.horizontalScrollBar().sizeHint().height() + 4)
+    def _fit_scroll_height(self, *_args) -> None:
+        """Reserve scrollbar height only while a scrollbar is actually there."""
+        bar = self._scroll.horizontalScrollBar()
+        extra = bar.sizeHint().height() if bar.maximum() > bar.minimum() else 0
+        self._scroll.setFixedHeight(self._strip.height() + extra)
 
     def _on_size(self, px: int) -> None:
         self._strip.set_pixel_size(px)
