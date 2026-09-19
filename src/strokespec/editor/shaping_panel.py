@@ -53,7 +53,7 @@ class ShapedStripView(QWidget):
         self.setStyleSheet(f"background:{BACKGROUND};")
 
     def _apply_height(self) -> None:
-        self.setFixedHeight(int(round(self._px + self.PAD_TOP + self.PAD_BOTTOM)))
+        self.setMinimumHeight(int(round(self._px + self.PAD_TOP + self.PAD_BOTTOM)))
 
     def pixel_size(self) -> float:
         return self._px
@@ -177,7 +177,7 @@ class ShapingExample(QWidget):
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._scroll.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self._scroll.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
         # The viewport is the display area: same background as the strip, so the run sits on one
         # continuous surface instead of on a strip inside a frame.
         self._scroll.viewport().setAutoFillBackground(True)
@@ -194,10 +194,10 @@ class ShapingExample(QWidget):
         self._reshape()
 
     def _fit_scroll_height(self, *_args) -> None:
-        """Reserve scrollbar height only while a scrollbar is actually there."""
+        """Minimum height is the strip plus a scrollbar while one is there; it fills the rest."""
         bar = self._scroll.horizontalScrollBar()
         extra = bar.sizeHint().height() if bar.maximum() > bar.minimum() else 0
-        self._scroll.setFixedHeight(self._strip.height() + extra)
+        self._scroll.setMinimumHeight(self._strip.minimumHeight() + extra)
 
     def _on_size(self, px: int) -> None:
         self._strip.set_pixel_size(px)
