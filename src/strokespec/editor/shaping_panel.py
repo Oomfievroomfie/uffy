@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -36,6 +37,8 @@ class ShapedStripView(QWidget):
     """Draws one shaped run: the authored glyphs at HarfBuzz's advances and offsets."""
 
     MARGIN = 8.0
+    PAD_TOP = 15.0          # room for the cluster text above the em box
+    PAD_BOTTOM = 16.0       # room for the glyph/cluster labels below the baseline
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -43,12 +46,25 @@ class ShapedStripView(QWidget):
         self._run: Optional[ShapedRun] = None
         self._paths: List[QPainterPath] = []
         self._scale = 1.0
-        self._base = 0.0
-        self._ascender = 0.0
         self._em = 1.0
-        self.setFixedHeight(104)
+        self._ascender = 0.0
+        self._base = 0.0
+        self._px = 32.0                       # em size in pixels
         self.setFixedWidth(1)
+        self._apply_height()
         self.setStyleSheet(f"background:{BACKGROUND};")
+
+    def _apply_height(self) -> None:
+        self.setFixedHeight(int(round(self._px + self.PAD_TOP + self.PAD_BOTTOM)))
+
+    def pixel_size(self) -> float:
+        return self._px
+
+    def set_pixel_size(self, px: float) -> None:
+        """Em size in pixels; re-lays out the run at the new size."""
+        self._px = float(px)
+        self._apply_height()
+        self.set_run(self._source, self._run)
 
     def set_run(self, source: Optional[StrokeFontSource], run: Optional[ShapedRun]) -> None:
         self._source = source
@@ -59,10 +75,10 @@ class ShapedStripView(QWidget):
             ascender, descender, _gap = source.font_extents()
             self._ascender = float(ascender)
             self._em = float(ascender - descender)
-            # Scale from the height only: the strip is as wide as the run, and the scroll area
-            # moves it, rather than the run shrinking to fit the visible width.
-            self._scale = (self.height() - 2 * self.MARGIN) / self._em
-            self._base = self.MARGIN + self._ascender * self._scale
+            # The size sets the scale; the strip is as wide as the run and the scroll area moves
+            # it, rather than the run shrinking to fit the visible width.
+            self._scale = self._px / self._em
+            self._base = self.PAD_TOP + self._ascender * self._scale
             for g in run.glyphs:
                 glyph = source.glyph(g.gid)
                 self._paths.append(
@@ -89,7 +105,7 @@ class ShapedStripView(QWidget):
 
         # HarfBuzz returns the run in visual order, RTL included: the pen only moves right.
         pen = self.MARGIN
-        top = self._base - self._ascender * self._scale
+        top = self.PAD_TOP
         for g, path in zip(run.glyphs, self._paths):
             w = g.x_advance * self._scale
             if g.x_advance > 0:
@@ -114,10 +130,10 @@ class ShapedStripView(QWidget):
             p.restore()
 
             p.setPen(LABEL)
-            p.drawText(QRectF(pen - 12, top - 15, max(w, 24.0) + 24, 14),
+            p.drawText(QRectF(pen - 12, top - 14, max(w, 24.0) + 24, 13),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, g.text)
             p.setPen(CLUSTER_LABEL)
-            p.drawText(QRectF(pen - 12, self._base + 6, max(w, 24.0) + 24, 13),
+            p.drawText(QRectF(pen - 12, self._base + 2, max(w, 24.0) + 24, 13),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
                        f"{g.gid} @{g.cluster}")
             pen += w
@@ -128,6 +144,7 @@ class ShapingExample(QWidget):
     """Shapes a sample string with HarfBuzz against the loaded stroke set."""
 
     SAMPLE = "AV e\u0301 \u4e2d \u05d0\u05d1\u05d2"
+    SIZE = 32                # default em size in pixels
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -146,19 +163,27 @@ class ShapingExample(QWidget):
         self._direction = QComboBox()
         self._direction.addItems(["Auto", "LTR", "RTL"])
         row.addWidget(self._direction)
+        row.addWidget(QLabel("Size"))
+        self._size = QSpinBox()
+        self._size.setRange(8, 256)
+        self._size.setSingleStep(4)
+        self._size.setValue(self.SIZE)
+        self._size.setSuffix(" px")
+        self._size.setToolTip("Em size of the shaped sample, in pixels.")
+        row.addWidget(self._size)
         lay.addLayout(row)
 
         # The strip carries the whole run and the scroll area moves it, so a long sample cannot
         # widen the dock.
         self._strip = ShapedStripView()
+        self._strip.set_pixel_size(self.SIZE)
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._strip)
         self._scroll.setWidgetResizable(False)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._scroll.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-        self._scroll.setFixedHeight(
-            self._strip.height() + self._scroll.horizontalScrollBar().sizeHint().height() + 4)
+        self._fit_scroll_height()
         lay.addWidget(self._scroll)
 
         # Wrapped: an unwrapped QLabel's minimum width is its whole text, which would set the
@@ -170,7 +195,16 @@ class ShapingExample(QWidget):
 
         self._sample.textChanged.connect(self._reshape)
         self._direction.currentIndexChanged.connect(self._reshape)
+        self._size.valueChanged.connect(self._on_size)
         self._reshape()
+
+    def _fit_scroll_height(self) -> None:
+        self._scroll.setFixedHeight(
+            self._strip.height() + self._scroll.horizontalScrollBar().sizeHint().height() + 4)
+
+    def _on_size(self, px: int) -> None:
+        self._strip.set_pixel_size(px)
+        self._fit_scroll_height()
 
     # --- the loaded font -------------------------------------------------------
     def set_font(self, strokefont: Optional[StrokeFont]) -> None:

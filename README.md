@@ -286,7 +286,8 @@ The full set of keyboard and mouse controls is below.
 
 * **Add folder** to load reference fonts; **Clear** to drop them. The fonts list is tabbed:
   **Reference fonts** (the list and its buttons) and **Shaping example** — type a sample, pick
-  Auto/LTR/RTL, and the tab draws that text shaped by **HarfBuzz** against the font you are drawing
+  Auto/LTR/RTL and an em size in pixels, and the tab draws that text shaped by **HarfBuzz** against
+  the font you are drawing
   (the stroke set answers HarfBuzz's font callbacks; no font file and no compilation). The strip
   scrolls horizontally when the run is wider than the panel, and re-reads the stroke set after every
   edit (while the tab is visible; otherwise on the next switch to it).
