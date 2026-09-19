@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import uharfbuzz as hb
 
-from .model import DEFAULT_BASELINE, GRID_H, SCALE, UPEM, Glyph, StrokeFont
+from .model import DEFAULT_BASELINE, GRID_H, HALF_WIDTH_UNITS, SCALE, UPEM, Glyph, StrokeFont
 
 
 @dataclass(frozen=True)
@@ -108,7 +108,7 @@ class StrokeFontSource(FontSource):
 
     def h_advance(self, gid: int) -> int:
         glyph = self.glyph(gid)
-        return glyph.advance_units if glyph is not None else UPEM
+        return glyph.advance_units if glyph is not None else HALF_WIDTH_UNITS
 
     def font_extents(self) -> Tuple[int, int, int]:
         ascender = int(round((self.height - self.baseline) * SCALE))
