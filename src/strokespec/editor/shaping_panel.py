@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+import uharfbuzz as hb
+
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -28,8 +30,12 @@ from ..shaping import ShapedRun, Shaper, StrokeFontSource
 from .uiutil import glyph_qpainterpath
 
 BACKGROUND = "#eceef2"
+CELL_LINE = QColor(180, 185, 195)
 INK = QColor(28, 30, 36)
 NOTDEF = QColor(150, 60, 60)
+BASELINE = QColor(150, 110, 110)
+LABEL = QColor(70, 76, 86)
+CLUSTER_LABEL = QColor(120, 128, 142)
 
 
 class ShapedStripView(QWidget):
@@ -82,15 +88,30 @@ class ShapedStripView(QWidget):
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        p.setPen(Qt.PenStyle.NoPen)
+        small = QFont(p.font())
+        small.setPixelSize(9)
+        p.setFont(small)
+
+        p.setPen(QPen(BASELINE, 1, Qt.PenStyle.DashLine))
+        p.drawLine(0, int(self._base), self.width(), int(self._base))
+
         # HarfBuzz returns the run in visual order (leftmost glyph first, RTL included), so the
         # pen only ever moves right, by each glyph's own advance.
         pen = self.MARGIN
+        top = self._base - self._ascender * self._scale
         for g, path in zip(run.glyphs, self._paths):
+            w = g.x_advance * self._scale
+            if g.x_advance > 0:
+                p.setPen(QPen(CELL_LINE, 1, Qt.PenStyle.DotLine))
+                p.drawRect(QRectF(pen, top, w, self._em * self._scale))
+                p.setPen(CELL_LINE)
+                p.drawLine(int(pen), int(self._base + 2), int(pen), int(self._base + 5))
+
             p.save()
             p.translate(pen, self._base)
             p.scale(self._scale, -self._scale)     # font units, y-up, as HarfBuzz reports them
             p.translate(g.x_offset, g.y_offset)    # HarfBuzz's offset, in font units
+            p.setPen(Qt.PenStyle.NoPen)
             glyph = source.glyph(g.gid)
             if glyph is None:
                 p.setBrush(NOTDEF)                 # .notdef: no authored glyph for the codepoint
@@ -100,7 +121,15 @@ class ShapedStripView(QWidget):
                 p.setBrush(INK)
                 p.drawPath(path)
             p.restore()
-            pen += g.x_advance * self._scale
+
+            p.setPen(LABEL)
+            p.drawText(QRectF(pen - 12, top - 15, max(w, 24.0) + 24, 14),
+                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, g.text)
+            p.setPen(CLUSTER_LABEL)
+            p.drawText(QRectF(pen - 12, self._base + 6, max(w, 24.0) + 24, 13),
+                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                       f"{g.gid} @{g.cluster}")
+            pen += w
         p.end()
 
 
@@ -128,20 +157,9 @@ class ShapingExample(QWidget):
         row.addWidget(self._direction)
         lay.addLayout(row)
 
-        caption = QLabel(
-            "HarfBuzz shapes this text against the font you are drawing, through its font "
-            "callback API: no font file is compiled and nothing is written to disk."
-        )
-        caption.setWordWrap(True)
-        caption.setStyleSheet("color:#5a6070;")
-        lay.addWidget(caption)
-
-        self._strip = ShapedStripView()
-        lay.addWidget(self._strip)
-
-        self._strip = ShapedStripView()
         # The strip is as wide as the run and is the ONLY thing that scrolls: without the scroll
         # area a long sample would widen the whole dock, and the dock is a sidebar.
+        self._strip = ShapedStripView()
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._strip)
         self._scroll.setWidgetResizable(False)
@@ -151,6 +169,13 @@ class ShapingExample(QWidget):
         self._scroll.setFixedHeight(
             self._strip.height() + self._scroll.horizontalScrollBar().sizeHint().height() + 4)
         lay.addWidget(self._scroll)
+
+        # The status line wraps, so its minimum width is its longest word: an unwrapped label's
+        # minimum is the whole string, which would pin the whole dock to that width forever.
+        self._info = QLabel()
+        self._info.setWordWrap(True)
+        self._info.setStyleSheet("color:#5a6070;")
+        lay.addWidget(self._info)
 
         self._sample.textChanged.connect(self._reshape)
         self._direction.currentIndexChanged.connect(self._reshape)
@@ -171,11 +196,18 @@ class ShapingExample(QWidget):
         text = self._sample.text()
         if self._shaper is None:
             self._strip.set_run(None, None)
+            self._info.setText("no stroke set loaded")
             return
         direction = {0: None, 1: "ltr", 2: "rtl"}[self._direction.currentIndex()]
         try:
             run = self._shaper.shape(text, direction=direction)
-        except Exception:                             # never let a shaping error kill the dock
+        except Exception as exc:                      # never let a shaping error kill the dock
             self._strip.set_run(None, None)
+            self._info.setText(f"shaping failed: {exc}")
             return
         self._strip.set_run(self._shaper.source, run)
+        self._info.setText(
+            f"uharfbuzz {hb.version_string()} · {run.direction} · {run.script or '—'} · "
+            f"{run.language} · {len(run.glyphs)} glyphs · "
+            f"advance {run.advance}u ({run.advance / SCALE:g} cells)"
+        )
