@@ -284,7 +284,13 @@ The full set of keyboard and mouse controls is below.
 
 ### Reference Fonts dock (right)
 
-* **Add folder** to load reference fonts; **Clear** to drop them.
+* **Add folder** to load reference fonts; **Clear** to drop them. The fonts list is tabbed:
+  **Reference fonts** (the list and its buttons) and **Shaping example** — a sample string shaped
+  by **HarfBuzz** against the font you are drawing, through its font callback API (glyph ids,
+  advances and extents answered by the stroke set; no font file and nothing compiled). Type a
+  sample and pick Auto/LTR/RTL; the panel draws the authored glyphs at the advances and offsets
+  HarfBuzz returned, and lists its glyph/cluster/advance dump underneath. It re-reads the stroke
+  set after every edit (while the tab is visible; otherwise on the next switch to it).
 * **Native reference** panel — the current codepoint as a big character.
 * **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open**,
   four **axial squish arrows** (↑↓←→), and four **diagonal squish buttons** (↖↗↙↘) below them.
