@@ -56,6 +56,20 @@ BADGE_BG = QColor(255, 255, 255, 210)
 BADGE_FG = QColor(60, 60, 72)
 
 
+def block_percent_text(covered: int, allocated: int) -> str:
+    """Coverage percentage for the block-list label.
+
+    A block that is short of full coverage must never read as 100%: anything from 99% up to (but
+    not including) complete shows 99%. Everything else rounds to nearest.
+    """
+    if not allocated:
+        return "0%"
+    pct = 100.0 * covered / allocated
+    if 99.0 <= pct < 100.0:
+        pct = 99.0
+    return f"{pct:.0f}%"
+
+
 def _badge_scale() -> float:
     """Device pixel ratio the badge bitmaps are rasterised at (so they stay crisp when scaled)."""
     app = QApplication.instance()
@@ -515,8 +529,9 @@ class BlockPane(QWidget):
                 self._model.set_codepoints(cps)
             with span("pane.block_coverage"):
                 covered, allocated = self._block_coverage(start, end)
-            pct = (100.0 * covered / allocated) if allocated else 0.0
-            self._count_label.setText(f"{len(cps)} glyphs · {pct:.0f}% of {allocated} allocated")
+            self._count_label.setText(
+                f"{len(cps)} glyphs · {block_percent_text(covered, allocated)} "
+                f"of {allocated} allocated")
             if selected is not None and selected in cps:
                 self.select_codepoint(selected, scroll=False)
             else:
