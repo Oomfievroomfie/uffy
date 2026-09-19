@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-import uharfbuzz as hb
-
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
@@ -25,12 +23,10 @@ from ..shaping import ShapedRun, Shaper, StrokeFontSource
 from .uiutil import glyph_qpainterpath
 
 BACKGROUND = "#eceef2"
-CELL_LINE = QColor(180, 185, 195)
 INK = QColor(28, 30, 36)
 NOTDEF = QColor(150, 60, 60)
 BASELINE = QColor(150, 110, 110)
 LABEL = QColor(70, 76, 86)
-CLUSTER_LABEL = QColor(120, 128, 142)
 
 
 class ShapedStripView(QWidget):
@@ -38,7 +34,7 @@ class ShapedStripView(QWidget):
 
     MARGIN = 8.0
     PAD_TOP = 15.0          # room for the cluster text above the em box
-    PAD_BOTTOM = 16.0       # room for the glyph/cluster labels below the baseline
+    PAD_BOTTOM = 6.0
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -108,12 +104,6 @@ class ShapedStripView(QWidget):
         top = self.PAD_TOP
         for g, path in zip(run.glyphs, self._paths):
             w = g.x_advance * self._scale
-            if g.x_advance > 0:
-                p.setPen(QPen(CELL_LINE, 1, Qt.PenStyle.DotLine))
-                p.drawRect(QRectF(pen, top, w, self._em * self._scale))
-                p.setPen(CELL_LINE)
-                p.drawLine(int(pen), int(self._base + 2), int(pen), int(self._base + 5))
-
             p.save()
             p.translate(pen, self._base)
             p.scale(self._scale, -self._scale)     # font units, y-up, as HarfBuzz reports them
@@ -132,10 +122,6 @@ class ShapedStripView(QWidget):
             p.setPen(LABEL)
             p.drawText(QRectF(pen - 12, top - 14, max(w, 24.0) + 24, 13),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, g.text)
-            p.setPen(CLUSTER_LABEL)
-            p.drawText(QRectF(pen - 12, self._base + 2, max(w, 24.0) + 24, 13),
-                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-                       f"{g.gid} @{g.cluster}")
             pen += w
         p.end()
 
@@ -185,13 +171,7 @@ class ShapingExample(QWidget):
         self._scroll.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self._fit_scroll_height()
         lay.addWidget(self._scroll)
-
-        # Wrapped: an unwrapped QLabel's minimum width is its whole text, which would set the
-        # dock's minimum width.
-        self._info = QLabel()
-        self._info.setWordWrap(True)
-        self._info.setStyleSheet("color:#5a6070;")
-        lay.addWidget(self._info)
+        lay.addStretch(1)
 
         self._sample.textChanged.connect(self._reshape)
         self._direction.currentIndexChanged.connect(self._reshape)
@@ -221,18 +201,11 @@ class ShapingExample(QWidget):
         text = self._sample.text()
         if self._shaper is None:
             self._strip.set_run(None, None)
-            self._info.setText("no stroke set loaded")
             return
         direction = {0: None, 1: "ltr", 2: "rtl"}[self._direction.currentIndex()]
         try:
             run = self._shaper.shape(text, direction=direction)
-        except Exception as exc:
+        except Exception:
             self._strip.set_run(None, None)
-            self._info.setText(f"shaping failed: {exc}")
             return
         self._strip.set_run(self._shaper.source, run)
-        self._info.setText(
-            f"uharfbuzz {hb.version_string()} · {run.direction} · {run.script or '—'} · "
-            f"{run.language} · {len(run.glyphs)} glyphs · "
-            f"advance {run.advance}u ({run.advance / SCALE:g} cells)"
-        )
