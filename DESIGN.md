@@ -267,6 +267,63 @@ Windows doesn't cover + GNU Unifont BMP and Unifont Upper), with their licenses 
 are registered at startup and attached per-block, so a block that the system already renders
 gets no override at all.
 
+## Shaping with HarfBuzz over a mocked font
+
+`strokespec.shaping` runs uharfbuzz against the authored stroke set with no font file behind it:
+an empty face plus custom font funcs that answer HarfBuzz's callbacks from the model
+(`nominal_glyph` from the codepoint order, `h_advance` from `Glyph.advance_units`, `font_extents`
+from the set's metadata). The editor's shaping tab is the user of it. Two findings from that work
+are recorded here because they decide what diacritics can ever do in this pipeline.
+
+### The empty face must not be the singleton
+
+`hb.Face(hb.Blob(b""))` is the face to build; `hb.Face(None)` — the empty-face *singleton* — shapes
+every advance as 0, even though `font.get_glyph_h_advance()` answers correctly when called directly
+on the same font object.
+
+### What uharfbuzz exposes, and what it does not
+
+uharfbuzz 0.56.1 (HarfBuzz 14.4.0) wraps eight setters: `nominal_glyph`, `variation_glyph`,
+`glyph_h_advance`, `glyph_v_advance`, `glyph_v_origin`, `font_h_extents`, `font_v_extents`,
+`glyph_name`. HarfBuzz itself has the rest, including `glyph_extents` (0.9.2), `glyph_h_origin`
+(0.9.2), `glyph_h_kerning` (0.9.2) and `draw_glyph_or_fail` (11.2.0).
+
+`glyph_extents` is the one that matters for diacritics: with no GPOS in the face, HarfBuzz places
+combining marks with its fallback mark positioning, which measures the base and the mark through
+that callback. uharfbuzz cannot set it, so a shaped mark comes out with zero offset — which is
+what the tab shows, and is not a HarfBuzz limitation.
+
+Monkeypatching cannot close the gap: on the compiled extension a class attribute can be added and
+`FontFuncs` can be subclassed, but instances are read-only (no `__dict__`) and the `.pyd` exports
+no `hb_*` symbols for `ctypes` to call (checked: 0 of 5). Getting at the missing setters needs
+either a binding-side addition or a separate shim extension.
+
+### Real mark attachment on a face built from tables
+
+GPOS mark-to-base **does** work over a mocked font today, through the table path rather than the
+callback path. Experiment (scratch, not in the repo):
+
+1. Build a minimal `fontTools` `TTFont` with a glyph order (`.notdef`, `a`, `acutecomb`) and compile
+   a `mark` feature with `feaLib.builder.addOpenTypeFeaturesFromString`, anchors base `(200, 300)`
+   and mark `(100, 200)`.
+2. Compile the tables straight out of that in-memory font — `font[tag].compile(font)` for `GDEF`
+   and `GPOS` — so no font file is written.
+3. `hb.Face.create_for_tables(func, data)`, where `func(face, tag, data)` returns the table bytes,
+   and attach the same custom font funcs for ids/advances.
+
+Result: `has_layout_positioning: 1`, and shaping `"a" + U+0301` with a mocked 600-unit base advance
+gives the mark `off=(-500, 100)`; with a 700-unit advance, `off=(-600, 100)`. So the x offset is
+`anchor_x − advance` and the y offset is the anchor delta: the attachment is computed by HarfBuzz
+from the GPOS table, with the metrics still coming from our callbacks. **The trap:** the table
+callback receives the tag as a `str`, not `bytes`; a bytes-keyed dict silently answers nothing, no
+error is raised, and `has_layout_positioning` just reads 0.
+
+The consequence for future diacritic work: mark attachment belongs on the table path (the same
+thing the compiler would emit), and the missing extents callback only matters for HarfBuzz's
+no-GPOS fallback. The compiled font currently ships no features at all — the combining-mark ink
+shift described under subcomponents stands in for attachment — so there is nothing for HarfBuzz to
+run yet.
+
 ## Notes / known limitations
 
 * If `uv` can't initialise its cache in `%LOCALAPPDATA%` (e.g. under a restricted sandbox),
