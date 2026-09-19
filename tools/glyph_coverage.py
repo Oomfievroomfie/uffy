@@ -29,6 +29,21 @@ def _allocated(start: int, end: int) -> int:
     return n
 
 
+def _percent_text(covered: int, allocated: int) -> str:
+    """Coverage as a percentage string that never rounds an incomplete count up to 100%.
+
+    Anything from 99% to (but not including) complete coverage is held at or below 99.9%, so a
+    block one codepoint short can never be reported as fully covered. Everything else rounds to
+    the nearest tenth.
+    """
+    if not allocated:
+        return "0.0%"
+    pct = 100.0 * covered / allocated
+    if 99.0 <= pct < 100.0:
+        pct = min(pct, 99.9)
+    return f"{pct:.1f}%"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("strokes", default="glyphs.strokes.json", nargs="?",
@@ -76,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     lines.append(f"| - with strokes | {with_strokes} |")
     lines.append(f"| - intentionally empty | {len(authored_set) - with_strokes} |")
     lines.append(f"| allocated codepoints (in scanned blocks) | {tot_alloc} |")
-    lines.append(f"| coverage of allocated | {tot_cov} ({100.0 * tot_cov / tot_alloc:.1f}%) |")
+    lines.append(f"| coverage of allocated | {tot_cov} ({_percent_text(tot_cov, tot_alloc)}) |")
     lines.append(f"| codepoints authored outside the block table | {len(outside)} |")
     if outside:
         lines.append("\nOutside blocks: " + " ".join(f"U+{cp:04X}" for cp in outside[:20]))
@@ -85,7 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     lines.append("| block | range | allocated | covered | % |")
     lines.append("|---|---:|---:|---:|---:|")
     for name, start, end, alloc, cov, pct in rows:
-        lines.append(f"| {name} | U+{start:04X}-U+{end:04X} | {alloc} | {cov} | {pct:.1f}% |")
+        lines.append(f"| {name} | U+{start:04X}-U+{end:04X} | {alloc} | {cov} | "
+                     f"{_percent_text(cov, alloc)} |")
 
     Path(args.output).write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"wrote {args.output} (authored {len(authored_set)}, coverage {tot_cov}/{tot_alloc})")
