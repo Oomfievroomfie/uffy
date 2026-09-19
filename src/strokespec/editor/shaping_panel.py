@@ -41,8 +41,8 @@ class ShapedStripView(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._source: Optional[StrokeFontSource] = None
-        self._run: Optional[ShapedRun] = None
-        self._paths: List[QPainterPath] = []
+        self._runs: List[ShapedRun] = []
+        self._paths: List[List[QPainterPath]] = []
         self._scale = 1.0
         self._em = 1.0
         self._ascender = 0.0
@@ -59,38 +59,42 @@ class ShapedStripView(QWidget):
         return self._px
 
     def set_pixel_size(self, px: float) -> None:
-        """Em size in pixels; re-lays out the run at the new size."""
+        """Em size in pixels; re-lays out the runs at the new size."""
         self._px = float(px)
         self._apply_height()
-        self.set_run(self._source, self._run)
+        self.set_runs(self._source, self._runs)
 
-    def set_run(self, source: Optional[StrokeFontSource], run: Optional[ShapedRun]) -> None:
+    def set_runs(self, source: Optional[StrokeFontSource], runs: List[ShapedRun]) -> None:
+        """Draw these runs in the given (visual) order; each run's glyphs are already visual."""
         self._source = source
-        self._run = run
-        self._paths: List[QPainterPath] = []
+        self._runs = list(runs)
+        self._paths = []
         width = 2 * self.MARGIN
-        if source is not None and run is not None:
+        if source is not None and self._runs:
             ascender, descender, _gap = source.font_extents()
             self._ascender = float(ascender)
             self._em = float(ascender - descender)
-            # The size sets the scale; the strip is as wide as the run and the scroll area moves
-            # it, rather than the run shrinking to fit the visible width.
+            # The size sets the scale; the strip is as wide as the text and the scroll area moves
+            # it, rather than the text shrinking to fit the visible width.
             self._scale = self._px / self._em
             self._base = self.PAD_TOP + self._ascender * self._scale
-            for g in run.glyphs:
-                glyph = source.glyph(g.gid)
-                self._paths.append(
-                    glyph_qpainterpath(glyph, baseline=source.baseline,
-                                       resolve=source.strokefont.get)
-                    if glyph is not None else QPainterPath())
-            width += run.advance * self._scale
+            for run in self._runs:
+                paths = []
+                for g in run.glyphs:
+                    glyph = source.glyph(g.gid)
+                    paths.append(
+                        glyph_qpainterpath(glyph, baseline=source.baseline,
+                                           resolve=source.strokefont.get)
+                        if glyph is not None else QPainterPath())
+                self._paths.append(paths)
+                width += run.advance * self._scale
         self.setFixedWidth(max(1, int(round(width))))
         self.update()
 
     def paintEvent(self, event) -> None:  # noqa: N802 (Qt naming)
         super().paintEvent(event)
-        run, source = self._run, self._source
-        if run is None or source is None:
+        source = self._source
+        if source is None or not self._runs:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -101,36 +105,38 @@ class ShapedStripView(QWidget):
         p.setPen(QPen(BASELINE, 1, Qt.PenStyle.DashLine))
         p.drawLine(0, int(self._base), self.width(), int(self._base))
 
-        # HarfBuzz returns the run in visual order, RTL included: the pen only moves right.
+        # Runs arrive in visual order and HarfBuzz returns each run's glyphs in visual order too
+        # (RTL included), so the pen only moves right.
         pen = self.MARGIN
         top = self.PAD_TOP
-        for g, path in zip(run.glyphs, self._paths):
-            w = g.x_advance * self._scale
-            if g.x_advance > 0:
-                p.setPen(QPen(CELL_LINE, 1, Qt.PenStyle.DotLine))
-                p.drawRect(QRectF(pen, top, w, self._em * self._scale))
-                p.setPen(CELL_LINE)
-                p.drawLine(int(pen), int(self._base + 2), int(pen), int(self._base + 5))
+        for run, paths in zip(self._runs, self._paths):
+            for g, path in zip(run.glyphs, paths):
+                w = g.x_advance * self._scale
+                if g.x_advance > 0:
+                    p.setPen(QPen(CELL_LINE, 1, Qt.PenStyle.DotLine))
+                    p.drawRect(QRectF(pen, top, w, self._em * self._scale))
+                    p.setPen(CELL_LINE)
+                    p.drawLine(int(pen), int(self._base + 2), int(pen), int(self._base + 5))
 
-            p.save()
-            p.translate(pen, self._base)
-            p.scale(self._scale, -self._scale)     # font units, y-up, as HarfBuzz reports them
-            p.translate(g.x_offset, g.y_offset)    # HarfBuzz's offset, in font units
-            p.setPen(Qt.PenStyle.NoPen)
-            glyph = source.glyph(g.gid)
-            if glyph is None:
-                p.setBrush(NOTDEF)                 # .notdef: no authored glyph for the codepoint
-                p.drawRect(QRectF(2 * SCALE, -self._ascender,
-                                  max(4 * SCALE, g.x_advance - 4 * SCALE), self._em * 0.6))
-            else:
-                p.setBrush(INK)
-                p.drawPath(path)
-            p.restore()
+                p.save()
+                p.translate(pen, self._base)
+                p.scale(self._scale, -self._scale)  # font units, y-up, as HarfBuzz reports them
+                p.translate(g.x_offset, g.y_offset)  # HarfBuzz's offset, in font units
+                p.setPen(Qt.PenStyle.NoPen)
+                glyph = source.glyph(g.gid)
+                if glyph is None:
+                    p.setBrush(NOTDEF)             # .notdef: no authored glyph for the codepoint
+                    p.drawRect(QRectF(2 * SCALE, -self._ascender,
+                                      max(4 * SCALE, g.x_advance - 4 * SCALE), self._em * 0.6))
+                else:
+                    p.setBrush(INK)
+                    p.drawPath(path)
+                p.restore()
 
-            p.setPen(LABEL)
-            p.drawText(QRectF(pen - 12, top - 14, max(w, 24.0) + 24, 13),
-                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, g.text)
-            pen += w
+                p.setPen(LABEL)
+                p.drawText(QRectF(pen - 12, top - 14, max(w, 24.0) + 24, 13),
+                           Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, g.text)
+                pen += w
         p.end()
 
 
@@ -217,12 +223,13 @@ class ShapingExample(QWidget):
     def _reshape(self) -> None:
         text = self._sample.text()
         if self._shaper is None:
-            self._strip.set_run(None, None)
+            self._strip.set_runs(None, [])
             return
-        direction = {0: None, 1: "ltr", 2: "rtl"}[self._direction.currentIndex()]
+        # "Auto" leaves the paragraph direction to the bidi algorithm (P2/P3); LTR/RTL force it.
+        base = {0: None, 1: "ltr", 2: "rtl"}[self._direction.currentIndex()]
         try:
-            run = self._shaper.shape(text, direction=direction)
+            runs = self._shaper.shape_visual(text, base_direction=base)
         except Exception:
-            self._strip.set_run(None, None)
+            self._strip.set_runs(None, [])
             return
-        self._strip.set_run(self._shaper.source, run)
+        self._strip.set_runs(self._shaper.source, runs)
