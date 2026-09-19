@@ -23,6 +23,7 @@ from ..shaping import ShapedRun, Shaper, StrokeFontSource
 from .uiutil import glyph_qpainterpath
 
 BACKGROUND = "#eceef2"
+CELL_LINE = QColor(180, 185, 195)
 INK = QColor(28, 30, 36)
 NOTDEF = QColor(150, 60, 60)
 BASELINE = QColor(150, 110, 110)
@@ -34,7 +35,7 @@ class ShapedStripView(QWidget):
 
     MARGIN = 8.0
     PAD_TOP = 15.0          # room for the cluster text above the em box
-    PAD_BOTTOM = 6.0
+    PAD_BOTTOM = 16.0
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -104,6 +105,12 @@ class ShapedStripView(QWidget):
         top = self.PAD_TOP
         for g, path in zip(run.glyphs, self._paths):
             w = g.x_advance * self._scale
+            if g.x_advance > 0:
+                p.setPen(QPen(CELL_LINE, 1, Qt.PenStyle.DotLine))
+                p.drawRect(QRectF(pen, top, w, self._em * self._scale))
+                p.setPen(CELL_LINE)
+                p.drawLine(int(pen), int(self._base + 2), int(pen), int(self._base + 5))
+
             p.save()
             p.translate(pen, self._base)
             p.scale(self._scale, -self._scale)     # font units, y-up, as HarfBuzz reports them
@@ -171,7 +178,6 @@ class ShapingExample(QWidget):
         self._scroll.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self._fit_scroll_height()
         lay.addWidget(self._scroll)
-        lay.addStretch(1)
 
         self._sample.textChanged.connect(self._reshape)
         self._direction.currentIndexChanged.connect(self._reshape)
