@@ -107,6 +107,11 @@ These are the things that repeatedly cost time when forgotten.
   real requirement (e.g. the line-butt snapping: a floating `2r` segment vs. the cell's own
   edge/diagonal differs wildly even though both "touched a grid line").
 
+- **Never write self-referential or self-congratulatory text into deliverables.** No "look how
+  careful I am", no noting that a requirement was met, no justifying a design choice, no explaining
+  what the user already knows. That applies to comments, docstrings, README/DESIGN text and commit
+  messages. A comment states a fact the code needs; anything else is noise.
+
 - **Read the requirement literally; the user means exactly what they say.** Terminology and
   precision matter and are corrected harshly: flat ends are **butts**, not caps; snap to the
   **cell's own edge/diagonal** (real corner coords), not a floating segment; diagonal case

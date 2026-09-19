@@ -1,13 +1,8 @@
-"""HarfBuzz shaping over the stroke set being authored, with no font file behind it.
+"""HarfBuzz shaping with the glyph data supplied by a ``FontSource``.
 
-HarfBuzz asks a font for glyph ids, advances and extents through callbacks rather than reading them
-itself, so a font can be **mocked by those funcs**: an empty face plus custom font funcs is a
-complete font as far as the shaper is concerned. ``StrokeFontSource`` is the authored stroke set
-wearing that costume — nothing is compiled, nothing is written to disk, and the shaping result is
-exactly what HarfBuzz would produce for a compiled face with the same glyphs, advances and metrics.
-
-The ``FontSource`` interface is the seam: shaping never touches a file, a ``QFont`` or the compiled
-binary, so the caller can shape anything that can answer those callbacks.
+HarfBuzz asks a font for glyph ids, advances and extents through callbacks, so an empty face plus
+custom font funcs is a usable font without a font file. ``StrokeFontSource`` answers those callbacks
+from a ``StrokeFont``.
 """
 
 from __future__ import annotations
@@ -92,12 +87,10 @@ class FontSource:
 
 
 class StrokeFontSource(FontSource):
-    """The stroke set being authored, answering HarfBuzz's font callbacks in its place.
+    """A ``StrokeFont`` answering HarfBuzz's font callbacks.
 
-    Glyph ids are assigned in codepoint order with 0 left for ``.notdef``. The advances are the
-    authored ones (``Glyph.advance_units``: 0 for combining marks, else 8 or 16 cells) and the
-    outlines are the same ``geometry`` expansion the editor previews with — this only *pretends*
-    to be a font file, it never becomes one.
+    Glyph ids are the codepoints in order, with 0 left for ``.notdef``. Advances are
+    ``Glyph.advance_units`` (0 for combining marks, else 8 or 16 cells).
     """
 
     def __init__(self, strokefont: StrokeFont) -> None:
@@ -159,15 +152,12 @@ def _cluster_text(text: str, clusters: List[int]) -> List[str]:
 
 
 class Shaper:
-    """Shapes text with HarfBuzz against a :class:`FontSource` (no font file involved)."""
+    """Shapes text with HarfBuzz against a :class:`FontSource`."""
 
     def __init__(self, source: FontSource) -> None:
         self.source: FontSource = source
-        # A face built from an empty blob: there is no font binary anywhere in this path, and
-        # HarfBuzz is told everything it needs by the funcs below, so it never looks for tables.
-        # (The empty-face *singleton* — ``hb.Face(None)`` — is not equivalent: shaping against it
-        # returns every advance as 0 even though the funcs answer correctly when called directly,
-        # so build a real face from an empty blob instead.)
+        # An empty face, not hb.Face(None): shaping against the empty-face singleton returns every
+        # advance as 0, even though the funcs answer correctly when called directly.
         self.font = hb.Font(hb.Face(hb.Blob(b"")))
         self.font.funcs = font_funcs(self.source)
         self.font.scale = (self.source.upem, self.source.upem)

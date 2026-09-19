@@ -460,15 +460,13 @@ class ReferenceFontsDock(QWidget):
 
         lay = QVBoxLayout(self)
         self._list = QListWidget()
-        # The fonts list is one MODE of this slot; the second tab is a HarfBuzz shaping example
-        # (mocked font funcs, no font file). The tabs cover the fonts list only — the related-glyph
-        # and native-reference panels below are not part of either mode.
+        # The tab bar covers the fonts list only: the related-glyph and native-reference panels
+        # below are not part of either tab.
         self._tabs = QTabWidget()
         self._tabs.addTab(self._list, "Reference fonts")
         self._shaping = ShapingExample()
         self._tabs.addTab(self._shaping, "Shaping example")
-        # Edits mark the shaping preview stale instead of rebuilding it: the rebuild costs a few
-        # ms and there is no point paying for it while the fonts list is the visible tab.
+        # Edits mark the shaping tab stale instead of rebuilding it while it is not visible.
         self._shaping_dirty = False
         self._tabs.currentChanged.connect(self._on_mode_changed)
         lay.addWidget(self._tabs)
@@ -560,16 +558,12 @@ class ReferenceFontsDock(QWidget):
         self._native_ghost_fn = cb
 
     def set_strokefont(self, strokefont) -> None:
-        """Point the shaping tab at the stroke set being authored."""
+        """Point the shaping tab at a stroke set."""
         self._shaping.set_font(strokefont)
         self._shaping_dirty = False
 
     def refresh_shaping(self) -> None:
-        """The stroke set changed: re-read it into the shaping preview.
-
-        Deferred while the shaping tab is not the visible mode — the shape callbacks would answer
-        the same stale data either way, and switching to the tab rebuilds it then.
-        """
+        """Re-read the stroke set into the shaping tab, or mark it stale while that tab is hidden."""
         if self._tabs.currentWidget() is self._shaping:
             self._shaping.refresh()
         else:
@@ -1336,8 +1330,6 @@ class MainWindow(QMainWindow):
                 self.strokefont.remove(glyph.codepoint)
                 self._grid.refresh()
             self._pending_commit = None
-        # An edit anywhere changes what the shaping callbacks answer (a new glyph is a new glyph
-        # id as well as a new advance/outline), so the shaping preview re-reads the stroke set.
         self._refdock.refresh_shaping()
 
     def _mark_dirty(self, invalidate_grid: bool = False) -> None:

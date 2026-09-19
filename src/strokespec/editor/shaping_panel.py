@@ -1,10 +1,4 @@
-"""The reference dock's second mode: a shaping preview of the font being authored.
-
-The shaping is ``strokespec.shaping`` — uharfbuzz driven by custom font funcs, with no font file
-and no compilation: the stroke set answers HarfBuzz's font callbacks directly. This module is the
-view. It draws the run at the positions HarfBuzz returned, using the editor's own stroke geometry
-for the outlines (``glyph_qpainterpath``), so what is on screen is the authored font shaped.
-"""
+"""The reference dock's shaping tab: draws a shaped sample of the font being authored."""
 
 from __future__ import annotations
 
@@ -59,16 +53,14 @@ class ShapedStripView(QWidget):
     def set_run(self, source: Optional[StrokeFontSource], run: Optional[ShapedRun]) -> None:
         self._source = source
         self._run = run
-        # The outlines come from the editor's own stroke geometry (the same call the canvas and
-        # the grid use) and are built once per run, not per repaint: HarfBuzz supplies positions.
         self._paths: List[QPainterPath] = []
         width = 2 * self.MARGIN
         if source is not None and run is not None:
             ascender, descender, _gap = source.font_extents()
             self._ascender = float(ascender)
             self._em = float(ascender - descender)
-            # One fixed scale from the height: the run keeps its own width and the view scrolls,
-            # instead of the glyphs shrinking to fit (which would resize no nothing but the run).
+            # Scale from the height only: the strip is as wide as the run, and the scroll area
+            # moves it, rather than the run shrinking to fit the visible width.
             self._scale = (self.height() - 2 * self.MARGIN) / self._em
             self._base = self.MARGIN + self._ascender * self._scale
             for g in run.glyphs:
@@ -95,8 +87,7 @@ class ShapedStripView(QWidget):
         p.setPen(QPen(BASELINE, 1, Qt.PenStyle.DashLine))
         p.drawLine(0, int(self._base), self.width(), int(self._base))
 
-        # HarfBuzz returns the run in visual order (leftmost glyph first, RTL included), so the
-        # pen only ever moves right, by each glyph's own advance.
+        # HarfBuzz returns the run in visual order, RTL included: the pen only moves right.
         pen = self.MARGIN
         top = self._base - self._ascender * self._scale
         for g, path in zip(run.glyphs, self._paths):
@@ -134,7 +125,7 @@ class ShapedStripView(QWidget):
 
 
 class ShapingExample(QWidget):
-    """Shapes a sample string with HarfBuzz against the live stroke set, and shows the result."""
+    """Shapes a sample string with HarfBuzz against the loaded stroke set."""
 
     SAMPLE = "AV e\u0301 \u4e2d \u05d0\u05d1\u05d2"
 
@@ -157,8 +148,8 @@ class ShapingExample(QWidget):
         row.addWidget(self._direction)
         lay.addLayout(row)
 
-        # The strip is as wide as the run and is the ONLY thing that scrolls: without the scroll
-        # area a long sample would widen the whole dock, and the dock is a sidebar.
+        # The strip carries the whole run and the scroll area moves it, so a long sample cannot
+        # widen the dock.
         self._strip = ShapedStripView()
         self._scroll = QScrollArea()
         self._scroll.setWidget(self._strip)
@@ -170,8 +161,8 @@ class ShapingExample(QWidget):
             self._strip.height() + self._scroll.horizontalScrollBar().sizeHint().height() + 4)
         lay.addWidget(self._scroll)
 
-        # The status line wraps, so its minimum width is its longest word: an unwrapped label's
-        # minimum is the whole string, which would pin the whole dock to that width forever.
+        # Wrapped: an unwrapped QLabel's minimum width is its whole text, which would set the
+        # dock's minimum width.
         self._info = QLabel()
         self._info.setWordWrap(True)
         self._info.setStyleSheet("color:#5a6070;")
@@ -181,15 +172,15 @@ class ShapingExample(QWidget):
         self._direction.currentIndexChanged.connect(self._reshape)
         self._reshape()
 
-    # --- the live font ---------------------------------------------------------
+    # --- the loaded font -------------------------------------------------------
     def set_font(self, strokefont: Optional[StrokeFont]) -> None:
-        """Point the preview at a stroke set (or none). Rebuilds the mocked font funcs."""
+        """Point the tab at a stroke set, or at none."""
         self._strokefont = strokefont
         self._shaper = Shaper(StrokeFontSource(strokefont)) if strokefont is not None else None
         self._reshape()
 
     def refresh(self) -> None:
-        """Re-read the stroke set (an edit changed what the shape callbacks must answer)."""
+        """Re-read the stroke set after an edit."""
         self.set_font(self._strokefont)
 
     def _reshape(self) -> None:
@@ -201,7 +192,7 @@ class ShapingExample(QWidget):
         direction = {0: None, 1: "ltr", 2: "rtl"}[self._direction.currentIndex()]
         try:
             run = self._shaper.shape(text, direction=direction)
-        except Exception as exc:                      # never let a shaping error kill the dock
+        except Exception as exc:
             self._strip.set_run(None, None)
             self._info.setText(f"shaping failed: {exc}")
             return
