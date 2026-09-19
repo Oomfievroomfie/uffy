@@ -196,16 +196,17 @@ class Shaper:
         return ShapedRun(text=text, direction=str(buf.direction), script=str(buf.script),
                          language=str(buf.language), glyphs=glyphs)
 
-    def shape_visual(self, text: str, base_direction: Optional[str] = None,
-                     script: Optional[str] = None, language: Optional[str] = None,
+    def shape_visual(self, text: str, script: Optional[str] = None,
+                     language: Optional[str] = None,
                      features: Optional[dict] = None) -> List[ShapedRun]:
         """Shape a paragraph: bidi runs, each shaped on its own, returned in visual order.
 
         HarfBuzz resolves one direction per buffer, so a paragraph that mixes directionalities
-        has to be split first — the bidi algorithm's job, not the shaper's.
+        has to be split first — the bidi algorithm's job, not the shaper's. A caller that wants
+        one direction for the whole string calls :meth:`shape` instead.
         """
         return [
             self.shape(text[start:end], direction="rtl" if rtl else "ltr", script=script,
                        language=language, features=features)
-            for start, end, rtl in visual_runs(text, base_direction)
+            for start, end, rtl in visual_runs(text)
         ]

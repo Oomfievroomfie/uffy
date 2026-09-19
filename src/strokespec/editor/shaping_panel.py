@@ -225,10 +225,12 @@ class ShapingExample(QWidget):
         if self._shaper is None:
             self._strip.set_runs(None, [])
             return
-        # "Auto" leaves the paragraph direction to the bidi algorithm (P2/P3); LTR/RTL force it.
+        # Auto = bidi runs (HarfBuzz resolves one direction per buffer); LTR/RTL override it and
+        # shape the whole sample in encoding order.
         base = {0: None, 1: "ltr", 2: "rtl"}[self._direction.currentIndex()]
         try:
-            runs = self._shaper.shape_visual(text, base_direction=base)
+            runs = (self._shaper.shape_visual(text) if base is None
+                    else [self._shaper.shape(text, direction=base)])
         except Exception:
             self._strip.set_runs(None, [])
             return

@@ -288,10 +288,10 @@ The full set of keyboard and mouse controls is below.
   **Reference fonts** (the list and its buttons) and **Shaping example** — type a sample, pick
   Auto/LTR/RTL and an em size in pixels, and the tab draws that text shaped by **HarfBuzz** against
   the font you are drawing (the stroke set answers HarfBuzz's font callbacks; no font file and no
-  compilation). A sample that mixes directionalities is split into bidi runs, each shaped on its
-  own and laid out in visual order — Auto takes the paragraph direction from the text, LTR/RTL
-  force it. The strip scrolls horizontally when the text is wider than the panel, and re-reads the
-  stroke set after every edit (while the tab is visible; otherwise on the next switch to it).
+  compilation). **Auto** splits a sample that mixes directionalities into bidi runs, each shaped on
+  its own and laid out in visual order; **LTR**/**RTL** override bidi and shape the whole sample in
+  encoding order. The strip scrolls horizontally when the text is wider than the panel, and re-reads
+  the stroke set after every edit (while the tab is visible; otherwise on the next switch to it).
 * **Native reference** panel — the current codepoint as a big character.
 * **Related glyphs** — components/IDS of the current codepoint, each with **Copy** / **Open**,
   four **axial squish arrows** (↑↓←→), and four **diagonal squish buttons** (↖↗↙↘) below them.
