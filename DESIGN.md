@@ -107,10 +107,8 @@ codepoint reference plus a **destination bounding box**, given as its **start an
 the *host* glyph's **cell** coordinates (integer coordinates are cell corners, so a full cell is
 `(0,0)→(16,16)`; a `Point` index `g` sits at cell coordinate `g + 0.5`).
 
-An instance draws the referenced glyph's strokes inside its box and nothing else: no glyph is
-attached to another, and the compiled font gains no positioning table from it. Combining marks land
-on their base through their own zero advance and the one-cell ink shift (see the stroke model), not
-through an instance; mark-to-base attachment would be a GPOS feature, and the font emits none.
+An instance reuses a drawing; it does not attach one glyph to another. The box places the
+referenced strokes, and an instance holds nowhere to say that this mark belongs on that base.
 
 * **The box may be negatively sized.** `end.x < start.x` mirrors the instance horizontally,
   `end.y < start.y` vertically — both at once is a 180° turn. That is the only way an instance is

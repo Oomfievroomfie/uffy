@@ -219,9 +219,8 @@ def _clamp_box(x, y) -> Tuple[int, int]:
 class Subcomponent:
     """A reference to another codepoint, placed in this glyph by a bounding box.
 
-    An instance draws the referenced glyph's strokes again inside a box; nothing is attached to
-    anything and nothing is positioned. A combining mark lands on its base through its own zero
-    advance and the one-cell ink shift, not through an instance.
+    An instance reuses another glyph's drawing; it does not attach a mark to a base. It holds the
+    reference and the box, and nowhere to say that one glyph belongs on another.
 
     ``start``/``end`` are the two opposite corners of the instance's bounding box, in **cell**
     coordinates of the *containing* glyph's grid (``0..GRID_W`` across, ``0..GRID_H`` up — cell
