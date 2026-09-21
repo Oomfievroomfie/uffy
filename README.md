@@ -196,16 +196,19 @@ src/strokespec/
   svgout.py        strokes -> stroked SVG (debug/inspection; arcs are a single quadratic)
   ufo.py           write a UFO (***authoring format only***) from the stroke geometry
   compiler.py      UFO (in memory) -> TTF via ufo2ft; gftools/fontmake CLI optional
+  shaping.py       HarfBuzz shaping over the stroke set, through custom font funcs
+  bidi.py          UAX #9 subset: paragraph level + directional runs
   refbrowser.py    scan a folder of reference fonts; render glyphs via FreeType+HarfBuzz
   cli.py           `uffy` command-line entry point
   editor/          PySide6 graphical editor
     grid.py        interactive, FontForge-style glyph grid (clickable cells)
     glyph_canvas.py 16x16 stroke-authoring canvas (line/arc, drag endpoints, reverse to flip)
     main_window.py  main window (grid left, editor right, reference-font dock)
+    shaping_panel.py the dock's shaping tab (sample in, shaped text out)
     fontfallback.py  per-codepoint native-text font fallback for the editor previews
     uiutil.py       stroke -> QPainterPath painting + PIL -> QImage
   data/fonts/      bundled fallback fonts (Noto scripts + GNU Unifont) + their licenses
-  examples/sample.strokes.json
+examples/          sample stroke set (examples/sample.strokes.json) used by the quick start
 ```
 
 ## The GUI
@@ -221,8 +224,8 @@ src/strokespec/
 * a **glyph editor** on the right (the 16x16 canvas + stroke list + tool row). Hovering a row in
   the stroke list shows that stroke's provenance (if any) as a tooltip; **subcomponents** are
   listed there too, naming the codepoint they reference.
-* a **Reference Fonts** dock with a big **native reference** panel and a **related-glyphs**
-  list.
+* a **Reference Fonts** dock with a big **native reference** panel, a **related-glyphs** list and
+  a **Shaping example** tab.
 * **File → Compile TTF…** to build the font with Google's tools.
 
 The full set of keyboard and mouse controls is below.
@@ -277,7 +280,8 @@ The full set of keyboard and mouse controls is below.
 * **Block** selector, **search** box (substring over the character's name, the character
   itself and its hex form), **Show unassigned** toggle.
 * The count label under the list shows how many of the block's **allocated** codepoints are
-  actually covered, as a percentage.
+  actually covered, as a percentage. A block short of full coverage never reads 100%: anything
+  from 99% up to (but not including) complete shows 99%.
 * Each block remembers its own scroll position when you switch blocks and come back.
 * Click a cell to open that glyph; the list only scrolls when *you* scroll it (opening/editing
   a codepoint does not move the view).

@@ -320,9 +320,9 @@ error is raised, and `has_layout_positioning` just reads 0.
 
 The consequence for future diacritic work: mark attachment belongs on the table path (the same
 thing the compiler would emit), and the missing extents callback only matters for HarfBuzz's
-no-GPOS fallback. The compiled font currently ships no features at all — the combining-mark ink
-shift described under subcomponents stands in for attachment — so there is nothing for HarfBuzz to
-run yet.
+no-GPOS fallback. The compiled font carries no features and no attachment lookups: its GPOS holds
+one standalone lookup that nothing references (so HarfBuzz's fallback mark positioning stays off),
+and the combining-mark ink shift described under subcomponents stands in for attachment.
 
 ## Notes / known limitations
 
