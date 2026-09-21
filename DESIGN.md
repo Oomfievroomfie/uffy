@@ -107,11 +107,10 @@ codepoint reference plus a **destination bounding box**, given as its **start an
 the *host* glyph's **cell** coordinates (integer coordinates are cell corners, so a full cell is
 `(0,0)→(16,16)`; a `Point` index `g` sits at cell coordinate `g + 0.5`).
 
-This is not a diacritics system: an instance draws the referenced glyph's strokes again inside a
-box, and it carries no attachment, no anchor, no positioning and no GPOS in the compiled font.
-Combining marks are handled without it — a mark is a zero-advance glyph whose ink is shifted one
-cell left (see the stroke model), which is what lands it on its base; mark-to-base attachment would
-be a GPOS feature, and the font emits none.
+An instance draws the referenced glyph's strokes inside its box and nothing else: no glyph is
+attached to another, and the compiled font gains no positioning table from it. Combining marks land
+on their base through their own zero advance and the one-cell ink shift (see the stroke model), not
+through an instance; mark-to-base attachment would be a GPOS feature, and the font emits none.
 
 * **The box may be negatively sized.** `end.x < start.x` mirrors the instance horizontally,
   `end.y < start.y` vertically — both at once is a 180° turn. That is the only way an instance is
