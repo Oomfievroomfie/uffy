@@ -322,7 +322,7 @@ The consequence for future diacritic work: mark attachment belongs on the table 
 thing the compiler would emit), and the missing extents callback only matters for HarfBuzz's
 no-GPOS fallback. The compiled font carries no features and no attachment lookups: its GPOS holds
 one standalone lookup that nothing references (so HarfBuzz's fallback mark positioning stays off),
-and the combining-mark ink shift described under subcomponents stands in for attachment.
+and the combining-mark ink shift described under the stroke model stands in for attachment.
 
 ## Notes / known limitations
 
