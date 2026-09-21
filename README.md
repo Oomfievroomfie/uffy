@@ -161,14 +161,12 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
   the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
   set's metadata.
-* A glyph may be flagged **combining**. In a compiled font that flag is where the diacritic data
-  lives — GPOS mark attachment and its anchors — and this tool offers no way to author it. Combining
-  is emulated instead: the glyph is given **zero advance**, and the exporter moves its outlines
-  **left by the glyph's own width**, which is where the pen already sits after the base, so the mark
-  lands on the base's cell. Draw a combining glyph as if it sat directly on the character it
-  combines with. A few codepoints are reordered ahead of their base (the Devanagari pre-base
-  matras, U+093F and U+094E) and skip that move; they are flagged combining like any other mark and
-  need nothing else.
+* A glyph may be flagged **combining**. Normally that would put diacritics information (GPOS mark
+  attachment and its anchors) in the compiled font file, but for simplicity this tool does not expose
+  a way to set that information. So instead it makes the glyph **zero advance** and moves its outlines
+  **left by its design width**, to emulate combining. Draw a combining glyph as though you were
+  drawing it directly on top of what it combines onto. (A few codepoints that Unicode orders in
+  unusual ways skip the shift — the Devanagari pre-base matras — so don't worry about those.)
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
