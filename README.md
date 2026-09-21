@@ -161,11 +161,12 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
 * The **baseline**, **x-height** and **cap-height** are globally configurable (grid cells above
   the bottom edge of the em box). Set them via **Font → Metrics Options…** or in the stroke
   set's metadata.
-* A glyph may be flagged **combining** (zero advance). The mark is authored in its own cell and
-  exported with its ink shifted one cell to the **left** (negative x), so a zero-advance mark drawn
-  after its base lands on the base's cell; that shift takes the place of the mark-to-base anchors
-  GPOS would otherwise use. Exception: the Devanagari pre-base matras (U+093F, U+094E), which the
-  shaper reorders before their consonant, are left unshifted.
+* A glyph may be flagged **combining** (zero advance). Draw it in its own cell: the exporter shifts
+  its ink one cell to the **left** (negative x), which is where the pen already sits after the base,
+  so the mark lands on the base's cell. Every mark is shifted by that same cell and no anchors are
+  involved, so nothing raises or nudges a mark to suit a particular base. Exception: the Devanagari
+  pre-base matras (U+093F, U+094E), which the shaper reorders before their consonant, are left
+  unshifted.
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
