@@ -230,10 +230,10 @@ def make_ufo(
         conts = glyph_outline_from_strokes(glyph, pen_radius, baseline)
         if merge_edges:
             conts = merge_stroke_edges(conts)
-        # Combining glyphs: place the ink one cell to the LEFT, as Unifont does (its combining
+        # Combining glyphs: place the ink a full width to the LEFT, as Unifont does (its combining
         # marks have zero advance with negative-x outlines, e.g. U+093F ink at x -1024..-320).
         # A zero-advance mark is drawn at the pen, which is already past its base, so shifting the
-        # ink left by the glyph's own cell width lands it back on the base's cell — no GPOS and no
+        # ink left by the glyph's own width lands it back on the base's cell — no GPOS and no
         # mark/abvm/mkmk needed. Exception: the Devanagari pre-base matras, which the shaper
         # reorders to sit *before* the base: there the pen is already at the base's cell, so they
         # are left unshifted (their ink then overlays the base's cell, as authored).

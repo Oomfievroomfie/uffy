@@ -83,7 +83,7 @@ instead, and hand the outlines to the compiler.
   so overlaps fill instead of punching holes. Consequently the pen radius is 32 (a one-cell
   diameter) so a minimum-size arc/semicircle stays well inside the box.
 * A glyph may be flagged **combining** (zero advance). Combining glyphs are exported with their
-  ink shifted **one cell to the left** (negative x), exactly as Unifont does — its combining marks
+  ink shifted **a full width to the left** (negative x), exactly as Unifont does — its combining marks
   are zero-advance with negative-x outlines (e.g. U+093F ink at x −1024…−320, U+0940 at −704…0).
   A zero-advance mark is drawn at the pen, which is already past its base, so the shifted ink
   lands back on the base's cell: an authored 16x16 combining glyph overlays its base's 16x16 cell.
