@@ -168,8 +168,8 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   exported **shifted left by the glyph's own width**. A zero-advance glyph is drawn where the pen
   already is — past the base — so that shift is what puts the mark back onto it. Draw a combining
   glyph as though it were sitting directly on the character it attaches to. (Unicode reorders a few
-  marks to sit before their base; the exporter accounts for that on its own, so you do not have to do
-  anything different for them.)
+  marks to sit before their base, but the exporter accounts for that on its own, so you do not have to
+  do anything different for them.)
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
