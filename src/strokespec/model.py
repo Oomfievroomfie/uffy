@@ -219,6 +219,10 @@ def _clamp_box(x, y) -> Tuple[int, int]:
 class Subcomponent:
     """A reference to another codepoint, placed in this glyph by a bounding box.
 
+    This is a drawing feature, **not a diacritics system**: it draws the referenced glyph's
+    strokes again inside a box, and carries no attachment, anchor or positioning. Combining marks
+    are handled without it — a mark is a zero-advance glyph whose ink is shifted one cell left.
+
     ``start``/``end`` are the two opposite corners of the instance's bounding box, in **cell**
     coordinates of the *containing* glyph's grid (``0..GRID_W`` across, ``0..GRID_H`` up — cell
     coordinates, not cell-centre point indices, so the full cell box is ``(0,0)-(16,16)``).

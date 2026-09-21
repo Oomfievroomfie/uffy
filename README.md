@@ -141,7 +141,11 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   filled with the **non-zero winding rule** so overlapping strokes **union**.
 * A glyph may also **instance** another codepoint as a **subcomponent**: a reference plus the
   **start and end corners of a bounding box**, stored in *cell* coordinates (integer values are
-  cell corners, so the full cell box is `(0,0)→(16,16)`). The box may be **negatively sized** —
+  cell corners, so the full cell box is `(0,0)→(16,16)`). **A subcomponent is not a diacritics
+  system**: it draws the referenced glyph's strokes again inside a box, with no attachment, anchor
+  or positioning, and it adds nothing to the compiled font's layout tables. Combining marks are
+  handled without it — a mark is a zero-advance glyph whose ink is shifted one cell left, which is
+  what lands it on its base. The box may be **negatively sized** —
   `end.x < start.x` mirrors the instance horizontally, and likewise vertically. The referenced
   glyph's own cell box `(0,0)→(its width,16)` is mapped onto that box, so a full-cell box of the
   same width is the identity placement. The transform is applied to the referenced glyph's

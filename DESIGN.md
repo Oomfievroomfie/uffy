@@ -102,6 +102,12 @@ instead, and hand the outlines to the compiler.
 
 ## Subcomponents (instancing other codepoints)
 
+**Subcomponents are not a diacritics system.** An instance draws a referenced glyph's strokes again
+inside a box; it carries no attachment, no anchor and no positioning, and it adds no GPOS to the
+compiled font. Combining marks are handled without it: a mark is a zero-advance glyph whose ink is
+shifted one cell left (see the stroke model), which is what lands it on its base. Mark-to-base
+attachment would be a GPOS feature, and the font emits none.
+
 A glyph may **instance** another codepoint instead of repeating its strokes. An instance is a
 codepoint reference plus a **destination bounding box**, given as its **start and end corners** in
 the *host* glyph's **cell** coordinates (integer coordinates are cell corners, so a full cell is
