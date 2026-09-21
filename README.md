@@ -163,8 +163,8 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   set's metadata.
 * A glyph may be flagged **combining** — a mark that belongs on the character before it. A normal
   font records where such a mark goes: the mark-attachment offsets in its layout tables (GPOS) tell
-  the renderer how far to move the mark onto its base. This tool has nowhere to put those offsets, so
-  it emulates the placement instead: the glyph is given **zero advance**, and its outlines are
+  the renderer how far to move the mark onto its base. This tool does not offer a way to author those
+  offsets; it emulates the placement instead: the glyph is given **zero advance**, and its outlines are
   exported **shifted left by the glyph's own width**. A zero-advance glyph is drawn where the pen
   already is — past the base — so that shift is what puts the mark back onto it. Draw a combining
   glyph as though it were sitting directly on the character it attaches to. (A couple of marks that
