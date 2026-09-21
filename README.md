@@ -167,7 +167,8 @@ one: no complex shaping, no ligatures, no kerning, no variable axes, no COLR. It
   **left by the glyph's own width**, which is where the pen already sits after the base, so the mark
   lands on the base's cell. Draw a combining glyph as if it sat directly on the character it
   combines with. A few codepoints are reordered ahead of their base (the Devanagari pre-base
-  matras, U+093F and U+094E); those skip the move.
+  matras, U+093F and U+094E) and skip that move; they are flagged combining like any other mark and
+  need nothing else.
 * Defaults come from Unicode: East Asian Width **W/F** → **16** cells, otherwise **8**;
   general category **Mn/Mc/Me** → starts **combining**; both overridable per glyph.
 
