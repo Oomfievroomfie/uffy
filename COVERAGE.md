@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-24 01:40  
+Generated: 2026-09-24 02:05  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 12821 |
-| - with strokes | 12792 |
+| codepoints authored | 23397 |
+| - with strokes | 23368 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 172808 |
-| coverage of allocated | 12821 (7.4%) |
+| coverage of allocated | 23397 (13.5%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -87,6 +87,7 @@ Generated: 2026-09-24 01:40
 | Devanagari Extended | U+A8E0-U+A8FF | 32 | 32 | 100.0% |
 | Hangul Jamo Extended-A | U+A960-U+A97F | 29 | 29 | 100.0% |
 | Latin Extended-E | U+AB30-U+AB6F | 62 | 62 | 100.0% |
+| Hangul Syllables | U+AC00-U+D7AF | 11172 | 11172 | 100.0% |
 | Hangul Jamo Extended-B | U+D7B0-U+D7FF | 72 | 72 | 100.0% |
 | Vertical Forms | U+FE10-U+FE1F | 10 | 10 | 100.0% |
 | Combining Half Marks | U+FE20-U+FE2F | 16 | 16 | 100.0% |
@@ -113,7 +114,6 @@ Generated: 2026-09-24 01:40
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | Egyptian Hieroglyph Format Controls | U+13430-U+1345F | 38 | 4 | 10.5% |
 | CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 1760 | 8.4% |
-| Hangul Syllables | U+AC00-U+D7AF | 11172 | 596 | 5.3% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 6 | 5.2% |
 | Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 40 | 5.2% |
 | Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 7 | 2.7% |
