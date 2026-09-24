@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-24 09:59  
+Generated: 2026-09-24 10:03  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 23781 |
-| - with strokes | 23752 |
+| codepoints authored | 23784 |
+| - with strokes | 23755 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 172808 |
-| coverage of allocated | 23781 (13.8%) |
+| coverage of allocated | 23784 (13.8%) |
 | codepoints authored outside the block table | 0 |
 
 ## Coverage by block
@@ -113,7 +113,7 @@ Generated: 2026-09-24 09:59
 | Latin Extended-F | U+10780-U+107BF | 62 | 29 | 46.8% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | Egyptian Hieroglyph Format Controls | U+13430-U+1345F | 38 | 4 | 10.5% |
-| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 2116 | 10.1% |
+| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 2119 | 10.1% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 6 | 5.2% |
 | Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 40 | 5.2% |
 | Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 7 | 2.7% |
