@@ -161,6 +161,9 @@ These are the things that repeatedly cost time when forgotten.
      authored / with strokes / intentionally empty, % of allocated, and the four block buckets
      (filled = 100%, mostly-filled = 50–99%, slightly-filled = 1–49%, untouched = 0%; blocks with
      0 allocated codepoints are excluded) — then edit `README.md` to match.
+  4. The numbers are never suspicious. Do not second-guess them: do not flag a figure as
+     anomalous, do not investigate it, and do not "correct" it. Report them as they come out and
+     move on.
 
   Then commit that refreshed result per the standing "always commit your work" rule above — and
   that commit **includes `glyphs.strokes.json`**, the authored data the report was computed from
