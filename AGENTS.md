@@ -150,18 +150,16 @@ These are the things that repeatedly cost time when forgotten.
   the standing "always commit your work" rule above. It is not a benchmark. Do not overthink it.
 
   Steps:
-  1. Validate the authored data loads:
-     `uv run --no-sync python -c "from strokespec.model import StrokeFont; print(len(StrokeFont.load('glyphs.strokes.json').codepoints()))"`.
-  2. Regenerate the coverage report: `uv run --no-sync python tools/glyph_coverage.py`
+  1. Regenerate the coverage report: `uv run --no-sync python tools/glyph_coverage.py`
      (rewrites `COVERAGE.md`).
-  3. Copy the README **Coverage** summary from the regenerated `COVERAGE.md` Summary table, which
+  2. Copy the README **Coverage** summary from the regenerated `COVERAGE.md` Summary table, which
      holds every number the README needs: codepoints authored / with strokes / intentionally empty,
      coverage of allocated, and the five block-bucket counts (filled, mostly-filled, slightly-filled,
      untouched, no allocated codepoints). **Read them off that table; do not recount and do not
      re-derive them from the per-block table.** The buckets are exact-count based and total: filled =
      every allocated codepoint covered, untouched = none covered, mostly-filled = at least half,
      slightly-filled = some but under half.
-  4. Commit, staging `COVERAGE.md`, `README.md` and **`glyphs.strokes.json`** (the authored data the
+  3. Commit, staging `COVERAGE.md`, `README.md` and **`glyphs.strokes.json`** (the authored data the
      report was computed from — this routine is exactly when committing the live glyph file is
      wanted).
 
