@@ -152,6 +152,12 @@ These are the things that repeatedly cost time when forgotten.
   itself is only the "progress update" part — the "and commit" is simply the standing rule above
   being applied afterwards, not a step of its own.
 
+  **It is not a benchmark, and there is nothing to overthink.** It is a two-command refresh plus a
+  commit: run the report, copy the numbers across, stage, commit. Do not deliberate over it, do not
+  go hunting for extra things to check, verify, or add, and do not turn it into an occasion for
+  commentary about the data, the project, or your own process. No analysis of the diff beyond what
+  the commit message needs.
+
   When the user asks for a **progress update and commit**:
   1. Validate the authored data loads:
      `uv run --no-sync python -c "from strokespec.model import StrokeFont; print(len(StrokeFont.load('glyphs.strokes.json').codepoints()))"`.
