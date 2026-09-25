@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-25 00:16  
+Generated: 2026-09-25 10:18  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 23950 |
-| - with strokes | 23921 |
+| codepoints authored | 24413 |
+| - with strokes | 24384 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 172808 |
-| coverage of allocated | 23950 (13.9%) |
+| coverage of allocated | 24413 (14.1%) |
 | codepoints authored outside the block table | 0 |
 | blocks filled (every allocated codepoint covered) | 86 |
 | blocks mostly-filled (50% and up) | 6 |
@@ -116,10 +116,10 @@ Generated: 2026-09-25 00:16
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 997 | 776 | 77.8% |
 | Arabic Extended-A | U+08A0-U+08FF | 96 | 56 | 58.3% |
 | Latin Extended-F | U+10780-U+107BF | 62 | 29 | 46.8% |
+| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 2727 | 13.0% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
-| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 2272 | 10.8% |
 | Egyptian Hieroglyph Format Controls | U+13430-U+1345F | 38 | 4 | 10.5% |
-| CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 6 | 5.2% |
+| CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 7 | 6.1% |
 | Miscellaneous Symbols and Pictographs | U+1F300-U+1F5FF | 768 | 40 | 5.2% |
 | Supplemental Symbols and Pictographs | U+1F900-U+1F9FF | 256 | 7 | 2.7% |
 | Tibetan | U+0F00-U+0FFF | 211 | 5 | 2.4% |
@@ -128,13 +128,13 @@ Generated: 2026-09-25 00:16
 | Latin Extended-G | U+1DF00-U+1DFFF | 188 | 1 | 0.5% |
 | CJK Unified Ideographs Extension A | U+3400-U+4DBF | 6592 | 31 | 0.5% |
 | CJK Unified Ideographs Extension D | U+2B740-U+2B81F | 223 | 1 | 0.4% |
-| CJK Unified Ideographs Extension B | U+20000-U+2A6DF | 42720 | 103 | 0.2% |
-| CJK Unified Ideographs Extension E | U+2B820-U+2CEAF | 5774 | 11 | 0.2% |
+| CJK Unified Ideographs Extension B | U+20000-U+2A6DF | 42720 | 108 | 0.3% |
+| CJK Unified Ideographs Extension E | U+2B820-U+2CEAF | 5774 | 12 | 0.2% |
 | CJK Compatibility Ideographs Supplement | U+2F800-U+2FA1F | 542 | 1 | 0.2% |
 | Unified Canadian Aboriginal Syllabics | U+1400-U+167F | 640 | 1 | 0.2% |
 | CJK Unified Ideographs Extension C | U+2A700-U+2B73F | 4160 | 6 | 0.1% |
 | Cuneiform | U+12000-U+123FF | 922 | 1 | 0.1% |
-| CJK Unified Ideographs Extension F | U+2CEB0-U+2EBEF | 7473 | 7 | 0.1% |
+| CJK Unified Ideographs Extension F | U+2CEB0-U+2EBEF | 7473 | 8 | 0.1% |
 | CJK Unified Ideographs Extension G | U+30000-U+3134F | 4939 | 1 | 0.0% |
 | Armenian | U+0530-U+058F | 94 | 0 | 0.0% |
 | Syriac | U+0700-U+074F | 77 | 0 | 0.0% |
