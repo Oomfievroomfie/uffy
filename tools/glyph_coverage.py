@@ -74,6 +74,22 @@ def main(argv: list[str] | None = None) -> int:
         rows.append((name, start, end, alloc, cov, pct))
     rows.sort(key=lambda r: -r[5])
 
+    # Block buckets, defined on exact counts: a block is filled only when every allocated
+    # codepoint is covered, untouched only when none is.
+    buckets = {"filled": 0, "mostly": 0, "slightly": 0, "untouched": 0}
+    no_alloc = 0
+    for _name, _s, _e, alloc, cov, _pct in rows:
+        if not alloc:
+            no_alloc += 1
+        elif cov == 0:
+            buckets["untouched"] += 1
+        elif cov >= alloc:
+            buckets["filled"] += 1
+        elif 2 * cov >= alloc:
+            buckets["mostly"] += 1
+        else:
+            buckets["slightly"] += 1
+
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     # Codepoints authored that fall outside the scanned block table (unlikely; flag them).
     scanned = set()
@@ -93,6 +109,11 @@ def main(argv: list[str] | None = None) -> int:
     lines.append(f"| allocated codepoints (in scanned blocks) | {tot_alloc} |")
     lines.append(f"| coverage of allocated | {tot_cov} ({_percent_text(tot_cov, tot_alloc)}) |")
     lines.append(f"| codepoints authored outside the block table | {len(outside)} |")
+    lines.append(f"| blocks filled (every allocated codepoint covered) | {buckets['filled']} |")
+    lines.append(f"| blocks mostly-filled (50% and up) | {buckets['mostly']} |")
+    lines.append(f"| blocks slightly-filled (under 50%, some covered) | {buckets['slightly']} |")
+    lines.append(f"| blocks untouched (none covered) | {buckets['untouched']} |")
+    lines.append(f"| blocks with no allocated codepoints | {no_alloc} |")
     if outside:
         lines.append("\nOutside blocks: " + " ".join(f"U+{cp:04X}" for cp in outside[:20]))
     lines.append("")

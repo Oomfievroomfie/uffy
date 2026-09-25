@@ -1,7 +1,7 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-25 00:15  
+Generated: 2026-09-25 00:16  
 
 ## Summary
 
@@ -13,6 +13,11 @@ Generated: 2026-09-25 00:15
 | allocated codepoints (in scanned blocks) | 172808 |
 | coverage of allocated | 23950 (13.9%) |
 | codepoints authored outside the block table | 0 |
+| blocks filled (every allocated codepoint covered) | 86 |
+| blocks mostly-filled (50% and up) | 6 |
+| blocks slightly-filled (under 50%, some covered) | 21 |
+| blocks untouched (none covered) | 234 |
+| blocks with no allocated codepoints | 2 |
 
 ## Coverage by block
 

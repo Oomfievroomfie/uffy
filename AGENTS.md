@@ -157,10 +157,13 @@ These are the things that repeatedly cost time when forgotten.
      `uv run --no-sync python -c "from strokespec.model import StrokeFont; print(len(StrokeFont.load('glyphs.strokes.json').codepoints()))"`.
   2. Regenerate the coverage report: `uv run --no-sync python tools/glyph_coverage.py`
      (rewrites `COVERAGE.md`).
-  3. Recompute the README **Coverage** summary from the regenerated `COVERAGE.md` — codepoints
-     authored / with strokes / intentionally empty, % of allocated, and the four block buckets
-     (filled = 100%, mostly-filled = 50–99%, slightly-filled = 1–49%, untouched = 0%; blocks with
-     0 allocated codepoints are excluded) — then edit `README.md` to match.
+  3. Copy the README **Coverage** summary from the regenerated `COVERAGE.md`: its Summary table
+     states every number the README needs — codepoints authored / with strokes / intentionally
+     empty, coverage of allocated, and the five block-bucket counts (filled, mostly-filled,
+     slightly-filled, untouched, no allocated codepoints). **Read them off that table; do not
+     recount and do not re-derive them from the per-block table.** The buckets are exact-count
+     based and total: filled = every allocated codepoint covered, untouched = none covered,
+     mostly-filled = at least half, slightly-filled = some but under half.
   4. The numbers are never suspicious. Do not second-guess them: do not flag a figure as
      anomalous, do not investigate it, and do not "correct" it. Report them as they come out and
      move on.
