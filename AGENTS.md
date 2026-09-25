@@ -145,34 +145,29 @@ These are the things that repeatedly cost time when forgotten.
   ask whether to update them, and do not treat "the request didn't mention docs" as a reason to
   leave them wrong.
 
-- **"progress update and commit" — a named routine, and NOT the "always commit your work" rule.**
-  These are two different things and must not be merged: *always commit your work* is the standing
-  rule above about **when to commit**; *progress update and commit* is a specific procedure the
-  user asks for **by that phrase**, and it is about **refreshing the coverage stats**. The routine
-  itself is only the "progress update" part — the "and commit" is simply the standing rule above
-  being applied afterwards, not a step of its own.
+- **"progress update and commit" — a named routine, triggered by exactly that phrase.** It is not a
+  separate commit rule; it means *refresh the coverage stats*, then commit that refreshed result per
+  the standing "always commit your work" rule above. It is not a benchmark. Do not overthink it.
 
-  **It is not a benchmark. Do not overthink it.**
-
-  When the user asks for a **progress update and commit**:
+  Steps:
   1. Validate the authored data loads:
      `uv run --no-sync python -c "from strokespec.model import StrokeFont; print(len(StrokeFont.load('glyphs.strokes.json').codepoints()))"`.
   2. Regenerate the coverage report: `uv run --no-sync python tools/glyph_coverage.py`
      (rewrites `COVERAGE.md`).
-  3. Copy the README **Coverage** summary from the regenerated `COVERAGE.md`: its Summary table
-     states every number the README needs — codepoints authored / with strokes / intentionally
-     empty, coverage of allocated, and the five block-bucket counts (filled, mostly-filled,
-     slightly-filled, untouched, no allocated codepoints). **Read them off that table; do not
-     recount and do not re-derive them from the per-block table.** The buckets are exact-count
-     based and total: filled = every allocated codepoint covered, untouched = none covered,
-     mostly-filled = at least half, slightly-filled = some but under half.
-  4. The numbers are never suspicious. Do not second-guess them: do not flag a figure as
-     anomalous, do not investigate it, and do not "correct" it. Report them as they come out and
-     move on.
+  3. Copy the README **Coverage** summary from the regenerated `COVERAGE.md` Summary table, which
+     holds every number the README needs: codepoints authored / with strokes / intentionally empty,
+     coverage of allocated, and the five block-bucket counts (filled, mostly-filled, slightly-filled,
+     untouched, no allocated codepoints). **Read them off that table; do not recount and do not
+     re-derive them from the per-block table.** The buckets are exact-count based and total: filled =
+     every allocated codepoint covered, untouched = none covered, mostly-filled = at least half,
+     slightly-filled = some but under half.
+  4. Commit, staging `COVERAGE.md`, `README.md` and **`glyphs.strokes.json`** (the authored data the
+     report was computed from — this routine is exactly when committing the live glyph file is
+     wanted).
 
-  Then commit that refreshed result per the standing "always commit your work" rule above — and
-  that commit **includes `glyphs.strokes.json`**, the authored data the report was computed from
-  (the routine is exactly the case where committing the live glyph file is wanted).
+  The numbers are never suspicious. Do not second-guess them: do not flag a figure as anomalous, do
+  not investigate it, and do not "correct" it. Report them as they come out and move on.
+
 - Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
   gitignored.
 
