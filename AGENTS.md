@@ -167,11 +167,8 @@ These are the things that repeatedly cost time when forgotten.
   not investigate it, and do not "correct" it. Report them as they come out and move on.
 
   **Do NOT diff the glyph data while running this routine.** No `git diff`, `git show`,
-  `git log -p`, or any other rendering of `glyphs.strokes.json`, and do not read the file. There is
-  no reason to: this routine's job is to refresh the stats and stage the file, and no step needs to
-  know what changed inside it. In particular do NOT diff it "to write an accurate commit message" —
-  the message states the coverage numbers from step 2 and leaves the glyph changes undescribed.
-  `git status`, `--stat` and line counts are fine; contents are not.
+  `git log -p`, or reading the file — including "to write an accurate commit message". The message
+  states the coverage numbers from step 2 and leaves the glyph changes undescribed.
 
 - Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
   gitignored.
