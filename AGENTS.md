@@ -127,6 +127,9 @@ These are the things that repeatedly cost time when forgotten.
   files and commit (the user can amend later). Do not leave finished work uncommitted. Never
   `git add -A`; stage exact paths only.
 
+- Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
+  gitignored.
+
 - **Experiments are NOT committed until the user explicitly says to commit them.** If the user
   calls something an experiment — or you are just trying something out / comparing options to
   show them a result — leave it **uncommitted** in the working tree, report what you found, and
@@ -169,9 +172,6 @@ These are the things that repeatedly cost time when forgotten.
   **Do NOT diff the glyph data while running this routine.** No `git diff`, `git show`,
   `git log -p`, or reading the file — including "to write an accurate commit message". The message
   states the coverage numbers from step 2 and leaves the glyph changes undescribed.
-
-- Clean up test artifacts (`*.ttf`, `*.build.log`, `*.png`) before committing; they are
-  gitignored.
 
 - **Glyph order slots 1 and 2 are reserved.** `build_ufo` emits `.null` (glyph 1) and
   `nonmarkingreturn` (glyph 2) — zero advance, no outline — before any real glyph. Renderers and
