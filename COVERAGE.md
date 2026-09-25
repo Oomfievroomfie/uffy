@@ -1,17 +1,17 @@
 # Glyph coverage report
 
 Source: `glyphs.strokes.json`  
-Generated: 2026-09-25 10:18  
+Generated: 2026-09-25 10:30  
 
 ## Summary
 
 | metric | value |
 |---|---|
-| codepoints authored | 24413 |
-| - with strokes | 24384 |
+| codepoints authored | 24417 |
+| - with strokes | 24388 |
 | - intentionally empty | 29 |
 | allocated codepoints (in scanned blocks) | 172808 |
-| coverage of allocated | 24413 (14.1%) |
+| coverage of allocated | 24417 (14.1%) |
 | codepoints authored outside the block table | 0 |
 | blocks filled (every allocated codepoint covered) | 86 |
 | blocks mostly-filled (50% and up) | 6 |
@@ -116,7 +116,7 @@ Generated: 2026-09-25 10:18
 | Mathematical Alphanumeric Symbols | U+1D400-U+1D7FF | 997 | 776 | 77.8% |
 | Arabic Extended-A | U+08A0-U+08FF | 96 | 56 | 58.3% |
 | Latin Extended-F | U+10780-U+107BF | 62 | 29 | 46.8% |
-| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 2727 | 13.0% |
+| CJK Unified Ideographs | U+4E00-U+9FFF | 20992 | 2731 | 13.0% |
 | CJK Compatibility Ideographs | U+F900-U+FAFF | 472 | 61 | 12.9% |
 | Egyptian Hieroglyph Format Controls | U+13430-U+1345F | 38 | 4 | 10.5% |
 | CJK Radicals Supplement | U+2E80-U+2EFF | 115 | 7 | 6.1% |

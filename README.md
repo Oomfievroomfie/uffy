@@ -4,7 +4,7 @@ Rapid font editor (vibecoded) + readable universal fallback font (human-made CC0
 
 ## Coverage
 
-- **24413** codepoints authored — **24384** with strokes, **29** intentionally empty.
+- **24417** codepoints authored — **24388** with strokes, **29** intentionally empty.
 - **14.1%** of the **172808** allocated Unicode codepoints across the full block table.
 - Block status (allocated codepoints per block): **86 filled** (every codepoint covered), **6
   mostly-filled** (50% and up), **21 slightly-filled** (some covered, under half), **234 untouched**
